@@ -277,6 +277,9 @@ jobs:
       - checkout
       - run: ci/circleci-build-android.sh
       - run: ci/maybe-push-upload.sh
+      - store_artifacts:
+          path: /home/circleci/project/build-android-aarch64
+          destination: android-arm64
 
   build-android-armhf:
     docker:
