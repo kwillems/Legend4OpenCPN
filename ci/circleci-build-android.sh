@@ -29,7 +29,7 @@ if [ -d /ci-source ]; then cd /ci-source; fi
 curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
     | sudo apt-key add -
 
-git submodule update --init opencpn-libs
+git submodule update --init --recursive
 
 # Set up build directory and a visible link in /
 builddir=build-$OCPN_TARGET
