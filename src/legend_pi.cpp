@@ -13,6 +13,7 @@
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/stdpaths.h>
+#include <wx/utils.h>
 
 #include <string>
 
@@ -785,6 +786,58 @@ void legend_pi::CreateLegendWindow()
         wxDefaultPosition,
         wxDefaultSize,
         wxHW_SCROLLBAR_AUTO);
+
+    // Give Markdown some breathing room without using extra layout rows.
+    m_markdown_view->SetBorders(12);
+
+    // Use the surrounding OpenCPN UI font as the basis for Markdown.
+    // The seven values correspond to HTML font sizes 1 through 7.
+    const int baseFontSize =
+        wxMax(11, panel->GetFont().GetPointSize());
+
+    int htmlFontSizes[7] = {
+        wxMax(9, baseFontSize - 2),
+        wxMax(10, baseFontSize - 1),
+        baseFontSize,
+        baseFontSize + 2,
+        baseFontSize + 4,
+        baseFontSize + 7,
+        baseFontSize + 10
+    };
+
+    wxString normalFace = panel->GetFont().GetFaceName();
+
+    wxFont fixedFont(
+        baseFontSize,
+        wxFONTFAMILY_TELETYPE,
+        wxFONTSTYLE_NORMAL,
+        wxFONTWEIGHT_NORMAL);
+
+    m_markdown_view->SetFonts(
+        normalFace,
+        fixedFont.GetFaceName(),
+        htmlFontSizes);
+
+    // Make the Markdown view visually belong to the plugin window.
+    m_markdown_view->SetBackgroundColour(panel->GetBackgroundColour());
+    m_markdown_view->SetForegroundColour(panel->GetForegroundColour());
+
+    // Open normal external Markdown links in the system browser.
+    m_markdown_view->Bind(
+        wxEVT_HTML_LINK_CLICKED,
+        [](wxHtmlLinkEvent &event) {
+            wxString href = event.GetLinkInfo().GetHref();
+
+            if (href.StartsWith("http://") ||
+                href.StartsWith("https://") ||
+                href.StartsWith("mailto:") ||
+                href.StartsWith("tel:")) {
+                wxLaunchDefaultBrowser(href);
+                return;
+            }
+
+            event.Skip();
+        });
 
     m_content_book->AddPage(m_image_page, "Afbeelding");
     m_content_book->AddPage(m_markdown_view, "Markdown");
