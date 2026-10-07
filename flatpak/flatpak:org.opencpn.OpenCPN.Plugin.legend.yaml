@@ -1,0 +1,7 @@
+id: org.opencpn.OpenCPN.Plugin.legend
+runtime: org.opencpn.OpenCPN
+runtime-version: stable
+sdk: org.freedesktop.Sdk
+command: opencpn
+
+modules: []
