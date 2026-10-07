@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 #
-# Build the flatpak artifacts.
+# Build the Flatpak artifacts.
 #
 
-# Copyright (c) 2021 Alec Leamas
+# Copyright (c) 2021-2026 Alec Leamas
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,10 +16,29 @@ MANIFEST=$(cd flatpak; ls org.opencpn.OpenCPN.Plugin*yaml)
 echo "Using manifest file: $MANIFEST"
 set -x
 
+if [[ "$BRANCH" == 2208 ]]; then
+  export SDK=22.08
+  export FLATHUB_REPO=flathub
+  export FLATHUB_BRANCH=stable
+elif [[ "$BRANCH" == 2408 ]]; then
+  export SDK=24.08
+  export FLATHUB_REPO=flathub
+  export FLATHUB_BRANCH=stable
+elif [[  "$BRANCH" == 2508 ]]; then
+  export SDK=25.08
+  export FLATHUB_REPO=flathub-beta
+  export FLATHUB_BRANCH=beta
+else
+  echo "Wrong branch: \"$BRANCH\""
+  exit 1
+fi
+
+
 # Load local environment if it exists i. e., this is a local build
 if [ -f ~/.config/local-build.rc ]; then source ~/.config/local-build.rc; fi
 if [ -d /ci-source ]; then cd /ci-source; fi
 
+git config --global protocol.file.allow always
 git submodule update --init opencpn-libs
 
 # Set up build directory and a visible link in /
@@ -39,7 +58,17 @@ if [ -n "$CI" ]; then
     # Avoid using outdated TLS certificates, see #210.
     sudo apt install --reinstall  ca-certificates
 
-    # Install flatpak and flatpak-builder
+    # Handle possible outdated key for google packages, see #486
+    wget -q -O - https://cli-assets.heroku.com/apt/release.key \
+        | sudo apt-key add -
+    wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+        | sudo apt-key add -
+
+    # Use updated flatpak (#457)
+    #sudo add-apt-repository -y ppa:alexlarsson/flatpak
+    #sudo apt update
+
+    # Install or update flatpak and flatpak-builder
     sudo apt install flatpak flatpak-builder
 fi
 
@@ -53,25 +82,27 @@ flatpak remote-add --user --if-not-exists flathub-beta \
     https://flathub.org/beta-repo/flathub-beta.flatpakrepo
 flatpak remote-add --user --if-not-exists \
     flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
 flatpak install --user -y --noninteractive \
-    flathub org.freedesktop.Sdk//20.08
+    flathub org.freedesktop.Sdk//${SDK:-22.08}
+
+set -x
+cd $builddir
+
+# Patch the manifest to use correct branch and runtime unconditionally
+manifest=$(ls ../flatpak/org.opencpn.OpenCPN.Plugin*yaml)
+sed -i  '/^runtime-version/s/:.*/:'" ${FLATHUB_BRANCH:-stable}/"  $manifest
+sed -i  '/^sdk:/s|//.*|//'"${SDK:-24.08}|"  $manifest
+
+flatpak install --user -y --or-update --noninteractive \
+    ${FLATHUB_REPO:-flathub}  org.opencpn.OpenCPN
 
 # Configure and build the plugin tarball and metadata.
-cd $builddir
-if [ -n "$BUILD_WX31" ]; then
-    manifest=$(ls ../flatpak/org.opencpn.OpenCPN.Plugin*yaml)
-    sed -i  '/STRING=TARBALL/s/$/ -DOCPN_WX_ABI=wx315/' $manifest
-    sed -i  '/runtime-version/s/stable/beta/'  $manifest
-    flatpak install --user -y --or-update --noninteractive \
-        flathub-beta  org.opencpn.OpenCPN//beta
-    cmake -DCMAKE_BUILD_TYPE=Release -DOCPN_WX_ABI=wx315  ..
-else
-    flatpak install --user -y --or-update --noninteractive \
-        flathub  org.opencpn.OpenCPN
-    cmake -DCMAKE_BUILD_TYPE=Release ..
-fi
-make -j $(nproc) VERBOSE=1 flatpak
+cmake \
+    -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-Release} \
+    -DOCPN_TARGET_TUPLE="flatpak-$(uname -m);${SDK};$(uname -m)" \
+    ..
+# Do not build flatpak in parallel; make becomes unreliable
+make -j 1 VERBOSE=1 flatpak
 
 # Restore permissions and owner in build tree.
 if [ -d /ci-source ]; then sudo chown --reference=/ci-source -R . ../cache; fi
