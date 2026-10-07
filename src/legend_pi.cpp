@@ -44,8 +44,12 @@ legend_pi::legend_pi(void *ppimgr)
     : opencpn_plugin_118(ppimgr),
       m_toolbar_item_id(-1),
       m_legend_window(nullptr),
+      m_header_book(nullptr),
+      m_single_title(nullptr),
       m_legend_position(nullptr),
       m_legend_choice(nullptr),
+      m_previous_button(nullptr),
+      m_next_button(nullptr),
       m_content_book(nullptr),
       m_image_page(nullptr),
       m_legend_bitmap(nullptr),
@@ -101,8 +105,12 @@ bool legend_pi::DeInit()
     if (m_legend_window) {
         m_legend_window->Destroy();
         m_legend_window = nullptr;
+        m_header_book = nullptr;
+        m_single_title = nullptr;
         m_legend_position = nullptr;
         m_legend_choice = nullptr;
+        m_previous_button = nullptr;
+        m_next_button = nullptr;
         m_content_book = nullptr;
         m_image_page = nullptr;
         m_legend_bitmap = nullptr;
@@ -324,22 +332,53 @@ void legend_pi::ScanLegendFiles()
 
 void legend_pi::RebuildLegendChoice()
 {
-    if (!m_legend_choice)
+    if (!m_header_book || !m_legend_choice ||
+        !m_legend_position || !m_single_title)
         return;
 
     m_legend_choice->Clear();
 
-    if (m_legend_files.IsEmpty()) {
-        m_legend_choice->Append("Geen legenda's of notities");
-        m_legend_choice->SetSelection(0);
-        m_legend_choice->Disable();
+    const size_t count = m_legend_files.GetCount();
+    const bool canNavigate = count > 1;
+
+    if (m_previous_button)
+        m_previous_button->Enable(canNavigate);
+
+    if (m_next_button)
+        m_next_button->Enable(canNavigate);
+
+    if (count == 0) {
+        // No separate header is useful when the folder is empty.
+        m_header_book->Hide();
+
+        if (m_header_book->GetParent())
+            m_header_book->GetParent()->Layout();
+
         return;
     }
 
-    for (size_t i = 0; i < m_legend_files.GetCount(); ++i)
+    m_header_book->Show();
+
+    if (count == 1) {
+        // One item: show only its title. No selector and no "1 van 1".
+        m_single_title->SetLabel(MakeDisplayTitle(m_legend_files[0]));
+        m_header_book->SetSelection(1);
+
+        if (m_header_book->GetParent())
+            m_header_book->GetParent()->Layout();
+
+        return;
+    }
+
+    // Multiple items: show the selector and position counter.
+    for (size_t i = 0; i < count; ++i)
         m_legend_choice->Append(MakeDisplayTitle(m_legend_files[i]));
 
     m_legend_choice->Enable();
+    m_header_book->SetSelection(2);
+
+    if (m_header_book->GetParent())
+        m_header_book->GetParent()->Layout();
 }
 
 void legend_pi::RefreshLegendFiles()
@@ -354,6 +393,9 @@ void legend_pi::RefreshLegendFiles()
 
     ScanLegendFiles();
     RebuildLegendChoice();
+
+    if (m_legend_window)
+        m_legend_window->Layout();
 
     if (m_legend_files.IsEmpty()) {
         ShowEmptyState();
@@ -424,16 +466,81 @@ void legend_pi::ShowEmptyState()
     m_legend_index = 0;
     m_last_legend_name.Clear();
 
-    if (m_legend_position)
-        m_legend_position->SetLabel("0 van 0");
-
     if (m_markdown_view) {
-        m_markdown_view->SetPage(
-            "<html><body><p>Geen PNG- of Markdown-bestanden gevonden.</p></body></html>");
+        wxString legend_dir = GetLegendDirectory();
+        legend_dir.Replace("&", "&amp;");
+        legend_dir.Replace("<", "&lt;");
+        legend_dir.Replace(">", "&gt;");
+
+        wxString html;
+        html << "<html><body>"
+             << "<font size=\"+1\">"
+             << "<p><b>Geen legenda's of notities gevonden.</b></p>"
+             << "<p>Plaats een PNG- of Markdown-bestand in:</p>"
+             << "<p><code>" << legend_dir << "</code></p>"
+             << "</font>"
+             << "</body></html>";
+
+        m_markdown_view->SetPage(html);
     }
 
     if (m_content_book && m_markdown_view)
         m_content_book->SetSelection(1);
+}
+
+void legend_pi::UpdateImageScale()
+{
+    if (!m_image_page || !m_legend_bitmap || !m_current_image.IsOk())
+        return;
+
+    wxSize client = m_image_page->GetClientSize();
+
+    // Leave some breathing room around the image.
+    const int availableWidth = client.GetWidth() - 20;
+    const int availableHeight = client.GetHeight() - 20;
+
+    if (availableWidth <= 0 || availableHeight <= 0)
+        return;
+
+    const int imageWidth = m_current_image.GetWidth();
+    const int imageHeight = m_current_image.GetHeight();
+
+    if (imageWidth <= 0 || imageHeight <= 0)
+        return;
+
+    double scale = 1.0;
+
+    if (imageWidth > availableWidth || imageHeight > availableHeight) {
+        const double scaleX =
+            static_cast<double>(availableWidth) / imageWidth;
+        const double scaleY =
+            static_cast<double>(availableHeight) / imageHeight;
+
+        scale = wxMin(scaleX, scaleY);
+    }
+
+    int displayWidth =
+        static_cast<int>(imageWidth * scale);
+    int displayHeight =
+        static_cast<int>(imageHeight * scale);
+
+    displayWidth = wxMax(1, displayWidth);
+    displayHeight = wxMax(1, displayHeight);
+
+    wxImage displayImage = m_current_image;
+
+    if (displayWidth != imageWidth || displayHeight != imageHeight) {
+        displayImage = m_current_image.Scale(
+            displayWidth,
+            displayHeight,
+            wxIMAGE_QUALITY_HIGH);
+    }
+
+    m_legend_bitmap->SetBitmap(wxBitmap(displayImage));
+
+    // The image page is a normal panel, not a scrolled window. The bitmap
+    // is therefore always constrained to the available view.
+    m_image_page->Layout();
 }
 
 void legend_pi::ShowLegend(size_t index)
@@ -454,16 +561,18 @@ void legend_pi::ShowLegend(size_t index)
 
     m_last_legend_name = filename.GetFullName();
 
-    if (m_legend_position) {
-        m_legend_position->SetLabel(
-            wxString::Format(
-                "%zu van %zu",
-                m_legend_index + 1,
-                m_legend_files.GetCount()));
-    }
+    if (m_legend_files.GetCount() > 1) {
+        if (m_legend_position) {
+            m_legend_position->SetLabel(
+                wxString::Format(
+                    "%zu van %zu",
+                    m_legend_index + 1,
+                    m_legend_files.GetCount()));
+        }
 
-    if (m_legend_choice)
-        m_legend_choice->SetSelection(static_cast<int>(m_legend_index));
+        if (m_legend_choice)
+            m_legend_choice->SetSelection(static_cast<int>(m_legend_index));
+    }
 
     if (ext == "png") {
         wxImage image;
@@ -471,26 +580,25 @@ void legend_pi::ShowLegend(size_t index)
         if (!image.LoadFile(path, wxBITMAP_TYPE_PNG))
             return;
 
-        if (m_legend_bitmap)
-            m_legend_bitmap->SetBitmap(wxBitmap(image));
-
-        if (m_image_page) {
-            m_image_page->SetVirtualSize(
-                image.GetWidth() + 20,
-                image.GetHeight() + 20);
-            m_image_page->Layout();
-        }
+        m_current_image = image.Copy();
 
         if (m_content_book)
             m_content_book->SetSelection(0);
+
+        UpdateImageScale();
     }
     else if (ext == "md" || ext == "markdown") {
+        m_current_image = wxImage();
+
         if (m_markdown_view)
             m_markdown_view->SetPage(RenderMarkdownFile(path));
 
         if (m_content_book)
             m_content_book->SetSelection(1);
     }
+
+    if (m_legend_window)
+        m_legend_window->Layout();
 
     SaveConfig();
 }
@@ -532,6 +640,10 @@ void legend_pi::OnLegendSelected(wxCommandEvent &event)
         return;
 
     ShowLegend(static_cast<size_t>(selection));
+
+    // Keep keyboard focus on the selector after a choice has been made.
+    // This allows Up/Down to continue moving through the list immediately.
+    m_legend_choice->SetFocus();
 }
 
 void legend_pi::CreateLegendWindow()
@@ -550,39 +662,80 @@ void legend_pi::CreateLegendWindow()
     auto *panel = new wxPanel(m_legend_window);
     auto *mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    auto *headerSizer = new wxBoxSizer(wxHORIZONTAL);
-
-    m_legend_choice = new wxChoice(
+    m_header_book = new wxSimplebook(
         panel,
         wxID_ANY,
         wxDefaultPosition,
         wxDefaultSize);
 
-    m_legend_choice->SetMinSize(wxSize(260, -1));
-    m_legend_choice->Disable();
+    // Page 0: empty state. The whole book is hidden when there are no items.
+    auto *emptyHeaderPage = new wxPanel(m_header_book);
+
+    // Page 1: exactly one item -> title only.
+    auto *singleHeaderPage = new wxPanel(m_header_book);
+    auto *singleHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
+
+    m_single_title = new wxStaticText(
+        singleHeaderPage,
+        wxID_ANY,
+        "");
+
+    wxFont singleTitleFont = m_single_title->GetFont();
+    singleTitleFont.SetWeight(wxFONTWEIGHT_BOLD);
+    m_single_title->SetFont(singleTitleFont);
+
+    singleHeaderSizer->Add(
+        m_single_title,
+        1,
+        wxALIGN_CENTER_VERTICAL);
+
+    singleHeaderPage->SetSizer(singleHeaderSizer);
+
+    // Page 2: multiple items -> selector plus "x van y".
+    auto *multiHeaderPage = new wxPanel(m_header_book);
+    auto *multiHeaderSizer = new wxBoxSizer(wxHORIZONTAL);
+
+    m_legend_choice = new wxChoice(
+        multiHeaderPage,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize);
+
+    m_legend_choice->SetMinSize(wxSize(160, -1));
 
     wxFont choiceFont = m_legend_choice->GetFont();
     choiceFont.SetWeight(wxFONTWEIGHT_BOLD);
     m_legend_choice->SetFont(choiceFont);
 
     m_legend_position = new wxStaticText(
-        panel,
+        multiHeaderPage,
         wxID_ANY,
-        "0 van 0");
+        "");
 
-    headerSizer->Add(
+    // Keep the position counter visible on the right, even in a narrow window.
+    m_legend_position->SetMinSize(wxSize(52, -1));
+
+    multiHeaderSizer->Add(
         m_legend_choice,
         1,
-        wxRIGHT | wxALIGN_CENTER_VERTICAL,
+        wxRIGHT | wxEXPAND | wxALIGN_CENTER_VERTICAL,
         10);
 
-    headerSizer->Add(
+    multiHeaderSizer->Add(
         m_legend_position,
         0,
         wxALIGN_CENTER_VERTICAL);
 
+    multiHeaderPage->SetSizer(multiHeaderSizer);
+
+    m_header_book->AddPage(emptyHeaderPage, "Leeg");
+    m_header_book->AddPage(singleHeaderPage, "Een");
+    m_header_book->AddPage(multiHeaderPage, "Meerdere");
+    m_header_book->SetSelection(0);
+    m_header_book->Hide();
+
     mainSizer->Add(
-        headerSizer,
+        m_header_book,
         0,
         wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
         10);
@@ -598,14 +751,18 @@ void legend_pi::CreateLegendWindow()
         wxDefaultPosition,
         wxDefaultSize);
 
-    m_image_page = new wxScrolledWindow(
+    m_image_page = new wxPanel(
         m_content_book,
         wxID_ANY,
         wxDefaultPosition,
-        wxDefaultSize,
-        wxHSCROLL | wxVSCROLL);
+        wxDefaultSize);
 
-    m_image_page->SetScrollRate(10, 10);
+    m_image_page->Bind(
+        wxEVT_SIZE,
+        [this](wxSizeEvent &event) {
+            event.Skip();
+            UpdateImageScale();
+        });
 
     auto *imageSizer = new wxBoxSizer(wxVERTICAL);
 
@@ -653,20 +810,20 @@ void legend_pi::CreateLegendWindow()
 
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-    auto *previousButton =
+    m_previous_button =
         new wxButton(panel, wxID_ANY, wxString::FromUTF8("‹  Vorige"));
 
-    auto *nextButton =
+    m_next_button =
         new wxButton(panel, wxID_ANY, wxString::FromUTF8("Volgende  ›"));
 
-    previousButton->SetMinSize(wxSize(110, 36));
-    nextButton->SetMinSize(wxSize(110, 36));
+    m_previous_button->SetMinSize(wxSize(110, 36));
+    m_next_button->SetMinSize(wxSize(110, 36));
 
-    previousButton->SetToolTip("Toon de vorige legenda of notitie");
-    nextButton->SetToolTip("Toon de volgende legenda of notitie");
+    m_previous_button->SetToolTip("Toon de vorige legenda of notitie");
+    m_next_button->SetToolTip("Toon de volgende legenda of notitie");
 
-    buttonSizer->Add(previousButton, 0, wxRIGHT, 8);
-    buttonSizer->Add(nextButton, 0, wxLEFT, 8);
+    buttonSizer->Add(m_previous_button, 0, wxRIGHT, 8);
+    buttonSizer->Add(m_next_button, 0, wxLEFT, 8);
 
     mainSizer->Add(
         buttonSizer,
@@ -674,15 +831,19 @@ void legend_pi::CreateLegendWindow()
         wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
         10);
 
-    previousButton->Bind(
+    m_previous_button->Bind(
         wxEVT_BUTTON,
         &legend_pi::OnPreviousLegend,
         this);
 
-    nextButton->Bind(
+    m_next_button->Bind(
         wxEVT_BUTTON,
         &legend_pi::OnNextLegend,
         this);
+
+    // Until the first scan completes, there is nothing to navigate.
+    m_previous_button->Disable();
+    m_next_button->Disable();
 
     panel->SetSizer(mainSizer);
 
@@ -695,6 +856,30 @@ void legend_pi::CreateLegendWindow()
             SaveConfig();
             m_legend_window->Hide();
             event.Veto();
+        });
+
+    m_legend_window->Bind(
+        wxEVT_CHAR_HOOK,
+        [this](wxKeyEvent &event) {
+            if (m_legend_files.GetCount() > 1 &&
+                !event.ControlDown() &&
+                !event.AltDown() &&
+                !event.MetaDown()) {
+
+                if (event.GetKeyCode() == WXK_LEFT) {
+                    wxCommandEvent commandEvent;
+                    OnPreviousLegend(commandEvent);
+                    return;
+                }
+
+                if (event.GetKeyCode() == WXK_RIGHT) {
+                    wxCommandEvent commandEvent;
+                    OnNextLegend(commandEvent);
+                    return;
+                }
+            }
+
+            event.Skip();
         });
 }
 

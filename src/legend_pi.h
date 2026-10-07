@@ -5,10 +5,12 @@
 
 #include <wx/arrstr.h>
 #include <wx/bitmap.h>
+#include <wx/button.h>
 #include <wx/choice.h>
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
-#include <wx/scrolwin.h>
+#include <wx/panel.h>
+#include <wx/image.h>
 #include <wx/simplebook.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
@@ -43,6 +45,7 @@ private:
     void RefreshLegendFiles();
     void ShowLegend(size_t index);
     void ShowEmptyState();
+    void UpdateImageScale();
 
     void OnPreviousLegend(wxCommandEvent &event);
     void OnNextLegend(wxCommandEvent &event);
@@ -64,12 +67,17 @@ private:
     wxBitmap m_toolbar_bitmap;
     wxFrame *m_legend_window;
 
+    wxSimplebook *m_header_book;
+    wxStaticText *m_single_title;
     wxStaticText *m_legend_position;
     wxChoice *m_legend_choice;
+    wxButton *m_previous_button;
+    wxButton *m_next_button;
     wxSimplebook *m_content_book;
 
-    wxScrolledWindow *m_image_page;
+    wxPanel *m_image_page;
     wxStaticBitmap *m_legend_bitmap;
+    wxImage m_current_image;
 
     wxHtmlWindow *m_markdown_view;
 
