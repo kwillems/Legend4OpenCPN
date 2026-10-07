@@ -5,6 +5,7 @@
 
 #include <wx/arrstr.h>
 #include <wx/bitmap.h>
+#include <wx/choice.h>
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
 #include <wx/scrolwin.h>
@@ -38,12 +39,14 @@ private:
     void ToggleLegendWindow();
 
     void ScanLegendFiles();
+    void RebuildLegendChoice();
     void RefreshLegendFiles();
     void ShowLegend(size_t index);
     void ShowEmptyState();
 
     void OnPreviousLegend(wxCommandEvent &event);
     void OnNextLegend(wxCommandEvent &event);
+    void OnLegendSelected(wxCommandEvent &event);
 
     wxString GetLegendDirectory() const;
     wxString GetConfigDirectory() const;
@@ -61,7 +64,8 @@ private:
     wxBitmap m_toolbar_bitmap;
     wxFrame *m_legend_window;
 
-    wxStaticText *m_legend_title;
+    wxStaticText *m_legend_position;
+    wxChoice *m_legend_choice;
     wxSimplebook *m_content_book;
 
     wxScrolledWindow *m_image_page;
