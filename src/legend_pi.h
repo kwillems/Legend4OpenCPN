@@ -3,6 +3,8 @@
 
 #include "ocpn_plugin.h"
 
+#include <map>
+
 #include <wx/arrstr.h>
 #include <wx/bitmap.h>
 #include <wx/button.h>
@@ -46,6 +48,8 @@ private:
     void ShowLegend(size_t index);
     void ShowEmptyState();
     void UpdateImageScale();
+    void SaveCurrentMarkdownScroll();
+    void RestoreMarkdownScroll(const wxString &path);
 
     void OnPreviousLegend(wxCommandEvent &event);
     void OnNextLegend(wxCommandEvent &event);
@@ -84,6 +88,8 @@ private:
     wxArrayString m_legend_files;
     size_t m_legend_index;
     wxString m_last_legend_name;
+    wxString m_current_legend_path;
+    std::map<wxString, wxPoint> m_markdown_scroll_positions;
 
     int m_window_x;
     int m_window_y;

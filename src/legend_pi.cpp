@@ -168,6 +168,7 @@ int legend_pi::Init()
 
 bool legend_pi::DeInit()
 {
+    SaveCurrentMarkdownScroll();
     SaveWindowState();
     SaveConfig();
 
@@ -486,6 +487,8 @@ void legend_pi::RebuildLegendChoice()
 
 void legend_pi::RefreshLegendFiles()
 {
+    SaveCurrentMarkdownScroll();
+
     wxString preferred = m_last_legend_name;
 
     if (!m_legend_files.IsEmpty() &&
@@ -623,10 +626,56 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     return wrapped;
 }
 
+void legend_pi::SaveCurrentMarkdownScroll()
+{
+    if (!m_markdown_view || m_current_legend_path.IsEmpty())
+        return;
+
+    wxFileName currentFile(m_current_legend_path);
+    wxString ext = currentFile.GetExt().Lower();
+
+    if (ext != "md" && ext != "markdown")
+        return;
+
+    int x = 0;
+    int y = 0;
+    m_markdown_view->GetViewStart(&x, &y);
+
+    m_markdown_scroll_positions[m_current_legend_path] =
+        wxPoint(x, y);
+}
+
+void legend_pi::RestoreMarkdownScroll(const wxString &path)
+{
+    if (!m_markdown_view)
+        return;
+
+    wxPoint position(0, 0);
+
+    auto it = m_markdown_scroll_positions.find(path);
+    if (it != m_markdown_scroll_positions.end())
+        position = it->second;
+
+    // SetPage() rebuilds the HTML contents. Restore the scroll position
+    // after wxWidgets has had a chance to lay out the new page.
+    m_markdown_view->CallAfter(
+        [this, path, position]() {
+            if (m_markdown_view &&
+                m_current_legend_path == path) {
+                m_markdown_view->Scroll(
+                    position.x,
+                    position.y);
+            }
+        });
+}
+
 void legend_pi::ShowEmptyState()
 {
+    SaveCurrentMarkdownScroll();
+
     m_legend_index = 0;
     m_last_legend_name.Clear();
+    m_current_legend_path.Clear();
 
     if (m_markdown_view) {
         wxString legend_dir = GetLegendDirectory();
@@ -707,6 +756,8 @@ void legend_pi::UpdateImageScale()
 
 void legend_pi::ShowLegend(size_t index)
 {
+    SaveCurrentMarkdownScroll();
+
     if (m_legend_files.IsEmpty()) {
         ShowEmptyState();
         return;
@@ -742,6 +793,7 @@ void legend_pi::ShowLegend(size_t index)
         if (!image.LoadFile(path, wxBITMAP_TYPE_PNG))
             return;
 
+        m_current_legend_path = path;
         m_current_image = image.Copy();
 
         if (m_content_book)
@@ -751,6 +803,7 @@ void legend_pi::ShowLegend(size_t index)
     }
     else if (ext == "md" || ext == "markdown") {
         m_current_image = wxImage();
+        m_current_legend_path = path;
 
         if (m_markdown_view) {
             auto *markdownWindow =
@@ -763,6 +816,8 @@ void legend_pi::ShowLegend(size_t index)
 
         if (m_content_book)
             m_content_book->SetSelection(1);
+
+        RestoreMarkdownScroll(path);
     }
 
     if (m_legend_window)
@@ -776,12 +831,12 @@ void legend_pi::OnPreviousLegend(wxCommandEvent &event)
     if (m_legend_files.IsEmpty())
         return;
 
-    if (m_legend_index == 0)
-        m_legend_index = m_legend_files.GetCount() - 1;
-    else
-        --m_legend_index;
+    size_t index =
+        (m_legend_index == 0)
+            ? m_legend_files.GetCount() - 1
+            : m_legend_index - 1;
 
-    ShowLegend(m_legend_index);
+    ShowLegend(index);
 }
 
 void legend_pi::OnNextLegend(wxCommandEvent &event)
@@ -789,12 +844,12 @@ void legend_pi::OnNextLegend(wxCommandEvent &event)
     if (m_legend_files.IsEmpty())
         return;
 
-    ++m_legend_index;
+    size_t index = m_legend_index + 1;
 
-    if (m_legend_index >= m_legend_files.GetCount())
-        m_legend_index = 0;
+    if (index >= m_legend_files.GetCount())
+        index = 0;
 
-    ShowLegend(m_legend_index);
+    ShowLegend(index);
 }
 
 void legend_pi::OnLegendSelected(wxCommandEvent &event)
@@ -1072,6 +1127,7 @@ void legend_pi::CreateLegendWindow()
     m_legend_window->Bind(
         wxEVT_CLOSE_WINDOW,
         [this](wxCloseEvent &event) {
+            SaveCurrentMarkdownScroll();
             SaveWindowState();
             SaveConfig();
             m_legend_window->Hide();
@@ -1081,10 +1137,22 @@ void legend_pi::CreateLegendWindow()
     m_legend_window->Bind(
         wxEVT_CHAR_HOOK,
         [this](wxKeyEvent &event) {
-            if (m_legend_files.GetCount() > 1 &&
+            const bool plainKey =
                 !event.ControlDown() &&
                 !event.AltDown() &&
-                !event.MetaDown()) {
+                !event.MetaDown();
+
+            if (plainKey &&
+                event.GetKeyCode() == WXK_ESCAPE) {
+                SaveCurrentMarkdownScroll();
+                SaveWindowState();
+                SaveConfig();
+                m_legend_window->Hide();
+                return;
+            }
+
+            if (plainKey &&
+                m_legend_files.GetCount() > 1) {
 
                 if (event.GetKeyCode() == WXK_LEFT) {
                     wxCommandEvent commandEvent;
@@ -1108,6 +1176,7 @@ void legend_pi::ToggleLegendWindow()
     CreateLegendWindow();
 
     if (m_legend_window->IsShown()) {
+        SaveCurrentMarkdownScroll();
         SaveWindowState();
         SaveConfig();
         m_legend_window->Hide();
