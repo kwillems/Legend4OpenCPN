@@ -14,6 +14,7 @@
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/stdpaths.h>
+#include <wx/textfile.h>
 #include <wx/utils.h>
 
 #include <string>
@@ -268,8 +269,42 @@ void legend_pi::EnsureDirectories() const
 wxString legend_pi::MakeDisplayTitle(const wxString &path) const
 {
     wxFileName filename(path);
-    wxString title = filename.GetName();
+    wxString ext = filename.GetExt().Lower();
 
+    // For Markdown, use the first non-empty H1 as the visible title.
+    // If the document does not start with an H1, fall back to the filename.
+    if (ext == "md" || ext == "markdown") {
+        wxTextFile markdownFile;
+
+        if (markdownFile.Open(path)) {
+            for (size_t i = 0; i < markdownFile.GetLineCount(); ++i) {
+                wxString line = markdownFile.GetLine(i);
+                line.Trim(true);
+                line.Trim(false);
+
+                if (line.IsEmpty())
+                    continue;
+
+                if (line.StartsWith("# ") && !line.StartsWith("##")) {
+                    wxString title = line.Mid(2);
+                    title.Trim(true);
+                    title.Trim(false);
+
+                    if (!title.IsEmpty()) {
+                        markdownFile.Close();
+                        return title;
+                    }
+                }
+
+                // Only the first non-empty line can act as the document title.
+                break;
+            }
+
+            markdownFile.Close();
+        }
+    }
+
+    wxString title = filename.GetName();
     title.Replace("_", " ");
     title.Replace("-", " ");
 
@@ -503,6 +538,65 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
 
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
         return "<html><body><p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
+
+    // If the first non-empty Markdown line is an H1, it is already used
+    // as the document title in the selector/header. Remove that one line
+    // from the rendered body to avoid showing the title twice.
+    {
+        size_t pos = 0;
+
+        // Skip UTF-8 BOM if present.
+        if (markdown.size() >= 3 &&
+            static_cast<unsigned char>(markdown[0]) == 0xEF &&
+            static_cast<unsigned char>(markdown[1]) == 0xBB &&
+            static_cast<unsigned char>(markdown[2]) == 0xBF) {
+            pos = 3;
+        }
+
+        while (pos < markdown.size()) {
+            size_t lineEnd = markdown.find('\n', pos);
+            size_t contentEnd =
+                (lineEnd == std::string::npos) ? markdown.size() : lineEnd;
+
+            size_t trimmedStart = pos;
+            while (trimmedStart < contentEnd &&
+                   (markdown[trimmedStart] == ' ' ||
+                    markdown[trimmedStart] == '\t' ||
+                    markdown[trimmedStart] == '\r')) {
+                ++trimmedStart;
+            }
+
+            size_t trimmedEnd = contentEnd;
+            while (trimmedEnd > trimmedStart &&
+                   (markdown[trimmedEnd - 1] == ' ' ||
+                    markdown[trimmedEnd - 1] == '\t' ||
+                    markdown[trimmedEnd - 1] == '\r')) {
+                --trimmedEnd;
+            }
+
+            if (trimmedStart == trimmedEnd) {
+                if (lineEnd == std::string::npos)
+                    break;
+
+                pos = lineEnd + 1;
+                continue;
+            }
+
+            const bool isH1 =
+                (trimmedEnd - trimmedStart >= 3) &&
+                markdown[trimmedStart] == '#' &&
+                markdown[trimmedStart + 1] == ' ';
+
+            if (isH1) {
+                size_t eraseEnd =
+                    (lineEnd == std::string::npos) ? contentEnd : lineEnd + 1;
+
+                markdown.erase(pos, eraseEnd - pos);
+            }
+
+            break;
+        }
+    }
 
     std::string html;
 
