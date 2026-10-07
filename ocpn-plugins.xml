@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+  <version>0.0.1</version>
+  <date>2026-10-07</date>
+
+  <plugin version="1">
+    <name>Legend</name>
+    <version>0.1.1</version>
+    <release>22</release>
+    <summary>Configurable legend and notes for OpenCPN</summary>
+    <api-version>1.18</api-version>
+    <open-source>yes</open-source>
+    <author>Koen Willems</author>
+    <source>https://github.com/kwillems/Legend4OpenCPN</source>
+    <description>Displays configurable PNG legends and Markdown notes in OpenCPN.</description>
+
+    <target>android-arm64</target>
+    <build-target>android</build-target>
+    <build-gtk/>
+    <target-version>16</target-version>
+    <target-arch>arm64</target-arch>
+
+    <tarball-url>https://output.circle-artifacts.com/output/job/8e9fbe4c-eda9-4bdc-b712-0a07c98f4f6e/artifacts/0/android-arm64/Legend-0.1.1+22.f36aa3e_android-arm64-16-arm64.tar.gz</tarball-url>
+  </plugin>
+</plugins>
