@@ -2,6 +2,7 @@
 
 #include <wx/button.h>
 #include <wx/dir.h>
+#include <wx/display.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -42,10 +43,16 @@ legend_pi::legend_pi(void *ppimgr)
     : opencpn_plugin_118(ppimgr),
       m_toolbar_item_id(-1),
       m_legend_window(nullptr),
+      m_legend_title(nullptr),
+      m_content_book(nullptr),
+      m_image_page(nullptr),
       m_legend_bitmap(nullptr),
       m_markdown_view(nullptr),
-      m_legend_title(nullptr),
-      m_legend_index(0)
+      m_legend_index(0),
+      m_window_x(-1),
+      m_window_y(-1),
+      m_window_width(560),
+      m_window_height(460)
 {
 }
 
@@ -79,21 +86,24 @@ int legend_pi::Init()
         this);
 
     EnsureDirectories();
-    LoadLastLegend();
+    LoadConfig();
 
     return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL;
 }
 
 bool legend_pi::DeInit()
 {
-    SaveLastLegend();
+    SaveWindowState();
+    SaveConfig();
 
     if (m_legend_window) {
         m_legend_window->Destroy();
         m_legend_window = nullptr;
+        m_legend_title = nullptr;
+        m_content_book = nullptr;
+        m_image_page = nullptr;
         m_legend_bitmap = nullptr;
         m_markdown_view = nullptr;
-        m_legend_title = nullptr;
     }
 
     if (m_toolbar_item_id >= 0) {
@@ -187,7 +197,7 @@ wxString legend_pi::MakeDisplayTitle(const wxString &path) const
     return title;
 }
 
-void legend_pi::LoadLastLegend()
+void legend_pi::LoadConfig()
 {
     wxString config_path =
         GetConfigDirectory() +
@@ -202,16 +212,21 @@ void legend_pi::LoadLastLegend()
         wxCONFIG_USE_LOCAL_FILE);
 
     config.Read("LastLegend", &m_last_legend_name, "");
+
+    config.Read("WindowX", &m_window_x, -1);
+    config.Read("WindowY", &m_window_y, -1);
+    config.Read("WindowWidth", &m_window_width, 560);
+    config.Read("WindowHeight", &m_window_height, 460);
+
+    if (m_window_width < 380)
+        m_window_width = 380;
+
+    if (m_window_height < 300)
+        m_window_height = 300;
 }
 
-void legend_pi::SaveLastLegend() const
+void legend_pi::SaveConfig() const
 {
-    if (m_legend_files.IsEmpty() ||
-        m_legend_index >= m_legend_files.GetCount())
-        return;
-
-    wxFileName filename(m_legend_files[m_legend_index]);
-
     wxString config_path =
         GetConfigDirectory() +
         wxFileName::GetPathSeparator() +
@@ -224,8 +239,54 @@ void legend_pi::SaveLastLegend() const
         wxEmptyString,
         wxCONFIG_USE_LOCAL_FILE);
 
-    config.Write("LastLegend", filename.GetFullName());
+    config.Write("LastLegend", m_last_legend_name);
+
+    config.Write("WindowX", m_window_x);
+    config.Write("WindowY", m_window_y);
+    config.Write("WindowWidth", m_window_width);
+    config.Write("WindowHeight", m_window_height);
+
     config.Flush();
+}
+
+void legend_pi::RestoreWindowState()
+{
+    if (!m_legend_window)
+        return;
+
+    m_legend_window->SetMinSize(wxSize(380, 300));
+
+    wxSize size(m_window_width, m_window_height);
+
+    if (m_window_x >= 0 && m_window_y >= 0) {
+        wxPoint pos(m_window_x, m_window_y);
+
+        if (wxDisplay::GetFromPoint(pos) != wxNOT_FOUND) {
+            m_legend_window->SetSize(
+                m_window_x,
+                m_window_y,
+                size.GetWidth(),
+                size.GetHeight());
+            return;
+        }
+    }
+
+    m_legend_window->SetSize(size);
+    m_legend_window->CentreOnParent();
+}
+
+void legend_pi::SaveWindowState()
+{
+    if (!m_legend_window)
+        return;
+
+    wxPoint pos = m_legend_window->GetPosition();
+    wxSize size = m_legend_window->GetSize();
+
+    m_window_x = pos.x;
+    m_window_y = pos.y;
+    m_window_width = size.GetWidth();
+    m_window_height = size.GetHeight();
 }
 
 void legend_pi::ScanLegendFiles()
@@ -256,6 +317,39 @@ void legend_pi::ScanLegendFiles()
     }
 
     m_legend_files.Sort();
+}
+
+void legend_pi::RefreshLegendFiles()
+{
+    wxString preferred = m_last_legend_name;
+
+    if (!m_legend_files.IsEmpty() &&
+        m_legend_index < m_legend_files.GetCount()) {
+        wxFileName current(m_legend_files[m_legend_index]);
+        preferred = current.GetFullName();
+    }
+
+    ScanLegendFiles();
+
+    if (m_legend_files.IsEmpty()) {
+        ShowEmptyState();
+        return;
+    }
+
+    size_t index = 0;
+
+    if (!preferred.IsEmpty()) {
+        for (size_t i = 0; i < m_legend_files.GetCount(); ++i) {
+            wxFileName file(m_legend_files[i]);
+
+            if (file.GetFullName() == preferred) {
+                index = i;
+                break;
+            }
+        }
+    }
+
+    ShowLegend(index);
 }
 
 wxString legend_pi::RenderMarkdownFile(const wxString &path) const
@@ -301,10 +395,29 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     return wrapped;
 }
 
+void legend_pi::ShowEmptyState()
+{
+    m_legend_index = 0;
+    m_last_legend_name.Clear();
+
+    if (m_legend_title)
+        m_legend_title->SetLabel("Legenda");
+
+    if (m_markdown_view) {
+        m_markdown_view->SetPage(
+            "<html><body><p>Geen PNG- of Markdown-bestanden gevonden.</p></body></html>");
+    }
+
+    if (m_content_book && m_markdown_view)
+        m_content_book->SetSelection(1);
+}
+
 void legend_pi::ShowLegend(size_t index)
 {
-    if (m_legend_files.IsEmpty())
+    if (m_legend_files.IsEmpty()) {
+        ShowEmptyState();
         return;
+    }
 
     if (index >= m_legend_files.GetCount())
         index = 0;
@@ -315,6 +428,8 @@ void legend_pi::ShowLegend(size_t index)
     wxFileName filename(path);
     wxString ext = filename.GetExt().Lower();
 
+    m_last_legend_name = filename.GetFullName();
+
     if (m_legend_title)
         m_legend_title->SetLabel(MakeDisplayTitle(path));
 
@@ -324,29 +439,28 @@ void legend_pi::ShowLegend(size_t index)
         if (!image.LoadFile(path, wxBITMAP_TYPE_PNG))
             return;
 
-        if (m_markdown_view)
-            m_markdown_view->Hide();
-
-        if (m_legend_bitmap) {
-            m_legend_bitmap->SetBitmap(wxBitmap(image));
-            m_legend_bitmap->Show();
-        }
-    } else if (ext == "md" || ext == "markdown") {
         if (m_legend_bitmap)
-            m_legend_bitmap->Hide();
+            m_legend_bitmap->SetBitmap(wxBitmap(image));
 
-        if (m_markdown_view) {
-            m_markdown_view->SetPage(RenderMarkdownFile(path));
-            m_markdown_view->Show();
+        if (m_image_page) {
+            m_image_page->SetVirtualSize(
+                image.GetWidth() + 20,
+                image.GetHeight() + 20);
+            m_image_page->Layout();
         }
+
+        if (m_content_book)
+            m_content_book->SetSelection(0);
+    }
+    else if (ext == "md" || ext == "markdown") {
+        if (m_markdown_view)
+            m_markdown_view->SetPage(RenderMarkdownFile(path));
+
+        if (m_content_book)
+            m_content_book->SetSelection(1);
     }
 
-    SaveLastLegend();
-
-    if (m_legend_window) {
-        m_legend_window->Layout();
-        m_legend_window->Fit();
-    }
+    SaveConfig();
 }
 
 void legend_pi::OnPreviousLegend(wxCommandEvent &event)
@@ -380,20 +494,21 @@ void legend_pi::CreateLegendWindow()
     if (m_legend_window)
         return;
 
-    ScanLegendFiles();
-
     m_legend_window = new wxFrame(
         GetOCPNCanvasWindow(),
         wxID_ANY,
         "Legenda",
         wxDefaultPosition,
-        wxDefaultSize,
+        wxSize(560, 460),
         wxDEFAULT_FRAME_STYLE | wxFRAME_FLOAT_ON_PARENT);
 
     auto *panel = new wxPanel(m_legend_window);
     auto *mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    m_legend_title = new wxStaticText(panel, wxID_ANY, "Legenda");
+    m_legend_title = new wxStaticText(
+        panel,
+        wxID_ANY,
+        "Legenda");
 
     wxFont titleFont = m_legend_title->GetFont();
     titleFont.SetWeight(wxFONTWEIGHT_BOLD);
@@ -405,99 +520,94 @@ void legend_pi::CreateLegendWindow()
         wxALIGN_CENTER | wxTOP | wxLEFT | wxRIGHT,
         10);
 
-    if (m_legend_files.IsEmpty()) {
-        auto *text = new wxStaticText(
-            panel,
-            wxID_ANY,
-            "Geen PNG- of Markdown-bestanden gevonden.");
+    m_content_book = new wxSimplebook(
+        panel,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize);
 
-        mainSizer->Add(
-            text,
-            0,
-            wxALL | wxALIGN_CENTER,
-            15);
-    } else {
-        m_legend_bitmap = new wxStaticBitmap(
-            panel,
-            wxID_ANY,
-            wxBitmap(1, 1));
+    m_image_page = new wxScrolledWindow(
+        m_content_book,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxHSCROLL | wxVSCROLL);
 
-        mainSizer->Add(
-            m_legend_bitmap,
-            0,
-            wxALL | wxALIGN_CENTER,
-            10);
+    m_image_page->SetScrollRate(10, 10);
 
-        m_markdown_view = new wxHtmlWindow(
-            panel,
-            wxID_ANY,
-            wxDefaultPosition,
-            wxSize(480, 320),
-            wxHW_SCROLLBAR_AUTO);
+    auto *imageSizer = new wxBoxSizer(wxVERTICAL);
 
-        m_markdown_view->Hide();
+    m_legend_bitmap = new wxStaticBitmap(
+        m_image_page,
+        wxID_ANY,
+        wxBitmap(1, 1));
 
-        mainSizer->Add(
-            m_markdown_view,
-            1,
-            wxEXPAND | wxALL,
-            10);
+    imageSizer->Add(
+        m_legend_bitmap,
+        0,
+        wxALL | wxALIGN_CENTER,
+        10);
 
-        auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_image_page->SetSizer(imageSizer);
 
-        auto *previousButton =
-            new wxButton(panel, wxID_ANY, wxString::FromUTF8("‹"));
+    m_markdown_view = new wxHtmlWindow(
+        m_content_book,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxHW_SCROLLBAR_AUTO);
 
-        auto *nextButton =
-            new wxButton(panel, wxID_ANY, wxString::FromUTF8("›"));
+    m_content_book->AddPage(m_image_page, "Afbeelding");
+    m_content_book->AddPage(m_markdown_view, "Markdown");
 
-        previousButton->SetMinSize(wxSize(42, -1));
-        nextButton->SetMinSize(wxSize(42, -1));
+    mainSizer->Add(
+        m_content_book,
+        1,
+        wxEXPAND | wxALL,
+        8);
 
-        buttonSizer->Add(previousButton, 0, wxRIGHT, 4);
-        buttonSizer->Add(nextButton, 0, wxLEFT, 4);
+    auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
-        mainSizer->Add(
-            buttonSizer,
-            0,
-            wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
-            10);
+    auto *previousButton =
+        new wxButton(panel, wxID_ANY, wxString::FromUTF8("‹  Vorige"));
 
-        previousButton->Bind(
-            wxEVT_BUTTON,
-            &legend_pi::OnPreviousLegend,
-            this);
+    auto *nextButton =
+        new wxButton(panel, wxID_ANY, wxString::FromUTF8("Volgende  ›"));
 
-        nextButton->Bind(
-            wxEVT_BUTTON,
-            &legend_pi::OnNextLegend,
-            this);
-    }
+    previousButton->SetMinSize(wxSize(110, 36));
+    nextButton->SetMinSize(wxSize(110, 36));
+
+    previousButton->SetToolTip("Toon de vorige legenda of notitie");
+    nextButton->SetToolTip("Toon de volgende legenda of notitie");
+
+    buttonSizer->Add(previousButton, 0, wxRIGHT, 8);
+    buttonSizer->Add(nextButton, 0, wxLEFT, 8);
+
+    mainSizer->Add(
+        buttonSizer,
+        0,
+        wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
+
+    previousButton->Bind(
+        wxEVT_BUTTON,
+        &legend_pi::OnPreviousLegend,
+        this);
+
+    nextButton->Bind(
+        wxEVT_BUTTON,
+        &legend_pi::OnNextLegend,
+        this);
 
     panel->SetSizer(mainSizer);
 
-    if (!m_legend_files.IsEmpty()) {
-        size_t start_index = 0;
-
-        if (!m_last_legend_name.IsEmpty()) {
-            for (size_t i = 0; i < m_legend_files.GetCount(); ++i) {
-                wxFileName file(m_legend_files[i]);
-
-                if (file.GetFullName() == m_last_legend_name) {
-                    start_index = i;
-                    break;
-                }
-            }
-        }
-
-        ShowLegend(start_index);
-    } else {
-        mainSizer->Fit(m_legend_window);
-    }
+    RestoreWindowState();
 
     m_legend_window->Bind(
         wxEVT_CLOSE_WINDOW,
         [this](wxCloseEvent &event) {
+            SaveWindowState();
+            SaveConfig();
             m_legend_window->Hide();
             event.Veto();
         });
@@ -508,8 +618,11 @@ void legend_pi::ToggleLegendWindow()
     CreateLegendWindow();
 
     if (m_legend_window->IsShown()) {
+        SaveWindowState();
+        SaveConfig();
         m_legend_window->Hide();
     } else {
+        RefreshLegendFiles();
         m_legend_window->Show();
         m_legend_window->Raise();
     }
