@@ -8,6 +8,7 @@
 #include <wx/filename.h>
 #include <wx/image.h>
 #include <wx/panel.h>
+#include <wx/statline.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
@@ -43,7 +44,8 @@ legend_pi::legend_pi(void *ppimgr)
     : opencpn_plugin_118(ppimgr),
       m_toolbar_item_id(-1),
       m_legend_window(nullptr),
-      m_legend_title(nullptr),
+      m_legend_position(nullptr),
+      m_legend_choice(nullptr),
       m_content_book(nullptr),
       m_image_page(nullptr),
       m_legend_bitmap(nullptr),
@@ -99,7 +101,8 @@ bool legend_pi::DeInit()
     if (m_legend_window) {
         m_legend_window->Destroy();
         m_legend_window = nullptr;
-        m_legend_title = nullptr;
+        m_legend_position = nullptr;
+        m_legend_choice = nullptr;
         m_content_book = nullptr;
         m_image_page = nullptr;
         m_legend_bitmap = nullptr;
@@ -319,6 +322,26 @@ void legend_pi::ScanLegendFiles()
     m_legend_files.Sort();
 }
 
+void legend_pi::RebuildLegendChoice()
+{
+    if (!m_legend_choice)
+        return;
+
+    m_legend_choice->Clear();
+
+    if (m_legend_files.IsEmpty()) {
+        m_legend_choice->Append("Geen legenda's of notities");
+        m_legend_choice->SetSelection(0);
+        m_legend_choice->Disable();
+        return;
+    }
+
+    for (size_t i = 0; i < m_legend_files.GetCount(); ++i)
+        m_legend_choice->Append(MakeDisplayTitle(m_legend_files[i]));
+
+    m_legend_choice->Enable();
+}
+
 void legend_pi::RefreshLegendFiles()
 {
     wxString preferred = m_last_legend_name;
@@ -330,6 +353,7 @@ void legend_pi::RefreshLegendFiles()
     }
 
     ScanLegendFiles();
+    RebuildLegendChoice();
 
     if (m_legend_files.IsEmpty()) {
         ShowEmptyState();
@@ -400,8 +424,8 @@ void legend_pi::ShowEmptyState()
     m_legend_index = 0;
     m_last_legend_name.Clear();
 
-    if (m_legend_title)
-        m_legend_title->SetLabel("Legenda");
+    if (m_legend_position)
+        m_legend_position->SetLabel("0 van 0");
 
     if (m_markdown_view) {
         m_markdown_view->SetPage(
@@ -430,8 +454,16 @@ void legend_pi::ShowLegend(size_t index)
 
     m_last_legend_name = filename.GetFullName();
 
-    if (m_legend_title)
-        m_legend_title->SetLabel(MakeDisplayTitle(path));
+    if (m_legend_position) {
+        m_legend_position->SetLabel(
+            wxString::Format(
+                "%zu van %zu",
+                m_legend_index + 1,
+                m_legend_files.GetCount()));
+    }
+
+    if (m_legend_choice)
+        m_legend_choice->SetSelection(static_cast<int>(m_legend_index));
 
     if (ext == "png") {
         wxImage image;
@@ -489,6 +521,19 @@ void legend_pi::OnNextLegend(wxCommandEvent &event)
     ShowLegend(m_legend_index);
 }
 
+void legend_pi::OnLegendSelected(wxCommandEvent &event)
+{
+    if (!m_legend_choice)
+        return;
+
+    int selection = m_legend_choice->GetSelection();
+
+    if (selection == wxNOT_FOUND)
+        return;
+
+    ShowLegend(static_cast<size_t>(selection));
+}
+
 void legend_pi::CreateLegendWindow()
 {
     if (m_legend_window)
@@ -505,20 +550,47 @@ void legend_pi::CreateLegendWindow()
     auto *panel = new wxPanel(m_legend_window);
     auto *mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    m_legend_title = new wxStaticText(
+    auto *headerSizer = new wxBoxSizer(wxHORIZONTAL);
+
+    m_legend_choice = new wxChoice(
         panel,
         wxID_ANY,
-        "Legenda");
+        wxDefaultPosition,
+        wxDefaultSize);
 
-    wxFont titleFont = m_legend_title->GetFont();
-    titleFont.SetWeight(wxFONTWEIGHT_BOLD);
-    m_legend_title->SetFont(titleFont);
+    m_legend_choice->SetMinSize(wxSize(260, -1));
+    m_legend_choice->Disable();
+
+    wxFont choiceFont = m_legend_choice->GetFont();
+    choiceFont.SetWeight(wxFONTWEIGHT_BOLD);
+    m_legend_choice->SetFont(choiceFont);
+
+    m_legend_position = new wxStaticText(
+        panel,
+        wxID_ANY,
+        "0 van 0");
+
+    headerSizer->Add(
+        m_legend_choice,
+        1,
+        wxRIGHT | wxALIGN_CENTER_VERTICAL,
+        10);
+
+    headerSizer->Add(
+        m_legend_position,
+        0,
+        wxALIGN_CENTER_VERTICAL);
 
     mainSizer->Add(
-        m_legend_title,
+        headerSizer,
         0,
-        wxALIGN_CENTER | wxTOP | wxLEFT | wxRIGHT,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
         10);
+
+    m_legend_choice->Bind(
+        wxEVT_CHOICE,
+        &legend_pi::OnLegendSelected,
+        this);
 
     m_content_book = new wxSimplebook(
         panel,
@@ -565,6 +637,19 @@ void legend_pi::CreateLegendWindow()
         1,
         wxEXPAND | wxALL,
         8);
+
+    auto *separator = new wxStaticLine(
+        panel,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxLI_HORIZONTAL);
+
+    mainSizer->Add(
+        separator,
+        0,
+        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
 
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
 
