@@ -2,7 +2,7 @@
 
 Legend4OpenCPN is een OpenCPN-plugin voor het tonen van legenda's, notities en andere compacte informatie naast de kaart.
 
-De plugin is begonnen als een manier om een legenda bij kaartlagen te tonen, maar is bewust breder opgezet. Naast afbeeldingen kan Legend4OpenCPN ook Markdown-bestanden tonen. Daardoor kan dezelfde plugin later ook worden gebruikt voor bijvoorbeeld routebeschrijvingen, vaarinstructies, checklists en eigen aantekeningen.
+De plugin is begonnen als een manier om een legenda bij kaartlagen te tonen, maar is bewust breder opgezet. Naast losse afbeeldingen kan Legend4OpenCPN ook Markdown-bestanden tonen. Daardoor kan dezelfde plugin worden gebruikt voor bijvoorbeeld routebeschrijvingen, vaarinstructies, checklists en eigen aantekeningen.
 
 > Status: vroege ontwikkelversie / alpha.
 
@@ -14,10 +14,21 @@ Op dit moment ondersteunt Legend4OpenCPN:
 - een afzonderlijk legenda-/informatievenster;
 - PNG-afbeeldingen;
 - Markdown (`.md` en `.markdown`);
-- bladeren door meerdere items met vorige/volgende;
+- lokale afbeeldingen in Markdown;
+- GitHub-flavoured Markdown via MD4C, waaronder tabellen;
+- klikbare externe links;
+- direct kiezen van een item via een keuzelijst;
+- bladeren door meerdere items met `Vorige` en `Volgende`;
+- bladeren met de pijltoetsen `←` en `→`;
+- gebruik van `↑` en `↓` in de keuzelijst wanneer die focus heeft;
 - alfabetische sortering van beschikbare items;
+- opnieuw scannen van de Legend-map wanneer het venster wordt geopend;
 - onthouden van het laatst getoonde item;
+- onthouden van vensterpositie en -grootte;
+- automatisch passend schalen van grote PNG-afbeeldingen;
 - automatisch aanmaken van de benodigde gebruikersmappen.
+
+Bij nul of één item wordt overbodige navigatie niet getoond of uitgeschakeld. Bij meerdere items verschijnt compact een keuzelijst met daarnaast de positie, bijvoorbeeld `2 van 5`.
 
 Markdown wordt verwerkt met [MD4C](https://github.com/mity/md4c).
 
@@ -35,10 +46,15 @@ Bijvoorbeeld:
 ~/Documents/OpenCPN/Legend/
 ├── VHF-Nederland.png
 ├── Route-IJsselmeer.md
-└── Checklist.md
+├── Checklist.md
+└── images/
+    ├── brug.png
+    └── sluis.png
 ```
 
-De plugin maakt deze map automatisch aan wanneer dat nodig is.
+De plugin maakt de hoofdmap automatisch aan wanneer dat nodig is.
+
+PNG-bestanden in de hoofdmap worden als afzonderlijke legenda-items getoond. Afbeeldingen die alleen in Markdown-documenten worden gebruikt, kunnen daarom het best in een submap zoals `images/` worden geplaatst.
 
 De interne configuratie van de plugin wordt apart opgeslagen onder:
 
@@ -46,7 +62,7 @@ De interne configuratie van de plugin wordt apart opgeslagen onder:
 ~/Library/Application Support/OpenCPN/Legend/
 ```
 
-Daar staat onder andere `legend.ini`, waarin bijvoorbeeld het laatst gekozen item wordt onthouden.
+Daar staat onder andere `legend.ini`. Daarin worden bijvoorbeeld het laatst gekozen item en de vensterpositie en -grootte bewaard.
 
 De locatie van de gebruikersmap is op dit moment nog vast. Een instelbare locatie is voorzien voor een latere versie.
 
@@ -72,17 +88,78 @@ Een eenvoudige notitie kan bijvoorbeeld zo worden geschreven:
 3. Noteer bijzonderheden onderweg.
 ```
 
-De bedoeling is dat gebruikers zulke bestanden gewoon met een teksteditor of notitie-app kunnen maken en daarna in de `Legend`-map plaatsen.
+Als de eerste niet-lege regel een H1-kop is, bijvoorbeeld:
 
-Ondersteuning voor afbeeldingen en andere media *binnen* Markdown is een volgende stap.
+```markdown
+# Route IJsselmeer
+```
+
+dan gebruikt Legend4OpenCPN die tekst als zichtbare titel. De H1 wordt vervolgens niet nogmaals bovenaan in de inhoud weergegeven. Als geen H1 aanwezig is, gebruikt de plugin de bestandsnaam als titel.
+
+### Afbeeldingen in Markdown
+
+Afbeeldingen kunnen relatief ten opzichte van het Markdown-bestand worden opgenomen.
+
+Een afbeelding in dezelfde map:
+
+```markdown
+![Nautin test](Nautin-test.png)
+```
+
+Een afbeelding in een submap:
+
+```markdown
+![Brug](images/brug.png)
+```
+
+Voor grotere verzamelingen is de tweede vorm aan te raden, omdat ondersteunende afbeeldingen dan niet als zelfstandige legenda-items in de keuzelijst verschijnen.
+
+### Tabellen
+
+Tabellen kunnen met GitHub-flavoured Markdown worden geschreven:
+
+```markdown
+| Object | VHF | Opmerking |
+|---|---:|---|
+| Ketelbrug | 18 | Luister uit op kanaal 18 |
+| Houtribsluizen | 22 | Meld je voor passage |
+| Oranjesluizen | 18 | Controleer actuele aanwijzingen |
+```
+
+### Links
+
+Normale externe links kunnen vanuit de Markdown-weergave worden geopend, bijvoorbeeld:
+
+```markdown
+[OpenCPN](https://opencpn.org)
+```
+
+Ook `mailto:`- en `tel:`-links worden als externe links behandeld.
 
 ## Waarom Markdown?
 
-Markdown is eenvoudig met de hand te schrijven en wordt door veel bestaande programma's gebruikt of ondersteund.
+Markdown is een eenvoudig, open tekstformaat dat door veel editors en notitieprogramma's wordt ondersteund.
 
-Daardoor kan Legend4OpenCPN op termijn ook informatie ontvangen die afkomstig is uit bijvoorbeeld notitieprogramma's en converters. Als mogelijke toekomstige importlaag wordt onder andere gekeken naar oplossingen zoals Obsidian Importer.
+Daarmee blijft de inhoud onafhankelijk van Legend4OpenCPN zelf. Gebruikers kunnen notities maken met hun eigen editor, bestanden eenvoudig uitwisselen en de inhoud ook buiten OpenCPN blijven gebruiken.
 
-Het uitgangspunt is om Legend4OpenCPN zelf klein te houden: de plugin moet vooral een stabiele weergavelaag zijn voor eenvoudige, uitwisselbare inhoud.
+Op termijn kan een aparte import- of conversielaag informatie uit andere notitieformaten naar Markdown omzetten. Als mogelijke toekomstige importlaag wordt onder andere gekeken naar oplossingen zoals Obsidian Importer.
+
+Het uitgangspunt is om Legend4OpenCPN zelf klein te houden: de plugin is in de eerste plaats een stabiele weergavelaag voor eenvoudige, uitwisselbare inhoud.
+
+## Bediening
+
+Klik op de Legend-knop in de OpenCPN-toolbar om het venster te openen of te verbergen.
+
+Bij meerdere items:
+
+- kies direct een legenda of notitie in de keuzelijst;
+- gebruik `Vorige` en `Volgende`;
+- gebruik `←` en `→` om tussen items te bladeren;
+- als de keuzelijst focus heeft, kunnen `↑` en `↓` worden gebruikt om een andere keuze te maken.
+
+Grote PNG-afbeeldingen worden automatisch proportioneel verkleind zodat ze binnen het beschikbare venster passen. Kleinere afbeeldingen worden niet automatisch vergroot.
+
+Markdown-tekst blijft scrollbaar.
 
 ## Broncode en dependencies
 
@@ -125,12 +202,14 @@ cd build
 export WX_CONFIG=/opt/homebrew/bin/wx-config-3.2
 
 cmake ..
-cmake --build . -j8
+cmake --build . --target tarball -j8
 ```
 
-Bij een geslaagde build wordt in `build/` onder andere een OpenCPN-pluginpakket (`.tar.gz`) aangemaakt.
+Gebruik voor een installeerbaar OpenCPN-pakket expliciet de `tarball`-target. Alleen de normale build van `liblegend_pi.dylib` is niet voldoende om een actuele importeerbare `.tar.gz` te garanderen.
 
-De CMake-template kan tijdens het bouwen waarschuwingen tonen over oudere CMake-policies en meldingen dat de buildmap zelf geen Git-repository is. Deze meldingen zijn in de huidige ontwikkelomgeving niet fataal zolang de configuratie en compilatie verder slagen.
+Bij een geslaagde build wordt in `build/` een OpenCPN-pluginpakket (`.tar.gz`) aangemaakt.
+
+De CMake-template kan tijdens het bouwen waarschuwingen tonen over oudere CMake-policies. Deze meldingen zijn in de huidige ontwikkelomgeving niet fataal zolang de configuratie en compilatie verder slagen.
 
 ## Installeren in OpenCPN
 
@@ -140,9 +219,9 @@ De gegenereerde `.tar.gz` kan in OpenCPN worden geïmporteerd via:
 Opties → Plugins → Import Plugin
 ```
 
-Na installatie verschijnt de Legend-knop in de OpenCPN-toolbar.
+Voor testen van een nieuwe build is het verstandig de bestaande Legend-plugin eerst uit te schakelen, het nieuwe pakket te importeren en de plugin daarna weer in te schakelen.
 
-Klik op de knop om het legenda-/informatievenster te openen of te sluiten.
+Na installatie verschijnt de Legend-knop in de OpenCPN-toolbar.
 
 ## Projectstructuur
 
@@ -169,16 +248,16 @@ De map `build/` bevat gegenereerde buildbestanden en hoort niet bij de broncode.
 
 Voor volgende versies zijn onder andere interessant:
 
-- automatisch opnieuw inlezen wanneer bestanden in de Legend-map wijzigen;
-- positie en grootte van het venster onthouden;
 - een instelbare locatie voor de Legend-map;
-- afbeeldingen en andere lokale media in Markdown;
-- een eenvoudige pakketstandaard voor legenda's en informatie;
+- een eenvoudige Markdown-notitie-editor in het Legend-venster;
+- een eenvoudige pakketstandaard voor legenda's, notities en bijbehorende media;
 - import van bestaande notitieformaten via een aparte conversielaag;
-- direct kiezen van een legenda/notitie in plaats van alleen bladeren;
+- verder verfijnen van de Markdown-weergave;
+- scrollpositie per document onthouden;
+- toetsenbordbediening verder uitbreiden;
 - betere integratie met OpenCPN-kaartlagen.
 
-Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op exact dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
+Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
 
 ## Licentie
 
@@ -188,4 +267,4 @@ Externe dependencies behouden hun eigen licenties. MD4C wordt bijvoorbeeld onder
 
 ## Ontwikkeling
 
-Dit project is in actieve ontwikkeling. De huidige versie is bedoeld als werkende basis waarop de bestandsstructuur, Markdown-ondersteuning en distributie verder worden ontwikkeld.
+Dit project is in actieve ontwikkeling. De huidige versie is bedoeld als werkende basis waarop de bestandsstructuur, Markdown-ondersteuning, notitiefuncties en distributie verder worden ontwikkeld.
