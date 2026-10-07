@@ -21,6 +21,8 @@ Op dit moment ondersteunt Legend4OpenCPN:
 - bladeren door meerdere items met `Vorige` en `Volgende`;
 - bladeren met de pijltoetsen `←` en `→`;
 - gebruik van `↑` en `↓` in de keuzelijst wanneer die focus heeft;
+- `Esc` om het Legend-venster te verbergen;
+- onthouden van de scrollpositie per Markdown-document tijdens de OpenCPN-sessie;
 - alfabetische sortering van beschikbare items;
 - opnieuw scannen van de Legend-map wanneer het venster wordt geopend;
 - onthouden van het laatst getoonde item;
@@ -155,11 +157,12 @@ Bij meerdere items:
 - kies direct een legenda of notitie in de keuzelijst;
 - gebruik `Vorige` en `Volgende`;
 - gebruik `←` en `→` om tussen items te bladeren;
-- als de keuzelijst focus heeft, kunnen `↑` en `↓` worden gebruikt om een andere keuze te maken.
+- als de keuzelijst focus heeft, kunnen `↑` en `↓` worden gebruikt om een andere keuze te maken;
+- druk op `Esc` om het Legend-venster te verbergen.
 
 Grote PNG-afbeeldingen worden automatisch proportioneel verkleind zodat ze binnen het beschikbare venster passen. Kleinere afbeeldingen worden niet automatisch vergroot.
 
-Markdown-tekst blijft scrollbaar.
+Markdown-tekst blijft scrollbaar. De scrollpositie wordt per Markdown-document onthouden zolang OpenCPN draait. Als je naar een ander document gaat en later terugkeert, wordt de eerdere positie hersteld.
 
 ## Broncode en dependencies
 
@@ -253,8 +256,7 @@ Voor volgende versies zijn onder andere interessant:
 - een eenvoudige pakketstandaard voor legenda's, notities en bijbehorende media;
 - import van bestaande notitieformaten via een aparte conversielaag;
 - verder verfijnen van de Markdown-weergave;
-- scrollpositie per document onthouden;
-- toetsenbordbediening verder uitbreiden;
+- toetsenbordbediening eventueel verder uitbreiden, bijvoorbeeld met `Page Up`, `Page Down`, `Home` en `End`;
 - betere integratie met OpenCPN-kaartlagen.
 
 Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
