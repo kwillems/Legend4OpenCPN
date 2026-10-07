@@ -5,6 +5,7 @@
 #include <wx/display.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
+#include <wx/filesys.h>
 #include <wx/filename.h>
 #include <wx/image.h>
 #include <wx/panel.h>
@@ -22,6 +23,72 @@ extern "C" {
 }
 
 namespace {
+
+class LegendHtmlWindow : public wxHtmlWindow
+{
+public:
+    LegendHtmlWindow(
+        wxWindow *parent,
+        wxWindowID id,
+        const wxPoint &pos,
+        const wxSize &size,
+        long style)
+        : wxHtmlWindow(parent, id, pos, size, style)
+    {
+    }
+
+    void SetMarkdownPage(
+        const wxString &html,
+        const wxString &markdownPath)
+    {
+        wxFileName markdownFile(markdownPath);
+        m_baseDirectory = markdownFile.GetPath();
+        SetPage(html);
+    }
+
+protected:
+    wxHtmlOpeningStatus OnOpeningURL(
+        wxHtmlURLType type,
+        const wxString &url,
+        wxString *redirect) const override
+    {
+        if (type != wxHTML_URL_IMAGE || m_baseDirectory.IsEmpty())
+            return wxHTML_OPEN;
+
+        // Leave remote and already-qualified resources alone.
+        if (url.StartsWith("http://") ||
+            url.StartsWith("https://") ||
+            url.StartsWith("file:") ||
+            url.StartsWith("data:")) {
+            return wxHTML_OPEN;
+        }
+
+        wxString imagePath = url;
+
+        // A query or fragment is meaningful in a URL but not in a local
+        // filename used by wxFileSystem.
+        int queryPos = imagePath.Find('?');
+        if (queryPos != wxNOT_FOUND)
+            imagePath = imagePath.Left(queryPos);
+
+        int fragmentPos = imagePath.Find('#');
+        if (fragmentPos != wxNOT_FOUND)
+            imagePath = imagePath.Left(fragmentPos);
+
+        wxFileName imageFile(imagePath);
+
+        if (!imageFile.IsAbsolute())
+            imageFile.MakeAbsolute(m_baseDirectory);
+
+        imageFile.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
+
+        *redirect = wxFileSystem::FileNameToURL(imageFile);
+        return wxHTML_REDIRECT;
+    }
+
+private:
+    wxString m_baseDirectory;
+};
 
 void Md4cOutputCallback(const MD_CHAR *text, MD_SIZE size, void *userdata)
 {
@@ -591,8 +658,14 @@ void legend_pi::ShowLegend(size_t index)
     else if (ext == "md" || ext == "markdown") {
         m_current_image = wxImage();
 
-        if (m_markdown_view)
-            m_markdown_view->SetPage(RenderMarkdownFile(path));
+        if (m_markdown_view) {
+            auto *markdownWindow =
+                static_cast<LegendHtmlWindow *>(m_markdown_view);
+
+            markdownWindow->SetMarkdownPage(
+                RenderMarkdownFile(path),
+                path);
+        }
 
         if (m_content_book)
             m_content_book->SetSelection(1);
@@ -780,7 +853,7 @@ void legend_pi::CreateLegendWindow()
 
     m_image_page->SetSizer(imageSizer);
 
-    m_markdown_view = new wxHtmlWindow(
+    m_markdown_view = new LegendHtmlWindow(
         m_content_book,
         wxID_ANY,
         wxDefaultPosition,
