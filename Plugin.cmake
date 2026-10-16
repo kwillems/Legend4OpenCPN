@@ -25,20 +25,21 @@ set(
 # ---------------------------------------------------------------------------
 
 set(PKG_NAME legend_pi)
-set(PKG_VERSION 0.1.1)
+set(PKG_VERSION 0.2.0)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME Legend)
 set(PLUGIN_API_NAME Legend)
 
 set(PKG_SUMMARY "Configurable legend and notes for OpenCPN")
 set(PKG_DESCRIPTION [=[
-Displays configurable PNG legends and Markdown notes in OpenCPN.
+Displays configurable PNG legends and Markdown notes in OpenCPN,
+plus a dynamic legend of the waypoint symbols visible on screen.
 ]=])
 
 set(PKG_AUTHOR "Koen Willems")
 set(PKG_IS_OPEN_SOURCE "yes")
-set(PKG_HOMEPAGE "")
-set(PKG_INFO_URL "")
+set(PKG_HOMEPAGE "https://github.com/kwillems/Legend4OpenCPN")
+set(PKG_INFO_URL "https://github.com/kwillems/Legend4OpenCPN")
 
 # ---------------------------------------------------------------------------
 # Sources

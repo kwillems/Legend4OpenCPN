@@ -34,6 +34,30 @@ Bij nul of één item wordt overbodige navigatie niet getoond of uitgeschakeld. 
 
 Markdown wordt verwerkt met [MD4C](https://github.com/mity/md4c).
 
+## Dynamische legenda (waypoints in beeld)
+
+Het eerste item in de keuzelijst is altijd de dynamische legenda. Die toont
+de waypoint-symbolen (waaronder die uit GPX-bestanden en GPX-lagen) die op dat
+moment in het kaartbeeld zichtbaar zijn, gegroepeerd per symbool met het
+aantal (`×7`). Elk symbool wordt getoond met zijn eigen icoon.
+
+- Klik op een symbool om het dichtstbijzijnde exemplaar aan te wijzen. Nog een
+  klik gaat naar het volgende (`2/7`).
+- Het gekozen exemplaar wordt ongeveer zes seconden gemarkeerd met een ring
+  en een kruisje op de kaart. Staat het buiten beeld, dan verschuift de kaart
+  naar dat punt; de zoomstand blijft gelijk.
+- Na het verschuiven van de kaart: klik op **Ververs**.
+
+Beperkingen:
+
+- Kaartsymbolen van ENC- en o-charts-kaarten worden niet getoond, omdat de
+  OpenCPN-plugin-API die niet beschikbaar maakt.
+- De markering is getest met **OpenGL ingeschakeld**. Zonder OpenGL wordt de
+  markering niet betrouwbaar getoond.
+- Iconen worden gelezen uit de PNG-bestanden van OpenCPN (`UserIcons` en de
+  ingebouwde markicons). Ontbreekt het bestand, dan vraagt de plugin het icoon
+  aan OpenCPN; dat kan op macOS een leeg icoon geven.
+
 ## Gebruikersbestanden
 
 Legenda's en notities worden momenteel gelezen uit:

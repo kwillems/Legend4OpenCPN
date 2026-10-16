@@ -1,13 +1,25 @@
+#ifdef __WXOSX__
+#define GL_SILENCE_DEPRECATION
+#endif
+
 #include "legend_pi.h"
 
+#include "config.h"
+
+#include <wx/glcanvas.h>
+
 #include <wx/button.h>
+#include <wx/dc.h>
+#include <wx/dcmemory.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filesys.h>
+#include <wx/fs_mem.h>
 #include <wx/filename.h>
 #include <wx/image.h>
+#include <wx/log.h>
 #include <wx/panel.h>
 #include <wx/statline.h>
 #include <wx/sizer.h>
@@ -17,6 +29,10 @@
 #include <wx/textfile.h>
 #include <wx/utils.h>
 
+#include <algorithm>
+#include <cmath>
+#include <memory>
+#include <set>
 #include <string>
 
 extern "C" {
@@ -24,6 +40,9 @@ extern "C" {
 }
 
 namespace {
+
+// Pseudo-path of the dynamic legend entry in the list of legend items.
+const wxString kDynamicGpxId = "@gpx-legend";
 
 class LegendHtmlWindow : public wxHtmlWindow
 {
@@ -47,6 +66,13 @@ public:
         SetPage(html);
     }
 
+    void SetDynamicPage(const wxString &html)
+    {
+        // The dynamic page only uses memory: images, no relative paths.
+        m_baseDirectory.Clear();
+        SetPage(html);
+    }
+
 protected:
     wxHtmlOpeningStatus OnOpeningURL(
         wxHtmlURLType type,
@@ -60,6 +86,7 @@ protected:
         if (url.StartsWith("http://") ||
             url.StartsWith("https://") ||
             url.StartsWith("file:") ||
+            url.StartsWith("memory:") ||
             url.StartsWith("data:")) {
             return wxHTML_OPEN;
         }
@@ -97,6 +124,147 @@ void Md4cOutputCallback(const MD_CHAR *text, MD_SIZE size, void *userdata)
     out->append(text, size);
 }
 
+// Draw an image (with or without alpha channel or mask) on a background
+// colour and return the opaque result.
+wxImage FlattenImage(const wxImage &image, const wxColour &background)
+{
+    if (!image.IsOk() || image.GetWidth() <= 0 || image.GetHeight() <= 0)
+        return wxImage();
+
+    const int width = image.GetWidth();
+    const int height = image.GetHeight();
+    const size_t pixels = static_cast<size_t>(width) * height;
+
+    const unsigned char *src = image.GetData();
+    const unsigned char *alpha = image.HasAlpha() ? image.GetAlpha() : nullptr;
+
+    const bool hasMask = !alpha && image.HasMask();
+    const unsigned char maskR = hasMask ? image.GetMaskRed() : 0;
+    const unsigned char maskG = hasMask ? image.GetMaskGreen() : 0;
+    const unsigned char maskB = hasMask ? image.GetMaskBlue() : 0;
+
+    wxImage flat(width, height, false);
+    unsigned char *dst = flat.GetData();
+
+    for (size_t i = 0; i < pixels; ++i) {
+        const unsigned char r = src[i * 3];
+        const unsigned char g = src[i * 3 + 1];
+        const unsigned char b = src[i * 3 + 2];
+
+        int a = alpha ? alpha[i] : 255;
+
+        if (hasMask && r == maskR && g == maskG && b == maskB)
+            a = 0;
+
+        dst[i * 3] = static_cast<unsigned char>(
+            (r * a + background.Red() * (255 - a)) / 255);
+        dst[i * 3 + 1] = static_cast<unsigned char>(
+            (g * a + background.Green() * (255 - a)) / 255);
+        dst[i * 3 + 2] = static_cast<unsigned char>(
+            (b * a + background.Blue() * (255 - a)) / 255);
+    }
+
+    return flat;
+}
+
+// OpenCPN keeps waypoint icons as PNG files: user icons in the private data
+// directory (UserIcons) and the built-in ones in the shared data directory.
+// Reading the file ourselves is more reliable than asking OpenCPN for a
+// bitmap, which can come back empty on macOS.
+wxImage LoadIconFromFile(const wxString &key, const wxColour &background)
+{
+    if (key.IsEmpty() || key.Find('/') != wxNOT_FOUND ||
+        key.Find('\\') != wxNOT_FOUND || key.Find("..") != wxNOT_FOUND)
+        return wxImage();
+
+    wxArrayString candidates;
+
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (privateDir && !privateDir->IsEmpty()) {
+        candidates.Add(
+            *privateDir + wxFileName::GetPathSeparator() +
+            "UserIcons" + wxFileName::GetPathSeparator() + key + ".png");
+    }
+
+    wxString *sharedDir = GetpSharedDataLocation();
+    if (sharedDir && !sharedDir->IsEmpty()) {
+        candidates.Add(
+            *sharedDir + wxFileName::GetPathSeparator() +
+            "uidata" + wxFileName::GetPathSeparator() +
+            "markicons" + wxFileName::GetPathSeparator() + key + ".png");
+        candidates.Add(
+            *sharedDir + wxFileName::GetPathSeparator() +
+            "uidata" + wxFileName::GetPathSeparator() + key + ".png");
+    }
+
+    for (size_t i = 0; i < candidates.GetCount(); ++i) {
+        if (!wxFileName::FileExists(candidates[i]))
+            continue;
+
+        wxImage image;
+        wxLogNull quiet;
+
+        if (image.LoadFile(candidates[i], wxBITMAP_TYPE_PNG) && image.IsOk())
+            return FlattenImage(image, background);
+    }
+
+    return wxImage();
+}
+
+// Convert an OpenCPN icon bitmap to an opaque image by drawing it on the
+// background colour. Transparency (alpha channel or mask) is resolved here,
+// because it is lost or turns black when the image is shown by wxHtmlWindow.
+wxImage FlattenIcon(
+    const wxBitmap &bitmap,
+    const wxColour &background,
+    const wxString &key)
+{
+    // First attempt: let the platform draw the bitmap on a canvas with the
+    // background colour. On some platforms reading the pixels of a bitmap
+    // directly (ConvertToImage) gives an empty result while drawing works.
+    {
+        const int bw = bitmap.GetWidth();
+        const int bh = bitmap.GetHeight();
+
+        if (bw > 0 && bh > 0) {
+            wxBitmap canvas(bw, bh, 24);
+
+            {
+                wxMemoryDC dc;
+                dc.SelectObject(canvas);
+                dc.SetBackground(wxBrush(background));
+                dc.Clear();
+                dc.DrawBitmap(bitmap, 0, 0, true);
+                dc.SelectObject(wxNullBitmap);
+            }
+
+            wxImage drawn = canvas.ConvertToImage();
+
+            if (drawn.IsOk()) {
+                const unsigned char *d = drawn.GetData();
+                const size_t n =
+                    static_cast<size_t>(drawn.GetWidth()) * drawn.GetHeight();
+
+                std::set<unsigned int> seen;
+                for (size_t i = 0; i < n; ++i) {
+                    seen.insert(
+                        (static_cast<unsigned int>(d[i * 3]) << 16) |
+                        (static_cast<unsigned int>(d[i * 3 + 1]) << 8) |
+                        static_cast<unsigned int>(d[i * 3 + 2]));
+                }
+
+                // More than the plain background colour: the drawing worked.
+                if (seen.size() > 1)
+                    return drawn;
+            }
+        }
+    }
+
+    (void)key;
+
+    return FlattenImage(bitmap.ConvertToImage(), background);
+}
+
 }
 
 extern "C" DECL_EXP opencpn_plugin *create_pi(void *ppimgr)
@@ -124,11 +292,23 @@ legend_pi::legend_pi(void *ppimgr)
       m_legend_bitmap(nullptr),
       m_markdown_view(nullptr),
       m_legend_index(0),
+      m_viewport_valid(false),
+      m_dynamic_generation(0),
+      m_dynamic_total(0),
+      m_marker_active(false),
+      m_marker_lat(0.0),
+      m_marker_lon(0.0),
+      m_marker_phase(0),
       m_window_x(-1),
       m_window_y(-1),
       m_window_width(560),
       m_window_height(460)
 {
+    m_viewport = PlugIn_ViewPort();
+
+    m_marker_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnMarkerTimer(); });
 }
 
 legend_pi::~legend_pi()
@@ -163,7 +343,10 @@ int legend_pi::Init()
     EnsureDirectories();
     LoadConfig();
 
-    return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL;
+    return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
+           WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
+           WANTS_OPENGL_OVERLAY_CALLBACK |
+           WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK;
 }
 
 bool legend_pi::DeInit()
@@ -171,6 +354,8 @@ bool legend_pi::DeInit()
     SaveCurrentMarkdownScroll();
     SaveWindowState();
     SaveConfig();
+    StopMarker();
+    ClearDynamicImages();
 
     if (m_legend_window) {
         m_legend_window->Destroy();
@@ -207,12 +392,12 @@ int legend_pi::GetAPIVersionMinor()
 
 int legend_pi::GetPlugInVersionMajor()
 {
-    return 0;
+    return PLUGIN_VERSION_MAJOR;
 }
 
 int legend_pi::GetPlugInVersionMinor()
 {
-    return 1;
+    return PLUGIN_VERSION_MINOR;
 }
 
 wxString legend_pi::GetCommonName()
@@ -227,7 +412,7 @@ wxString legend_pi::GetShortDescription()
 
 wxString legend_pi::GetLongDescription()
 {
-    return "Displays PNG legends and Markdown notes in OpenCPN.";
+    return "Displays PNG legends and Markdown notes in OpenCPN, plus a dynamic legend of the waypoint symbols visible on screen.";
 }
 
 wxString legend_pi::GetLegendDirectory() const
@@ -242,14 +427,18 @@ wxString legend_pi::GetLegendDirectory() const
 
 wxString legend_pi::GetConfigDirectory() const
 {
+    // OpenCPN's own private data directory is platform specific and known
+    // to OpenCPN itself; use it instead of a hardcoded macOS path.
+    wxString base;
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+
+    if (privateDir && !privateDir->IsEmpty())
+        base = *privateDir;
+    else
+        base = wxStandardPaths::Get().GetUserDataDir();
+
     return
-        wxFileName::GetHomeDir() +
-        wxFileName::GetPathSeparator() +
-        "Library" +
-        wxFileName::GetPathSeparator() +
-        "Application Support" +
-        wxFileName::GetPathSeparator() +
-        "OpenCPN" +
+        base +
         wxFileName::GetPathSeparator() +
         "Legend";
 }
@@ -269,6 +458,9 @@ void legend_pi::EnsureDirectories() const
 
 wxString legend_pi::MakeDisplayTitle(const wxString &path) const
 {
+    if (path == kDynamicGpxId)
+        return wxString::FromUTF8("Kaartlegenda (waypoints in beeld)");
+
     wxFileName filename(path);
     wxString ext = filename.GetExt().Lower();
 
@@ -411,27 +603,29 @@ void legend_pi::ScanLegendFiles()
     wxString legend_dir = GetLegendDirectory();
     wxDir dir(legend_dir);
 
-    if (!dir.IsOpened())
-        return;
+    if (dir.IsOpened()) {
+        wxString filename;
+        bool found = dir.GetFirst(&filename, wxEmptyString, wxDIR_FILES);
 
-    wxString filename;
-    bool found = dir.GetFirst(&filename, wxEmptyString, wxDIR_FILES);
+        while (found) {
+            wxFileName file(filename);
+            wxString ext = file.GetExt().Lower();
 
-    while (found) {
-        wxFileName file(filename);
-        wxString ext = file.GetExt().Lower();
+            if (ext == "png" || ext == "md" || ext == "markdown") {
+                m_legend_files.Add(
+                    legend_dir +
+                    wxFileName::GetPathSeparator() +
+                    filename);
+            }
 
-        if (ext == "png" || ext == "md" || ext == "markdown") {
-            m_legend_files.Add(
-                legend_dir +
-                wxFileName::GetPathSeparator() +
-                filename);
+            found = dir.GetNext(&filename);
         }
 
-        found = dir.GetNext(&filename);
+        m_legend_files.Sort();
     }
 
-    m_legend_files.Sort();
+    // The dynamic legend is always the first item.
+    m_legend_files.Insert(kDynamicGpxId, 0);
 }
 
 void legend_pi::RebuildLegendChoice()
@@ -787,7 +981,12 @@ void legend_pi::ShowLegend(size_t index)
             m_legend_choice->SetSelection(static_cast<int>(m_legend_index));
     }
 
-    if (ext == "png") {
+    if (path == kDynamicGpxId) {
+        m_current_image = wxImage();
+        m_current_legend_path = path;
+        ShowDynamicLegend();
+    }
+    else if (ext == "png") {
         wxImage image;
 
         if (!image.LoadFile(path, wxBITMAP_TYPE_PNG))
@@ -1047,8 +1246,27 @@ void legend_pi::CreateLegendWindow()
     // Open normal external Markdown links in the system browser.
     m_markdown_view->Bind(
         wxEVT_HTML_LINK_CLICKED,
-        [](wxHtmlLinkEvent &event) {
+        [this](wxHtmlLinkEvent &event) {
             wxString href = event.GetLinkInfo().GetHref();
+
+            // Links inside the dynamic legend.
+            if (href.StartsWith("legend-goto:")) {
+                long index = -1;
+
+                if (href.Mid(12).ToLong(&index) && index >= 0) {
+                    m_markdown_view->CallAfter(
+                        [this, index]() {
+                            GoToDynamicGroup(static_cast<size_t>(index));
+                        });
+                }
+                return;
+            }
+
+            if (href.StartsWith("legend-refresh:")) {
+                m_markdown_view->CallAfter(
+                    [this]() { ShowDynamicLegend(); });
+                return;
+            }
 
             if (href.StartsWith("http://") ||
                 href.StartsWith("https://") ||
@@ -1191,4 +1409,487 @@ void legend_pi::OnToolbarToolCallback(int id)
 {
     if (id == m_toolbar_item_id)
         ToggleLegendWindow();
+}
+
+
+void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
+{
+    m_viewport = vp;
+    m_viewport_valid = (vp.pix_width > 0 && vp.pix_height > 0);
+}
+
+void legend_pi::ClearDynamicImages()
+{
+    for (const wxString &name : m_dynamic_image_names)
+        wxMemoryFSHandler::RemoveFile(name);
+
+    m_dynamic_image_names.clear();
+}
+
+void legend_pi::CollectDynamicLegend()
+{
+    m_dynamic_groups.clear();
+    m_dynamic_total = 0;
+
+    if (!m_viewport_valid)
+        return;
+
+    const PlugIn_ViewPort vp = m_viewport;
+
+    // Longitudes may be offset by 360 degrees relative to the viewport.
+    auto lonInView = [&vp](double lon) {
+        for (double offset : {0.0, 360.0, -360.0}) {
+            const double l = lon + offset;
+            if (l >= vp.lon_min && l <= vp.lon_max)
+                return true;
+        }
+        return false;
+    };
+
+    std::map<wxString, DynamicGroup> groups;
+
+    wxArrayString guids = GetWaypointGUIDArray();
+
+    for (size_t i = 0; i < guids.GetCount(); ++i) {
+        std::unique_ptr<PlugIn_Waypoint_Ex> wp =
+            GetWaypointEx_Plugin(guids[i]);
+
+        if (!wp || !wp->IsVisible)
+            continue;
+
+        // Waypoints with a scale limit disappear when zoomed out too far.
+        if (wp->b_useScamin && vp.chart_scale > wp->scamin)
+            continue;
+
+        if (wp->m_lat < vp.lat_min || wp->m_lat > vp.lat_max)
+            continue;
+
+        if (!lonInView(wp->m_lon))
+            continue;
+
+        wxString key = wp->IconName;
+        if (key.IsEmpty())
+            key = "unknown";
+
+        DynamicGroup &group = groups[key];
+
+        if (group.key.IsEmpty()) {
+            group.key = key;
+            group.label =
+                wp->IconDescription.IsEmpty() ? key : wp->IconDescription;
+        }
+
+        group.positions.emplace_back(wp->m_lat, wp->m_lon);
+        ++m_dynamic_total;
+    }
+
+    // Order the positions of every group from near to far, measured from
+    // the centre of the screen.
+    const double kPi = 3.14159265358979323846;
+    const double cosLat = std::cos(vp.clat * kPi / 180.0);
+
+    auto distance = [&](const std::pair<double, double> &p) {
+        double dlat = p.first - vp.clat;
+        double dlon = p.second - vp.clon;
+
+        while (dlon > 180.0)
+            dlon -= 360.0;
+        while (dlon < -180.0)
+            dlon += 360.0;
+
+        dlon *= cosLat;
+        return dlat * dlat + dlon * dlon;
+    };
+
+    for (auto &entry : groups) {
+        DynamicGroup group = entry.second;
+
+        std::sort(
+            group.positions.begin(),
+            group.positions.end(),
+            [&](const std::pair<double, double> &a,
+                const std::pair<double, double> &b) {
+                return distance(a) < distance(b);
+            });
+
+        m_dynamic_groups.push_back(group);
+    }
+
+    std::sort(
+        m_dynamic_groups.begin(),
+        m_dynamic_groups.end(),
+        [](const DynamicGroup &a, const DynamicGroup &b) {
+            return a.label.CmpNoCase(b.label) < 0;
+        });
+}
+
+void legend_pi::RenderDynamicLegend(bool keepScroll)
+{
+    if (!m_markdown_view)
+        return;
+
+    static bool memoryHandlerAdded = false;
+    if (!memoryHandlerAdded) {
+        wxFileSystem::AddHandler(new wxMemoryFSHandler);
+        memoryHandlerAdded = true;
+    }
+
+    int scrollX = 0;
+    int scrollY = 0;
+    if (keepScroll)
+        m_markdown_view->GetViewStart(&scrollX, &scrollY);
+
+    ClearDynamicImages();
+    ++m_dynamic_generation;
+
+    auto escape = [](wxString text) {
+        text.Replace("&", "&amp;");
+        text.Replace("<", "&lt;");
+        text.Replace(">", "&gt;");
+        return text;
+    };
+
+    wxString html;
+    html << "<html><body>";
+    html << "<p><b>Kaartlegenda</b></p>";
+
+    if (!m_viewport_valid) {
+        html << "<p>De kaartpositie is nog niet bekend. Beweeg de kaart "
+                "een klein stukje en klik daarna op "
+                "<a href=\"legend-refresh:\">Ververs</a>.</p>";
+    }
+    else {
+        html << "<p>" << static_cast<int>(m_dynamic_groups.size())
+             << " symbolen, "
+             << m_dynamic_total << " waypoints in beeld. "
+             << "<a href=\"legend-refresh:\">Ververs</a></p>";
+
+        if (m_dynamic_groups.empty()) {
+            html << "<p>Geen zichtbare waypoints in dit kaartbeeld.</p>";
+        }
+        else {
+            html << "<table cellpadding=\"4\">";
+
+            for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+                DynamicGroup &group = m_dynamic_groups[i];
+                group.imageName.Clear();
+
+                const wxColour background =
+                    m_markdown_view->GetBackgroundColour();
+
+                // First choice: the icon's own PNG file. Fall back to
+                // asking OpenCPN for the bitmap.
+                wxImage image = LoadIconFromFile(group.key, background);
+
+                if (!image.IsOk()) {
+                    wxBitmap bitmap = GetIcon_PlugIn(group.key);
+
+                    if (bitmap.IsOk())
+                        image = FlattenIcon(bitmap, background, group.key);
+                }
+
+                if (image.IsOk()) {
+                    wxString name = wxString::Format(
+                        "legend_dyn_%d_%zu.png",
+                        m_dynamic_generation,
+                        i);
+
+                    wxMemoryFSHandler::AddFile(
+                        name, image, wxBITMAP_TYPE_PNG);
+
+                    m_dynamic_image_names.push_back(name);
+                    group.imageName = name;
+                }
+
+                const size_t count = group.positions.size();
+
+                wxString countText;
+                if (group.current >= 0 && count > 1) {
+                    countText = wxString::Format(
+                        "%d/%zu", group.current + 1, count);
+                }
+                else {
+                    countText = wxString::Format("&times;%zu", count);
+                }
+
+                html << "<tr><td>";
+                if (!group.imageName.IsEmpty())
+                    html << "<img src=\"memory:" << group.imageName << "\">";
+                html << "</td><td><a href=\"legend-goto:" << static_cast<int>(i) << "\">"
+                     << escape(group.label) << "</a></td><td align=\"right\">"
+                     << countText << "</td></tr>";
+            }
+
+            html << "</table>";
+            html << "<p><font size=\"-1\">Klik op een symbool om naar het "
+                    "dichtstbijzijnde te gaan. Nog een klik gaat naar het "
+                    "volgende. Klik op Ververs nadat je de kaart hebt "
+                    "verschoven.</font></p>";
+        }
+    }
+
+    html << "</body></html>";
+
+    static_cast<LegendHtmlWindow *>(m_markdown_view)->SetDynamicPage(html);
+
+    if (keepScroll) {
+        m_markdown_view->CallAfter(
+            [this, scrollX, scrollY]() {
+                if (m_markdown_view &&
+                    m_current_legend_path == kDynamicGpxId) {
+                    m_markdown_view->Scroll(scrollX, scrollY);
+                }
+            });
+    }
+}
+
+void legend_pi::ShowDynamicLegend()
+{
+    CollectDynamicLegend();
+    RenderDynamicLegend(false);
+
+    if (m_content_book)
+        m_content_book->SetSelection(1);
+}
+
+void legend_pi::GoToDynamicGroup(size_t index)
+{
+    if (index >= m_dynamic_groups.size())
+        return;
+
+    DynamicGroup &group = m_dynamic_groups[index];
+
+    if (group.positions.empty())
+        return;
+
+    group.current =
+        (group.current + 1) % static_cast<int>(group.positions.size());
+
+    const std::pair<double, double> &position =
+        group.positions[static_cast<size_t>(group.current)];
+
+    // Keep the current zoom level.
+    double scale = m_viewport_valid ? m_viewport.view_scale_ppm : 0.0;
+    if (scale <= 0.0)
+        scale = 0.1;
+
+    // Only move the chart when the object is not comfortably in view.
+    // Otherwise the chart stays where it is and the marker shows the spot.
+    bool comfortablyVisible = false;
+
+    if (m_viewport_valid) {
+        wxPoint pixel;
+        GetCanvasPixLL(&m_viewport, &pixel, position.first, position.second);
+
+        const int marginX = m_viewport.pix_width / 8;
+        const int marginY = m_viewport.pix_height / 8;
+
+        comfortablyVisible =
+            pixel.x >= marginX &&
+            pixel.x <= m_viewport.pix_width - marginX &&
+            pixel.y >= marginY &&
+            pixel.y <= m_viewport.pix_height - marginY;
+    }
+
+    if (!comfortablyVisible) {
+        wxWindow *canvas = PluginGetFocusCanvas();
+        if (!canvas)
+            canvas = GetCanvasByIndex(0);
+
+        if (canvas) {
+            CanvasJumpToPosition(
+                canvas, position.first, position.second, scale);
+        }
+        else {
+            JumpToPosition(position.first, position.second, scale);
+        }
+    }
+
+    ShowMarker(position.first, position.second);
+
+    RenderDynamicLegend(true);
+}
+
+
+void legend_pi::RefreshAllCanvases()
+{
+    const int count = GetCanvasCount();
+
+    for (int i = 0; i < count; ++i) {
+        wxWindow *canvas = GetCanvasByIndex(i);
+
+        if (canvas)
+            RequestRefresh(canvas);
+    }
+}
+
+void legend_pi::ShowMarker(double lat, double lon)
+{
+    m_marker_lat = lat;
+    m_marker_lon = lon;
+    m_marker_phase = 0;
+    m_marker_active = true;
+
+    if (m_marker_timer.IsRunning())
+        m_marker_timer.Stop();
+
+    m_marker_timer.Start(120);
+    RefreshAllCanvases();
+}
+
+void legend_pi::StopMarker()
+{
+    if (m_marker_timer.IsRunning())
+        m_marker_timer.Stop();
+
+    if (m_marker_active) {
+        m_marker_active = false;
+        RefreshAllCanvases();
+    }
+}
+
+void legend_pi::OnMarkerTimer()
+{
+    ++m_marker_phase;
+
+    // About six seconds in total.
+    if (m_marker_phase > 50) {
+        StopMarker();
+        return;
+    }
+
+    RefreshAllCanvases();
+}
+
+bool legend_pi::RenderOverlayMultiCanvas(
+    wxDC &dc,
+    PlugIn_ViewPort *vp,
+    int canvasIndex,
+    int priority)
+{
+    (void)canvasIndex;
+
+    if (!m_marker_active || !vp)
+        return false;
+
+    // Draw once per frame.
+    if (priority != OVERLAY_LEGACY && priority != -1)
+        return false;
+
+    wxPoint centre;
+    GetCanvasPixLL(vp, &centre, m_marker_lat, m_marker_lon);
+
+    if (centre.x < -60 || centre.y < -60 ||
+        centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
+        return false;
+
+    const int radius = 16;
+    const int pulse = m_marker_phase % 10;
+
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
+
+    const wxColour highlight(255, 0, 110);
+
+    // White outline first, so the marker stands out on any chart colour.
+    dc.SetPen(wxPen(*wxWHITE, 7));
+    dc.DrawCircle(centre, radius);
+    dc.DrawLine(centre.x - radius - 12, centre.y, centre.x - radius + 2, centre.y);
+    dc.DrawLine(centre.x + radius - 2, centre.y, centre.x + radius + 12, centre.y);
+    dc.DrawLine(centre.x, centre.y - radius - 12, centre.x, centre.y - radius + 2);
+    dc.DrawLine(centre.x, centre.y + radius - 2, centre.x, centre.y + radius + 12);
+
+    dc.SetPen(wxPen(highlight, 3));
+    dc.DrawCircle(centre, radius);
+    dc.DrawLine(centre.x - radius - 10, centre.y, centre.x - radius + 2, centre.y);
+    dc.DrawLine(centre.x + radius - 2, centre.y, centre.x + radius + 10, centre.y);
+    dc.DrawLine(centre.x, centre.y - radius - 10, centre.x, centre.y - radius + 2);
+    dc.DrawLine(centre.x, centre.y + radius - 2, centre.x, centre.y + radius + 10);
+
+    // A pulsing ring that draws the eye.
+    dc.SetPen(wxPen(highlight, 2));
+    dc.DrawCircle(centre, radius + 8 + pulse * 3);
+
+    return true;
+}
+
+bool legend_pi::RenderGLOverlayMultiCanvas(
+    wxGLContext *pcontext,
+    PlugIn_ViewPort *vp,
+    int canvasIndex,
+    int priority)
+{
+    (void)pcontext;
+    (void)canvasIndex;
+
+    if (!m_marker_active || !vp)
+        return false;
+
+    // Draw once per frame.
+    if (priority != OVERLAY_LEGACY && priority != -1)
+        return false;
+
+    wxPoint centre;
+    GetCanvasPixLL(vp, &centre, m_marker_lat, m_marker_lon);
+
+    if (centre.x < -60 || centre.y < -60 ||
+        centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
+        return false;
+
+    const double cx = centre.x;
+    const double cy = centre.y;
+    const double radius = 16.0;
+    const int pulse = m_marker_phase % 10;
+
+    glPushAttrib(
+        GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT | GL_HINT_BIT);
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    auto circle = [](double x, double y, double r) {
+        const int segments = 48;
+        const double kPi = 3.14159265358979323846;
+
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
+        }
+        glEnd();
+    };
+
+    auto ticks = [](double x, double y, double r, double length) {
+        glBegin(GL_LINES);
+        glVertex2d(x - r - length, y);
+        glVertex2d(x - r + 2, y);
+        glVertex2d(x + r - 2, y);
+        glVertex2d(x + r + length, y);
+        glVertex2d(x, y - r - length);
+        glVertex2d(x, y - r + 2);
+        glVertex2d(x, y + r - 2);
+        glVertex2d(x, y + r + length);
+        glEnd();
+    };
+
+    // White outline first, so the marker stands out on any chart colour.
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(7.0f);
+    circle(cx, cy, radius);
+    ticks(cx, cy, radius, 12.0);
+
+    glColor4ub(255, 0, 110, 255);
+    glLineWidth(3.0f);
+    circle(cx, cy, radius);
+    ticks(cx, cy, radius, 10.0);
+
+    // A pulsing ring that draws the eye.
+    glLineWidth(2.0f);
+    circle(cx, cy, radius + 8.0 + pulse * 3.0);
+
+    glPopAttrib();
+
+    return true;
 }
