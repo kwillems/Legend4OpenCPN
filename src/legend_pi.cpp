@@ -55,6 +55,10 @@ namespace {
 // Pseudo-path of the dynamic legend entry in the list of legend items.
 const wxString kDynamicGpxId = "@gpx-legend";
 
+// Id of the table cells of one row in the dynamic legend, followed by the
+// row number.
+const wxString kLegendRowIdPrefix = "legend-row-";
+
 // The "memory:" file system handler for the icons of the dynamic legend.
 // Its code is compiled into this plugin, so it must be removed again in
 // DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
@@ -88,6 +92,36 @@ public:
         // The dynamic page only uses memory: images, no relative paths.
         m_baseDirectory.Clear();
         SetPage(html);
+    }
+
+    // Row of the dynamic legend at a window position, or -1.
+    int RowAt(const wxPoint &windowPos) const
+    {
+        const wxHtmlCell *root = GetInternalRepresentation();
+        if (!root)
+            return -1;
+
+        const wxPoint pos = CalcUnscrolledPosition(windowPos);
+        return FindRow(root, pos.x - root->GetPosX(), pos.y - root->GetPosY());
+    }
+
+    void SetRowCursor(bool overRow)
+    {
+        if (overRow == m_overRow)
+            return;
+
+        m_overRow = overRow;
+        SetCursor(overRow ? wxCursor(wxCURSOR_HAND) : wxNullCursor);
+    }
+
+    // wxHtmlWindow sets its own cursor (text or arrow) when the mouse moves
+    // to another cell; keep the hand over a row.
+    wxCursor GetHTMLCursor(HTMLCursor type) const override
+    {
+        if (m_overRow)
+            return wxCursor(wxCURSOR_HAND);
+
+        return wxHtmlWindow::GetHTMLCursor(type);
     }
 
 protected:
@@ -132,7 +166,36 @@ protected:
     }
 
 private:
+    // x and y are relative to container. Table cells fill the full row
+    // height, so a hit on any cell with a row id identifies the row.
+    static int FindRow(const wxHtmlCell *container, int x, int y)
+    {
+        for (const wxHtmlCell *cell = container->GetFirstChild();
+             cell;
+             cell = cell->GetNext()) {
+            const int cx = x - cell->GetPosX();
+            const int cy = y - cell->GetPosY();
+
+            if (cx < 0 || cy < 0 ||
+                cx >= cell->GetWidth() || cy >= cell->GetHeight())
+                continue;
+
+            wxString rest;
+            long row = -1;
+            if (cell->GetId().StartsWith(kLegendRowIdPrefix, &rest) &&
+                rest.ToLong(&row))
+                return static_cast<int>(row);
+
+            const int found = FindRow(cell, cx, cy);
+            if (found >= 0)
+                return found;
+        }
+
+        return -1;
+    }
+
     wxString m_baseDirectory;
+    bool m_overRow = false;
 };
 
 void Md4cOutputCallback(const MD_CHAR *text, MD_SIZE size, void *userdata)
@@ -475,6 +538,10 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnLoadingTimer(); });
 
+    m_visibility_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { CheckVisibilityChanges(); });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -532,6 +599,7 @@ bool legend_pi::DeInit()
     m_auto_refresh_timer.Stop();
     m_loading_timer.Stop();
     m_prefetch_timer.Stop();
+    m_visibility_timer.Stop();
     m_loading = false;
     ClearDynamicImages();
 
@@ -1434,19 +1502,6 @@ void legend_pi::CreateLegendWindow()
         [this](wxHtmlLinkEvent &event) {
             wxString href = event.GetLinkInfo().GetHref();
 
-            // Links inside the dynamic legend.
-            if (href.StartsWith("legend-goto:")) {
-                long index = -1;
-
-                if (href.Mid(12).ToLong(&index) && index >= 0) {
-                    m_markdown_view->CallAfter(
-                        [this, index]() {
-                            GoToDynamicGroup(static_cast<size_t>(index));
-                        });
-                }
-                return;
-            }
-
             if (href.StartsWith("legend-refresh:")) {
                 m_markdown_view->CallAfter(
                     [this]() { ShowDynamicLegend(true); });
@@ -1461,6 +1516,54 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            event.Skip();
+        });
+
+    // Whole rows of the dynamic legend are clickable, not only the text.
+    // A press and release on the same row counts as a click; dragging to
+    // select text does not.
+    auto *legendView = static_cast<LegendHtmlWindow *>(m_markdown_view);
+    auto pressedRow = std::make_shared<int>(-1);
+
+    m_markdown_view->Bind(
+        wxEVT_LEFT_DOWN,
+        [this, legendView, pressedRow](wxMouseEvent &event) {
+            *pressedRow = m_current_legend_path == kDynamicGpxId
+                              ? legendView->RowAt(event.GetPosition())
+                              : -1;
+            event.Skip();
+        });
+
+    m_markdown_view->Bind(
+        wxEVT_LEFT_UP,
+        [this, legendView, pressedRow](wxMouseEvent &event) {
+            event.Skip();
+
+            const int pressed = *pressedRow;
+            *pressedRow = -1;
+
+            if (pressed < 0 || m_current_legend_path != kDynamicGpxId ||
+                legendView->RowAt(event.GetPosition()) != pressed)
+                return;
+
+            m_markdown_view->CallAfter([this, pressed]() {
+                GoToDynamicGroup(static_cast<size_t>(pressed));
+            });
+        });
+
+    m_markdown_view->Bind(
+        wxEVT_MOTION,
+        [this, legendView](wxMouseEvent &event) {
+            legendView->SetRowCursor(
+                m_current_legend_path == kDynamicGpxId &&
+                legendView->RowAt(event.GetPosition()) >= 0);
+            event.Skip();
+        });
+
+    m_markdown_view->Bind(
+        wxEVT_LEAVE_WINDOW,
+        [legendView](wxMouseEvent &event) {
+            legendView->SetRowCursor(false);
             event.Skip();
         });
 
@@ -1650,8 +1753,78 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
         vp.pix_height != old.pix_height;
 
     // Wait until the chart has stopped moving before rebuilding the list.
-    if (changed)
+    if (changed) {
         m_auto_refresh_timer.StartOnce(400);
+        return;
+    }
+
+    // A repaint without movement may come from hiding or showing a layer.
+    // Not restarted on every repaint, so the marker animation cannot keep
+    // postponing the check.
+    if (!m_visibility_timer.IsRunning())
+        m_visibility_timer.StartOnce(700);
+}
+
+void legend_pi::CheckVisibilityChanges()
+{
+    if (!IsDynamicLegendVisible() || m_loading || !m_viewport_valid ||
+        m_waypoint_cache.empty() ||
+        m_waypoint_cache.size() != m_waypoint_guids.GetCount())
+        return;
+
+    const PlugIn_ViewPort &vp = m_viewport;
+
+    auto lonInView = [&vp](double lon) {
+        for (double offset : {0.0, 360.0, -360.0}) {
+            const double l = lon + offset;
+            if (l >= vp.lon_min && l <= vp.lon_max)
+                return true;
+        }
+        return false;
+    };
+
+    // Waypoints of one layer are next to each other in OpenCPN's list.
+    // Probe the first waypoint in view of every unbroken run, visible or
+    // not: hiding or showing a layer changes all of its waypoints at once.
+    std::vector<size_t> probes;
+    size_t previous = static_cast<size_t>(-1);
+
+    for (size_t i = 0; i < m_waypoint_cache.size(); ++i) {
+        const CachedWaypoint &wp = m_waypoint_cache[i];
+
+        if (wp.lat < vp.lat_min || wp.lat > vp.lat_max || !lonInView(wp.lon))
+            continue;
+
+        if (previous == static_cast<size_t>(-1) || i != previous + 1)
+            probes.push_back(i);
+
+        previous = i;
+    }
+
+    // Every probe asks OpenCPN for one waypoint; keep the total small.
+    const size_t kMaxProbes = 200;
+    if (probes.size() > kMaxProbes) {
+        std::vector<size_t> spread;
+        for (size_t k = 0; k < kMaxProbes; ++k)
+            spread.push_back(probes[k * probes.size() / kMaxProbes]);
+        probes.swap(spread);
+    }
+
+    for (size_t index : probes) {
+        std::unique_ptr<PlugIn_Waypoint_Ex> wp =
+            GetWaypointEx_Plugin(m_waypoint_guids[index]);
+
+        const bool visible = wp && wp->IsVisible;
+
+        if (visible != m_waypoint_cache[index].visible) {
+            wxLogMessage(
+                "Legend: waypoint visibility changed, reloading waypoints");
+
+            // The list stays in place while loading; its end refreshes it.
+            StartWaypointLoading(true);
+            return;
+        }
+    }
 }
 
 bool legend_pi::IsDynamicLegendVisible() const
@@ -2145,22 +2318,28 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             if (isActive)
                 label = "<b>" + label + "</b>";
 
+            // Every cell of the row carries the row id, so a click anywhere
+            // in the row can be traced back to its symbol.
+            const wxString rowId =
+                wxString::Format("%s%zu", kLegendRowIdPrefix, i);
+
             html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
-                 << "<td width=\"" << iconCell + 10
+                 << "<td id=\"" << rowId << "\" width=\"" << iconCell + 10
                  << "\" height=\"" << iconCell + 10
                  << "\" align=\"center\" valign=\"middle\">";
             if (!group.imageName.IsEmpty())
                 html << "<img src=\"memory:" << group.imageName << "\">";
-            html << "</td><td valign=\"middle\"><a href=\"legend-goto:"
-                 << static_cast<int>(i) << "\">" << label << "</a></td>"
-                 << "<td align=\"right\" valign=\"middle\" nowrap>"
+            html << "</td><td id=\"" << rowId << "\" valign=\"middle\">"
+                 << label << "</td>"
+                 << "<td id=\"" << rowId
+                 << "\" align=\"right\" valign=\"middle\" nowrap>"
                  << "<font color=\"" << hex(isActive ? foreground : muted)
                  << "\">" << countText << "</font></td></tr>";
         }
 
         html << "</table>";
         html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
-                "Klik op een symbool om naar het dichtstbijzijnde te gaan. "
+                "Klik op een rij om naar het dichtstbijzijnde symbool te gaan. "
                 "Nog een klik gaat naar het volgende. De lijst past zich "
                 "vanzelf aan als je de kaart verschuift of zoomt.</font></p>";
     }
@@ -2189,6 +2368,9 @@ void legend_pi::ShowDynamicLegend(bool reloadWaypoints)
     if (StartWaypointLoading(reloadWaypoints)) {
         CollectDynamicLegend();
         RenderDynamicLegend(false);
+
+        // A layer may have been hidden or shown while the legend was closed.
+        m_visibility_timer.StartOnce(300);
         return;
     }
 

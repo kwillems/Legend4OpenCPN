@@ -113,6 +113,9 @@ private:
     bool StartWaypointLoading(bool reloadAll); // true: cache is up to date
     void OnLoadingTimer();
     void FinishWaypointLoading();
+
+    // Layers can be hidden or shown without the waypoint list changing.
+    void CheckVisibilityChanges();
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void ClearDynamicImages();
@@ -186,6 +189,7 @@ private:
     wxLongLong m_loading_started;
     wxTimer m_loading_timer;
     wxTimer m_prefetch_timer;
+    wxTimer m_visibility_timer;
     bool m_prefetch_scheduled;
     bool m_showing_loading_page;
 
