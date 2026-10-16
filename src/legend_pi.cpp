@@ -30,11 +30,13 @@
 #include <wx/image.h>
 #include <wx/log.h>
 #include <wx/panel.h>
+#include <wx/settings.h>
 #include <wx/statline.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/stdpaths.h>
+#include <wx/stopwatch.h>
 #include <wx/textfile.h>
 #include <wx/utils.h>
 
@@ -274,6 +276,138 @@ wxImage FlattenIcon(
     return FlattenImage(bitmap.ConvertToImage(), background);
 }
 
+// Every icon gets a square of the same size, so all rows in the dynamic
+// legend are equally high. Icons keep their own size and are centred; only
+// icons larger than the square are scaled down. With a tile colour the icon
+// sits on a rounded tile of that colour, padding pixels wider than the box.
+wxImage NormalizeIcon(
+    const wxImage &image,
+    const wxColour &background,
+    int box,
+    const wxColour *tile = nullptr,
+    int padding = 0)
+{
+    wxImage icon = image;
+    int width = icon.GetWidth();
+    int height = icon.GetHeight();
+
+    if (width > box || height > box) {
+        const double factor =
+            std::min(static_cast<double>(box) / width,
+                     static_cast<double>(box) / height);
+
+        width = std::max(1, static_cast<int>(std::lround(width * factor)));
+        height = std::max(1, static_cast<int>(std::lround(height * factor)));
+        icon = icon.Scale(width, height, wxIMAGE_QUALITY_HIGH);
+    }
+
+    if (!tile)
+        padding = 0;
+
+    const int size = box + 2 * padding;
+
+    wxImage square(size, size, false);
+    square.SetRGB(
+        wxRect(0, 0, size, size),
+        background.Red(),
+        background.Green(),
+        background.Blue());
+
+    if (tile) {
+        // Rounded corners, blended at the edge for a smooth outline.
+        const double radius = std::min(6.0, size / 4.0);
+        unsigned char *data = square.GetData();
+
+        for (int y = 0; y < size; ++y) {
+            for (int x = 0; x < size; ++x) {
+                const double cx =
+                    std::max({radius - (x + 0.5), (x + 0.5) - (size - radius),
+                              0.0});
+                const double cy =
+                    std::max({radius - (y + 0.5), (y + 0.5) - (size - radius),
+                              0.0});
+                const double outside = std::sqrt(cx * cx + cy * cy) - radius;
+                const double cover = std::min(1.0, std::max(0.0, 0.5 - outside));
+
+                unsigned char *px = data + (y * size + x) * 3;
+                px[0] = static_cast<unsigned char>(std::lround(
+                    px[0] + (tile->Red() - px[0]) * cover));
+                px[1] = static_cast<unsigned char>(std::lround(
+                    px[1] + (tile->Green() - px[1]) * cover));
+                px[2] = static_cast<unsigned char>(std::lround(
+                    px[2] + (tile->Blue() - px[2]) * cover));
+            }
+        }
+    }
+
+    square.Paste(icon, (size - width) / 2, (size - height) / 2);
+
+    return square;
+}
+
+// Colours of the legend view. Fixed values instead of the system colours:
+// on macOS the dynamic system colours turn into white when converted to
+// RGB in dark mode, which left white text on a white page.
+struct LegendPalette
+{
+    wxColour background;
+    wxColour text;
+    wxColour muted;
+    wxColour stripe;
+    wxColour active;
+    wxColour rule;
+    wxColour link;
+    bool iconTiles; // icons on a light tile, for contrast on a dark page
+    wxColour tile;
+};
+
+LegendPalette GetLegendPalette()
+{
+    if (wxSystemSettings::GetAppearance().IsDark()) {
+        return {
+            wxColour(30, 30, 30),    // background
+            wxColour(230, 230, 230), // text
+            wxColour(150, 150, 156), // muted
+            wxColour(42, 42, 44),    // stripe
+            wxColour(38, 68, 110),   // active
+            wxColour(64, 64, 68),    // rule
+            wxColour(108, 180, 255), // link
+            true,
+            wxColour(232, 232, 230)  // tile: light, like a paper chart
+        };
+    }
+
+    return {
+        wxColour(255, 255, 255),
+        wxColour(29, 29, 31),
+        wxColour(110, 110, 115),
+        wxColour(244, 245, 247),
+        wxColour(214, 228, 250),
+        wxColour(217, 217, 222),
+        wxColour(10, 99, 201),
+        false,
+        wxColour(255, 255, 255)
+    };
+}
+
+wxString HtmlColour(const wxColour &colour)
+{
+    return colour.GetAsString(wxC2S_HTML_SYNTAX);
+}
+
+// Opening body tag with the palette, so wxHtmlWindow does not fall back to
+// its own default colours.
+wxString LegendBodyTag(bool plainLinks = false)
+{
+    const LegendPalette palette = GetLegendPalette();
+
+    return wxString::Format(
+        "<body bgcolor=\"%s\" text=\"%s\" link=\"%s\">",
+        HtmlColour(palette.background),
+        HtmlColour(palette.text),
+        HtmlColour(plainLinks ? palette.text : palette.link));
+}
+
 }
 
 extern "C" DECL_EXP opencpn_plugin *create_pi(void *ppimgr)
@@ -304,6 +438,12 @@ legend_pi::legend_pi(void *ppimgr)
       m_viewport_valid(false),
       m_dynamic_generation(0),
       m_dynamic_total(0),
+      m_loading(false),
+      m_loading_reload(false),
+      m_loading_next(0),
+      m_loading_fetched(0),
+      m_prefetch_scheduled(false),
+      m_showing_loading_page(false),
       m_collected_viewport_valid(false),
       m_marker_active(false),
       m_marker_lat(0.0),
@@ -324,6 +464,19 @@ legend_pi::legend_pi(void *ppimgr)
     m_auto_refresh_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnAutoRefreshTimer(); });
+
+    m_loading_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnLoadingTimer(); });
+
+    // Fill the cache once OpenCPN has settled after starting, so the first
+    // look at the dynamic legend does not have to wait for it.
+    m_prefetch_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) {
+            if (!m_loading && m_waypoint_cache.empty())
+                StartWaypointLoading(false);
+        });
 }
 
 legend_pi::~legend_pi()
@@ -371,6 +524,9 @@ bool legend_pi::DeInit()
     SaveConfig();
     StopMarker();
     m_auto_refresh_timer.Stop();
+    m_loading_timer.Stop();
+    m_prefetch_timer.Stop();
+    m_loading = false;
     ClearDynamicImages();
 
     if (m_legend_window) {
@@ -739,18 +895,18 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     wxFile file(path);
 
     if (!file.IsOpened())
-        return "<html><body><p>Markdown-bestand kon niet worden geopend.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet worden geopend.</p></body></html>";
 
     wxFileOffset len = file.Length();
 
     if (len <= 0)
-        return "<html><body><p>Leeg Markdown-bestand.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>Leeg Markdown-bestand.</p></body></html>";
 
     std::string markdown;
     markdown.resize(static_cast<size_t>(len));
 
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
-        return "<html><body><p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
 
     // If the first non-empty Markdown line is an H1, it is already used
     // as the document title in the selector/header. Remove that one line
@@ -826,10 +982,10 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         0);
 
     if (result != 0)
-        return "<html><body><p>Markdown kon niet worden verwerkt.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>Markdown kon niet worden verwerkt.</p></body></html>";
 
     wxString wrapped;
-    wrapped << "<html><body>"
+    wrapped << "<html>" << LegendBodyTag()
             << wxString::FromUTF8(html.c_str())
             << "</body></html>";
 
@@ -894,7 +1050,7 @@ void legend_pi::ShowEmptyState()
         legend_dir.Replace(">", "&gt;");
 
         wxString html;
-        html << "<html><body>"
+        html << "<html>" << LegendBodyTag()
              << "<font size=\"+1\">"
              << "<p><b>Geen legenda's of notities gevonden.</b></p>"
              << "<p>Plaats een PNG- of Markdown-bestand in:</p>"
@@ -1255,9 +1411,7 @@ void legend_pi::CreateLegendWindow()
         fixedFont.GetFaceName(),
         htmlFontSizes);
 
-    // Make the Markdown view visually belong to the plugin window.
-    m_markdown_view->SetBackgroundColour(panel->GetBackgroundColour());
-    m_markdown_view->SetForegroundColour(panel->GetForegroundColour());
+    ApplyViewColours();
 
     // Open normal external Markdown links in the system browser.
     m_markdown_view->Bind(
@@ -1280,7 +1434,7 @@ void legend_pi::CreateLegendWindow()
 
             if (href.StartsWith("legend-refresh:")) {
                 m_markdown_view->CallAfter(
-                    [this]() { ShowDynamicLegend(); });
+                    [this]() { ShowDynamicLegend(true); });
                 return;
             }
 
@@ -1368,6 +1522,20 @@ void legend_pi::CreateLegendWindow()
             event.Veto();
         });
 
+    // Switching macOS between light and dark: repaint with the new palette.
+    m_legend_window->Bind(
+        wxEVT_SYS_COLOUR_CHANGED,
+        [this](wxSysColourChangedEvent &event) {
+            event.Skip();
+            m_legend_window->CallAfter([this]() {
+                ApplyViewColours();
+
+                if (m_legend_window && m_legend_window->IsShown() &&
+                    !m_legend_files.IsEmpty())
+                    ShowLegend(m_legend_index);
+            });
+        });
+
     m_legend_window->Bind(
         wxEVT_CHAR_HOOK,
         [this](wxKeyEvent &event) {
@@ -1405,6 +1573,17 @@ void legend_pi::CreateLegendWindow()
         });
 }
 
+void legend_pi::ApplyViewColours()
+{
+    if (!m_markdown_view)
+        return;
+
+    const LegendPalette palette = GetLegendPalette();
+    m_markdown_view->SetBackgroundColour(palette.background);
+    m_markdown_view->SetForegroundColour(palette.text);
+    m_markdown_view->Refresh();
+}
+
 void legend_pi::ToggleLegendWindow()
 {
     CreateLegendWindow();
@@ -1432,6 +1611,11 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
 {
     m_viewport = vp;
     m_viewport_valid = (vp.pix_width > 0 && vp.pix_height > 0);
+
+    if (m_viewport_valid && !m_prefetch_scheduled) {
+        m_prefetch_scheduled = true;
+        m_prefetch_timer.StartOnce(5000);
+    }
 
     if (!m_viewport_valid || !IsDynamicLegendVisible())
         return;
@@ -1467,6 +1651,16 @@ void legend_pi::OnAutoRefreshTimer()
     if (!IsDynamicLegendVisible())
         return;
 
+    // When new waypoints still have to be fetched, the end of the loading
+    // refreshes the list.
+    if (!StartWaypointLoading(false))
+        return;
+
+    RefreshDynamicLegendKeepingState();
+}
+
+void legend_pi::RefreshDynamicLegendKeepingState()
+{
     const std::vector<DynamicGroup> previous = m_dynamic_groups;
 
     CollectDynamicLegend();
@@ -1520,12 +1714,12 @@ void legend_pi::OnAutoRefreshTimer()
     }
 
     // Nothing to show differently: leave the window alone.
-    if (!changed) {
+    if (!changed && !m_showing_loading_page) {
         m_dynamic_groups = previous;
         return;
     }
 
-    RenderDynamicLegend(true);
+    RenderDynamicLegend(!m_showing_loading_page);
 }
 
 void legend_pi::ClearDynamicImages()
@@ -1534,6 +1728,151 @@ void legend_pi::ClearDynamicImages()
         wxMemoryFSHandler::RemoveFile(name);
 
     m_dynamic_image_names.clear();
+}
+
+bool legend_pi::StartWaypointLoading(bool reloadAll)
+{
+    // A loading run is busy; its end refreshes the legend. Only a request
+    // to reload everything restarts it.
+    if (m_loading && !(reloadAll && !m_loading_reload))
+        return false;
+
+    const wxArrayString guids = GetWaypointGUIDArray();
+
+    // Unchanged set of waypoints: nothing to ask OpenCPN.
+    if (!reloadAll && !m_loading && guids == m_waypoint_guids)
+        return true;
+
+    m_loading_known.clear();
+    if (!reloadAll) {
+        for (size_t i = 0; i < m_waypoint_guids.GetCount(); ++i)
+            m_loading_known[m_waypoint_guids[i]] = i;
+    }
+
+    m_loading = true;
+    m_loading_reload = reloadAll;
+    m_loading_guids = guids;
+    m_loading_cache.clear();
+    m_loading_cache.reserve(guids.GetCount());
+    m_loading_next = 0;
+    m_loading_fetched = 0;
+    m_loading_started = wxGetLocalTimeMillis();
+
+    size_t missing = 0;
+    for (size_t i = 0; i < guids.GetCount(); ++i) {
+        if (m_loading_known.find(guids[i]) == m_loading_known.end())
+            ++missing;
+    }
+
+    // A handful of new waypoints is quicker to fetch right away.
+    if (missing < 500) {
+        while (m_loading)
+            OnLoadingTimer();
+        return true;
+    }
+
+    m_loading_timer.Start(10);
+    return false;
+}
+
+void legend_pi::OnLoadingTimer()
+{
+    if (!m_loading) {
+        m_loading_timer.Stop();
+        return;
+    }
+
+    // Work for a short moment per step, then give OpenCPN room to paint
+    // and handle input.
+    wxStopWatch step;
+
+    while (m_loading_next < m_loading_guids.GetCount() &&
+           step.Time() < 40) {
+        const wxString &guid = m_loading_guids[m_loading_next++];
+
+        auto found = m_loading_known.find(guid);
+        if (found != m_loading_known.end()) {
+            m_loading_cache.push_back(m_waypoint_cache[found->second]);
+            continue;
+        }
+
+        CachedWaypoint entry;
+        std::unique_ptr<PlugIn_Waypoint_Ex> wp = GetWaypointEx_Plugin(guid);
+        ++m_loading_fetched;
+
+        if (wp) {
+            entry.lat = wp->m_lat;
+            entry.lon = wp->m_lon;
+            entry.icon = wp->IconName;
+            entry.description = wp->IconDescription;
+            entry.visible = wp->IsVisible;
+            entry.useScamin = wp->b_useScamin;
+            entry.scamin = wp->scamin;
+        }
+
+        m_loading_cache.push_back(entry);
+    }
+
+    if (m_loading_next >= m_loading_guids.GetCount()) {
+        FinishWaypointLoading();
+        return;
+    }
+
+    if (m_showing_loading_page && IsDynamicLegendVisible())
+        RenderLoadingPage();
+}
+
+void legend_pi::FinishWaypointLoading()
+{
+    m_loading_timer.Stop();
+    m_loading = false;
+
+    m_waypoint_guids = m_loading_guids;
+    m_waypoint_cache.swap(m_loading_cache);
+    m_loading_cache.clear();
+    m_loading_known.clear();
+    m_loading_guids.Clear();
+
+    wxLogMessage(
+        "Legend: waypoint cache %zu waypoints, %d fetched in %lld ms",
+        m_waypoint_cache.size(),
+        m_loading_fetched,
+        static_cast<long long>(
+            (wxGetLocalTimeMillis() - m_loading_started).GetValue()));
+
+    if (IsDynamicLegendVisible())
+        RefreshDynamicLegendKeepingState();
+}
+
+void legend_pi::RenderLoadingPage()
+{
+    if (!m_markdown_view)
+        return;
+
+    const LegendPalette palette = GetLegendPalette();
+
+    wxString progress;
+    if (m_loading && !m_loading_guids.IsEmpty()) {
+        progress = wxString::Format(
+            "%zu van %zu",
+            m_loading_next,
+            m_loading_guids.GetCount());
+    }
+
+    wxString html;
+    html << "<html>" << LegendBodyTag(true)
+         << "<p><font size=\"+1\"><b>Kaartlegenda</b></font></p>"
+         << "<p>Waypoints worden geladen&hellip;</p>";
+
+    if (!progress.IsEmpty()) {
+        html << "<p><font color=\"" << HtmlColour(palette.muted) << "\">"
+             << progress << "</font></p>";
+    }
+
+    html << "</body></html>";
+
+    static_cast<LegendHtmlWindow *>(m_markdown_view)->SetDynamicPage(html);
+    m_showing_loading_page = true;
 }
 
 void legend_pi::CollectDynamicLegend()
@@ -1561,26 +1900,21 @@ void legend_pi::CollectDynamicLegend()
 
     std::map<wxString, DynamicGroup> groups;
 
-    wxArrayString guids = GetWaypointGUIDArray();
-
-    for (size_t i = 0; i < guids.GetCount(); ++i) {
-        std::unique_ptr<PlugIn_Waypoint_Ex> wp =
-            GetWaypointEx_Plugin(guids[i]);
-
-        if (!wp || !wp->IsVisible)
+    for (const CachedWaypoint &wp : m_waypoint_cache) {
+        if (!wp.visible)
             continue;
 
         // Waypoints with a scale limit disappear when zoomed out too far.
-        if (wp->b_useScamin && vp.chart_scale > wp->scamin)
+        if (wp.useScamin && vp.chart_scale > wp.scamin)
             continue;
 
-        if (wp->m_lat < vp.lat_min || wp->m_lat > vp.lat_max)
+        if (wp.lat < vp.lat_min || wp.lat > vp.lat_max)
             continue;
 
-        if (!lonInView(wp->m_lon))
+        if (!lonInView(wp.lon))
             continue;
 
-        wxString key = wp->IconName;
+        wxString key = wp.icon;
         if (key.IsEmpty())
             key = "unknown";
 
@@ -1589,10 +1923,10 @@ void legend_pi::CollectDynamicLegend()
         if (group.key.IsEmpty()) {
             group.key = key;
             group.label =
-                wp->IconDescription.IsEmpty() ? key : wp->IconDescription;
+                wp.description.IsEmpty() ? key : wp.description;
         }
 
-        group.positions.emplace_back(wp->m_lat, wp->m_lon);
+        group.positions.emplace_back(wp.lat, wp.lon);
         ++m_dynamic_total;
     }
 
@@ -1662,88 +1996,165 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         return text;
     };
 
+    const LegendPalette palette = GetLegendPalette();
+    const wxColour &background = palette.background;
+    const wxColour &foreground = palette.text;
+    const wxColour &stripe = palette.stripe;
+    const wxColour &active = palette.active;
+    const wxColour &muted = palette.muted;
+    const wxColour &rule = palette.rule;
+
+    auto hex = [](const wxColour &colour) { return HtmlColour(colour); };
+
+    // Load all icons first: the largest one sets the square every icon
+    // gets, so all rows are equally high without shrinking any icon.
+    // Very large icons are limited to kMaxIconBox.
+    const int kMaxIconBox = 64;
+    const int tilePadding = palette.iconTiles ? 3 : 0;
+
+    std::vector<wxImage> icons(m_dynamic_groups.size());
+    std::vector<wxColour> rowColours(m_dynamic_groups.size());
+    int iconBox = 16;
+
+    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        const DynamicGroup &group = m_dynamic_groups[i];
+
+        const bool isActive =
+            !m_active_group_key.IsEmpty() && group.key == m_active_group_key;
+
+        rowColours[i] =
+            isActive ? active : (i % 2 == 1 ? stripe : background);
+
+        // Transparency is resolved against what ends up behind the icon:
+        // the tile in dark mode, otherwise the row itself.
+        const wxColour iconBackground =
+            palette.iconTiles ? palette.tile : rowColours[i];
+
+        // First choice: the icon's own PNG file. Fall back to asking
+        // OpenCPN for the bitmap.
+        wxImage image = LoadIconFromFile(group.key, iconBackground);
+
+        if (!image.IsOk()) {
+            wxBitmap bitmap = GetIcon_PlugIn(group.key);
+
+            if (bitmap.IsOk())
+                image = FlattenIcon(bitmap, iconBackground, group.key);
+        }
+
+        if (image.IsOk()) {
+            iconBox = std::max(
+                iconBox,
+                std::min(kMaxIconBox,
+                         std::max(image.GetWidth(), image.GetHeight())));
+        }
+
+        icons[i] = image;
+    }
+
+    const int iconCell = iconBox + 2 * tilePadding;
+
     wxString html;
-    html << "<html><body>";
-    html << "<p><b>Kaartlegenda</b></p>";
+    html << "<html>" << LegendBodyTag(true);
+
+    // Title with the summary and Ververs on the line below it.
+    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"2\">"
+         << "<tr><td><font size=\"+1\"><b>Kaartlegenda</b></font></td></tr>"
+         << "<tr><td><font color=\"" << hex(muted) << "\">";
 
     if (!m_viewport_valid) {
-        html << "<p>De kaartpositie is nog niet bekend. Beweeg de kaart "
-                "een klein stukje en klik daarna op "
-                "<a href=\"legend-refresh:\">Ververs</a>.</p>";
+        html << "De kaartpositie is nog niet bekend. Beweeg de kaart "
+                "een klein stukje en klik daarna op Ververs.";
     }
     else {
-        html << "<p>" << static_cast<int>(m_dynamic_groups.size())
-             << " symbolen, "
-             << m_dynamic_total << " waypoints in beeld. "
-             << "<a href=\"legend-refresh:\">Ververs</a></p>";
+        html << static_cast<int>(m_dynamic_groups.size()) << " symbolen"
+             << " &middot; " << m_dynamic_total << " waypoints in beeld";
+    }
 
-        if (m_dynamic_groups.empty()) {
-            html << "<p>Geen zichtbare waypoints in dit kaartbeeld.</p>";
-        }
-        else {
-            html << "<table cellpadding=\"4\">";
+    html << "</font></td><td align=\"right\" nowrap>"
+         << "<a href=\"legend-refresh:\">Ververs</a></td></tr></table>";
 
-            for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
-                DynamicGroup &group = m_dynamic_groups[i];
-                group.imageName.Clear();
+    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
+         << "<tr><td bgcolor=\"" << hex(rule) << "\" height=\"1\"></td></tr>"
+         << "</table>";
 
-                const wxColour background =
-                    m_markdown_view->GetBackgroundColour();
+    if (m_viewport_valid && m_dynamic_groups.empty()) {
+        html << "<p><font color=\"" << hex(muted) << "\">"
+             << "Geen zichtbare waypoints in dit kaartbeeld.</font></p>";
+    }
+    else if (m_viewport_valid) {
+        html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
 
-                // First choice: the icon's own PNG file. Fall back to
-                // asking OpenCPN for the bitmap.
-                wxImage image = LoadIconFromFile(group.key, background);
+        for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+            DynamicGroup &group = m_dynamic_groups[i];
+            group.imageName.Clear();
 
-                if (!image.IsOk()) {
-                    wxBitmap bitmap = GetIcon_PlugIn(group.key);
+            const bool isActive =
+                !m_active_group_key.IsEmpty() &&
+                group.key == m_active_group_key;
 
-                    if (bitmap.IsOk())
-                        image = FlattenIcon(bitmap, background, group.key);
-                }
+            const wxColour &rowColour = rowColours[i];
+            wxImage image = icons[i];
 
-                if (image.IsOk()) {
-                    wxString name = wxString::Format(
-                        "legend_dyn_%d_%zu.png",
-                        m_dynamic_generation,
-                        i);
-
-                    wxMemoryFSHandler::AddFile(
-                        name, image, wxBITMAP_TYPE_PNG);
-
-                    m_dynamic_image_names.push_back(name);
-                    group.imageName = name;
-                }
-
-                const size_t count = group.positions.size();
-
-                wxString countText;
-                if (group.current >= 0 && count > 1) {
-                    countText = wxString::Format(
-                        "%d/%zu", group.current + 1, count);
-                }
-                else {
-                    countText = wxString::Format("&times;%zu", count);
-                }
-
-                html << "<tr><td>";
-                if (!group.imageName.IsEmpty())
-                    html << "<img src=\"memory:" << group.imageName << "\">";
-                html << "</td><td><a href=\"legend-goto:" << static_cast<int>(i) << "\">"
-                     << escape(group.label) << "</a></td><td align=\"right\">"
-                     << countText << "</td></tr>";
+            if (image.IsOk()) {
+                image = NormalizeIcon(
+                    image,
+                    rowColour,
+                    iconBox,
+                    palette.iconTiles ? &palette.tile : nullptr,
+                    tilePadding);
             }
 
-            html << "</table>";
-            html << "<p><font size=\"-1\">Klik op een symbool om naar het "
-                    "dichtstbijzijnde te gaan. Nog een klik gaat naar het "
-                    "volgende. De lijst past zich vanzelf aan als je de "
-                    "kaart verschuift of zoomt.</font></p>";
+            if (image.IsOk()) {
+                wxString name = wxString::Format(
+                    "legend_dyn_%d_%zu.png",
+                    m_dynamic_generation,
+                    i);
+
+                wxMemoryFSHandler::AddFile(name, image, wxBITMAP_TYPE_PNG);
+
+                m_dynamic_image_names.push_back(name);
+                group.imageName = name;
+            }
+
+            const size_t count = group.positions.size();
+
+            wxString countText;
+            if (group.current >= 0 && count > 1) {
+                countText = wxString::Format(
+                    "%d/%zu", group.current + 1, count);
+            }
+            else {
+                countText = wxString::Format("&times;%zu", count);
+            }
+
+            wxString label = escape(group.label);
+            if (isActive)
+                label = "<b>" + label + "</b>";
+
+            html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
+                 << "<td width=\"" << iconCell + 10
+                 << "\" height=\"" << iconCell + 10
+                 << "\" align=\"center\" valign=\"middle\">";
+            if (!group.imageName.IsEmpty())
+                html << "<img src=\"memory:" << group.imageName << "\">";
+            html << "</td><td valign=\"middle\"><a href=\"legend-goto:"
+                 << static_cast<int>(i) << "\">" << label << "</a></td>"
+                 << "<td align=\"right\" valign=\"middle\" nowrap>"
+                 << "<font color=\"" << hex(isActive ? foreground : muted)
+                 << "\">" << countText << "</font></td></tr>";
         }
+
+        html << "</table>";
+        html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
+                "Klik op een symbool om naar het dichtstbijzijnde te gaan. "
+                "Nog een klik gaat naar het volgende. De lijst past zich "
+                "vanzelf aan als je de kaart verschuift of zoomt.</font></p>";
     }
 
     html << "</body></html>";
 
     static_cast<LegendHtmlWindow *>(m_markdown_view)->SetDynamicPage(html);
+    m_showing_loading_page = false;
 
     if (keepScroll) {
         m_markdown_view->CallAfter(
@@ -1756,13 +2167,20 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     }
 }
 
-void legend_pi::ShowDynamicLegend()
+void legend_pi::ShowDynamicLegend(bool reloadWaypoints)
 {
-    CollectDynamicLegend();
-    RenderDynamicLegend(false);
-
     if (m_content_book)
         m_content_book->SetSelection(1);
+
+    if (StartWaypointLoading(reloadWaypoints)) {
+        CollectDynamicLegend();
+        RenderDynamicLegend(false);
+        return;
+    }
+
+    // Loading runs in small steps; the window shows the progress and fills
+    // itself at the end.
+    RenderLoadingPage();
 }
 
 void legend_pi::GoToDynamicGroup(size_t index)
@@ -1777,6 +2195,7 @@ void legend_pi::GoToDynamicGroup(size_t index)
 
     group.current =
         (group.current + 1) % static_cast<int>(group.positions.size());
+    m_active_group_key = group.key;
 
     const std::pair<double, double> &position =
         group.positions[static_cast<size_t>(group.current)];

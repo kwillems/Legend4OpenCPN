@@ -38,6 +38,20 @@ struct DynamicGroup
     int current = -1; // last position shown by a click, -1 = none yet
 };
 
+// What the dynamic legend needs of one waypoint. Asking OpenCPN for a
+// waypoint by GUID is slow with many thousands of layer waypoints, so the
+// answers are kept between refreshes.
+struct CachedWaypoint
+{
+    double lat = 0.0;
+    double lon = 0.0;
+    wxString icon;
+    wxString description;
+    bool visible = false;
+    bool useScamin = false;
+    double scamin = 0.0;
+};
+
 class legend_pi : public opencpn_plugin_118
 {
 public:
@@ -89,8 +103,16 @@ private:
     void RestoreMarkdownScroll(const wxString &path);
 
     // Dynamic legend (waypoints visible on screen)
-    void ShowDynamicLegend();
+    void ShowDynamicLegend(bool reloadWaypoints = false);
     void CollectDynamicLegend();
+    void RefreshDynamicLegendKeepingState();
+    void RenderLoadingPage();
+    void ApplyViewColours();
+
+    // Filling the waypoint cache in small steps keeps OpenCPN responsive.
+    bool StartWaypointLoading(bool reloadAll); // true: cache is up to date
+    void OnLoadingTimer();
+    void FinishWaypointLoading();
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void ClearDynamicImages();
@@ -149,6 +171,23 @@ private:
     std::vector<wxString> m_dynamic_image_names;
     int m_dynamic_generation;
     int m_dynamic_total;
+    wxString m_active_group_key; // symbol clicked last, highlighted
+
+    wxArrayString m_waypoint_guids;
+    std::vector<CachedWaypoint> m_waypoint_cache; // same order as the GUIDs
+
+    bool m_loading;
+    bool m_loading_reload;
+    wxArrayString m_loading_guids;
+    std::vector<CachedWaypoint> m_loading_cache;
+    std::map<wxString, size_t> m_loading_known; // GUID -> m_waypoint_cache
+    size_t m_loading_next;
+    int m_loading_fetched;
+    wxLongLong m_loading_started;
+    wxTimer m_loading_timer;
+    wxTimer m_prefetch_timer;
+    bool m_prefetch_scheduled;
+    bool m_showing_loading_page;
 
     // Viewport the dynamic legend was last collected for; a change starts
     // m_auto_refresh_timer so the list follows the chart.
