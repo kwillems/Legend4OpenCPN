@@ -287,9 +287,14 @@ Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaa
 
 ## Licentie
 
-Voor Legend4OpenCPN zelf is nog geen definitieve licentie vastgelegd.
+Legend4OpenCPN is vrije software, uitgebracht onder de
+[GNU General Public License, versie 2](LICENSE), of naar keuze een latere
+versie (SPDX: `GPL-2.0-or-later`).
 
-Externe dependencies behouden hun eigen licenties. MD4C wordt bijvoorbeeld onder de MIT-licentie uitgebracht.
+Externe onderdelen behouden hun eigen licenties. MD4C wordt bijvoorbeeld onder
+de MIT-licentie uitgebracht. De buildbestanden die uit de OpenCPN-plugin-sjabloon
+komen (zoals `CMakeLists.txt` en de map `cmake/`) behouden hun eigen
+licentiekoppen.
 
 ## Ontwikkeling
 
