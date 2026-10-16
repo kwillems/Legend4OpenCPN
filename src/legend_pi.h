@@ -94,6 +94,8 @@ private:
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void ClearDynamicImages();
+    bool IsDynamicLegendVisible() const;
+    void OnAutoRefreshTimer();
 
     // Temporary marker on the chart for the object chosen in the legend
     void ShowMarker(double lat, double lon);
@@ -147,6 +149,12 @@ private:
     std::vector<wxString> m_dynamic_image_names;
     int m_dynamic_generation;
     int m_dynamic_total;
+
+    // Viewport the dynamic legend was last collected for; a change starts
+    // m_auto_refresh_timer so the list follows the chart.
+    PlugIn_ViewPort m_collected_viewport;
+    bool m_collected_viewport_valid;
+    wxTimer m_auto_refresh_timer;
 
     bool m_marker_active;
     double m_marker_lat;

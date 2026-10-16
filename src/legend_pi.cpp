@@ -304,6 +304,7 @@ legend_pi::legend_pi(void *ppimgr)
       m_viewport_valid(false),
       m_dynamic_generation(0),
       m_dynamic_total(0),
+      m_collected_viewport_valid(false),
       m_marker_active(false),
       m_marker_lat(0.0),
       m_marker_lon(0.0),
@@ -314,10 +315,15 @@ legend_pi::legend_pi(void *ppimgr)
       m_window_height(460)
 {
     m_viewport = PlugIn_ViewPort();
+    m_collected_viewport = PlugIn_ViewPort();
 
     m_marker_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnMarkerTimer(); });
+
+    m_auto_refresh_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnAutoRefreshTimer(); });
 }
 
 legend_pi::~legend_pi()
@@ -364,6 +370,7 @@ bool legend_pi::DeInit()
     SaveWindowState();
     SaveConfig();
     StopMarker();
+    m_auto_refresh_timer.Stop();
     ClearDynamicImages();
 
     if (m_legend_window) {
@@ -1425,6 +1432,100 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
 {
     m_viewport = vp;
     m_viewport_valid = (vp.pix_width > 0 && vp.pix_height > 0);
+
+    if (!m_viewport_valid || !IsDynamicLegendVisible())
+        return;
+
+    // OpenCPN calls this on every repaint, also while the marker animates.
+    // Only a real change of position, zoom, rotation or window size counts.
+    const PlugIn_ViewPort &old = m_collected_viewport;
+
+    const bool changed =
+        !m_collected_viewport_valid ||
+        std::fabs(vp.clat - old.clat) > 1e-7 ||
+        std::fabs(vp.clon - old.clon) > 1e-7 ||
+        std::fabs(vp.view_scale_ppm - old.view_scale_ppm) >
+            1e-6 * old.view_scale_ppm ||
+        std::fabs(vp.rotation - old.rotation) > 1e-4 ||
+        vp.pix_width != old.pix_width ||
+        vp.pix_height != old.pix_height;
+
+    // Wait until the chart has stopped moving before rebuilding the list.
+    if (changed)
+        m_auto_refresh_timer.StartOnce(400);
+}
+
+bool legend_pi::IsDynamicLegendVisible() const
+{
+    return m_legend_window &&
+           m_legend_window->IsShown() &&
+           m_current_legend_path == kDynamicGpxId;
+}
+
+void legend_pi::OnAutoRefreshTimer()
+{
+    if (!IsDynamicLegendVisible())
+        return;
+
+    const std::vector<DynamicGroup> previous = m_dynamic_groups;
+
+    CollectDynamicLegend();
+
+    auto sortedPositions = [](const DynamicGroup &group) {
+        auto positions = group.positions;
+        std::sort(positions.begin(), positions.end());
+        return positions;
+    };
+
+    std::map<wxString, const DynamicGroup *> previousByKey;
+    for (const DynamicGroup &group : previous)
+        previousByKey[group.key] = &group;
+
+    bool changed = previous.size() != m_dynamic_groups.size();
+
+    for (DynamicGroup &group : m_dynamic_groups) {
+        auto found = previousByKey.find(group.key);
+        if (found == previousByKey.end()) {
+            changed = true;
+            continue;
+        }
+
+        const DynamicGroup &old = *found->second;
+
+        // Same waypoints as before: keep the old order and counter, so
+        // clicking on continues through the same sequence. Re-sorting
+        // around the new centre would send the next click back to the
+        // object just visited.
+        if (sortedPositions(old) == sortedPositions(group)) {
+            group.positions = old.positions;
+            group.current = old.current;
+            continue;
+        }
+
+        changed = true;
+
+        // The set changed; continue from the object shown last if it is
+        // still in view.
+        if (old.current >= 0) {
+            const auto &shown =
+                old.positions[static_cast<size_t>(old.current)];
+
+            for (size_t i = 0; i < group.positions.size(); ++i) {
+                if (group.positions[i] == shown) {
+                    group.current = static_cast<int>(i);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Nothing to show differently: leave the window alone.
+    if (!changed) {
+        m_dynamic_groups = previous;
+        return;
+    }
+
+    RenderDynamicLegend(true);
 }
 
 void legend_pi::ClearDynamicImages()
@@ -1439,6 +1540,9 @@ void legend_pi::CollectDynamicLegend()
 {
     m_dynamic_groups.clear();
     m_dynamic_total = 0;
+
+    m_collected_viewport = m_viewport;
+    m_collected_viewport_valid = m_viewport_valid;
 
     if (!m_viewport_valid)
         return;
@@ -1632,8 +1736,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             html << "</table>";
             html << "<p><font size=\"-1\">Klik op een symbool om naar het "
                     "dichtstbijzijnde te gaan. Nog een klik gaat naar het "
-                    "volgende. Klik op Ververs nadat je de kaart hebt "
-                    "verschoven.</font></p>";
+                    "volgende. De lijst past zich vanzelf aan als je de "
+                    "kaart verschuift of zoomt.</font></p>";
         }
     }
 
