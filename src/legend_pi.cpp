@@ -55,6 +55,12 @@ namespace {
 // Pseudo-path of the dynamic legend entry in the list of legend items.
 const wxString kDynamicGpxId = "@gpx-legend";
 
+// The "memory:" file system handler for the icons of the dynamic legend.
+// Its code is compiled into this plugin, so it must be removed again in
+// DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
+// long after the plugin library has been unloaded.
+wxMemoryFSHandler *g_memoryHandler = nullptr;
+
 class LegendHtmlWindow : public wxHtmlWindow
 {
 public:
@@ -530,7 +536,10 @@ bool legend_pi::DeInit()
     ClearDynamicImages();
 
     if (m_legend_window) {
-        m_legend_window->Destroy();
+        // Delete right away instead of Destroy(): Destroy() postpones the
+        // deletion to a later idle moment, when this plugin's code may
+        // already be unloaded. Deleting also drops pending CallAfter calls.
+        delete m_legend_window;
         m_legend_window = nullptr;
         m_header_book = nullptr;
         m_single_title = nullptr;
@@ -542,6 +551,12 @@ bool legend_pi::DeInit()
         m_image_page = nullptr;
         m_legend_bitmap = nullptr;
         m_markdown_view = nullptr;
+    }
+
+    if (g_memoryHandler) {
+        wxFileSystem::RemoveHandler(g_memoryHandler);
+        delete g_memoryHandler;
+        g_memoryHandler = nullptr;
     }
 
     if (m_toolbar_item_id >= 0) {
@@ -1975,10 +1990,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     if (!m_markdown_view)
         return;
 
-    static bool memoryHandlerAdded = false;
-    if (!memoryHandlerAdded) {
-        wxFileSystem::AddHandler(new wxMemoryFSHandler);
-        memoryHandlerAdded = true;
+    if (!g_memoryHandler) {
+        g_memoryHandler = new wxMemoryFSHandler;
+        wxFileSystem::AddHandler(g_memoryHandler);
     }
 
     int scrollX = 0;
