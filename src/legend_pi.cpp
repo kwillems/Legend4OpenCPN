@@ -3881,6 +3881,40 @@ wxString AttributeValueText(const LegendS57attVal *val)
     }
 }
 
+// The object of the o-charts plugin as a source-independent chart object.
+ChartObject ToChartObject(const PI_S57Obj *obj)
+{
+    ChartObject object;
+    object.className = wxString::FromAscii(obj->FeatureName);
+    object.primitive = obj->Primitive_type;
+    object.lat = obj->m_lat;
+    object.lon = obj->m_lon;
+
+    if (obj->att_array && obj->attVal && obj->n_attr > 0) {
+        const auto *values =
+            reinterpret_cast<const LegendS57attValArray *>(obj->attVal);
+        const int count =
+            std::min(obj->n_attr, static_cast<int>(values->GetCount()));
+
+        for (int i = 0; i < count; ++i) {
+            wxString acronym = wxString::From8BitData(obj->att_array + 6 * i, 6);
+            acronym.Trim(true);
+            wxString value = AttributeValueText(values->Item(i));
+            if (value == "<null>")
+                value.Clear();
+            object.attributes.emplace_back(acronym, value);
+
+            // The Scamin field of the object is a sentinel; the attribute
+            // carries the real limit.
+            long scamin = 0;
+            if (acronym == "SCAMIN" && value.ToLong(&scamin) && scamin > 0)
+                object.scamin = static_cast<int>(scamin);
+        }
+    }
+
+    return object;
+}
+
 // "ACRONYM=value; ..." for all attributes of an object.
 wxString AttributesText(const PI_S57Obj *obj)
 {
@@ -4106,11 +4140,32 @@ void legend_pi::ProbeChartObjects()
                  watch.Time());
 
     // CreateObjDescriptions() of the o-charts plugin crashes when called on
-    // a chart it did not render itself, so the attributes are read directly.
+    // a chart it did not render itself, so the attributes are read directly
+    // and the symbol and texts come from OpenCPN's own tables.
     if (objects) {
+        watch.Start();
+        wxString *shared = GetpSharedDataLocation();
+        wxFileName s57dir(shared ? *shared : wxString(), "");
+        s57dir.AppendDir("s57data");
+        const bool loaded = m_chart_symbols.Load(s57dir.GetPath());
+        wxLogMessage(
+            "Legend probe: symbol tables %s from %s: %zu lookups, %zu symbols, %ld ms",
+            loaded ? "loaded" : "NOT loaded", s57dir.GetPath(),
+            m_chart_symbols.LookupCount(), m_chart_symbols.SymbolCount(),
+            watch.Time());
+
+        const int style = PI_GetPLIBSymbolStyle();
+        const bool simplified = style != PI_PAPER_CHART;
+        wxLogMessage("Legend probe: OpenCPN symbol style %d (%s)", style,
+                     simplified ? "simplified" : "paper chart");
+
         std::map<wxString, int> perClass;
+        std::map<wxString, int> perSymbol;
         std::map<int, int> perPrim;
         int shown = 0;
+        int noSymbol = 0;
+        bool imageTested = false;
+
         for (ListOfPI_S57Obj::Node *node = objects->GetFirst(); node;
              node = node->GetNext()) {
             PI_S57Obj *obj = node->GetData();
@@ -4120,20 +4175,61 @@ void legend_pi::ProbeChartObjects()
             ++perClass[wxString::Format("%s/prim%d", feature, obj->Primitive_type)];
             ++perPrim[obj->Primitive_type];
 
-            // Areas are of no use to the legend; show the others.
-            if (shown < 25 && obj->Primitive_type != 2) {
+            if (obj->Primitive_type == 2)
+                continue;
+
+            ChartObject object = ToChartObject(obj);
+            ChartSymbols::Resolved resolved;
+            const bool ok = loaded && m_chart_symbols.Resolve(object, simplified, &resolved);
+            if (!ok || resolved.symbol.IsEmpty())
+                ++noSymbol;
+            else
+                ++perSymbol[resolved.symbol];
+
+            if (shown < 25) {
                 ++shown;
+                wxString meanings;
+                for (const auto &attr : object.attributes) {
+                    const wxString meaning =
+                        m_chart_symbols.AttributeValueMeaning(attr.first, attr.second);
+                    if (!meaning.IsEmpty())
+                        meanings << attr.first << ": " << meaning.Left(40) << "; ";
+                }
                 wxLogMessage(
-                    "Legend probe:   %s prim %d cat %c at %.5f %.5f scamin %d: %s",
-                    feature, obj->Primitive_type,
-                    static_cast<char>(obj->m_DisplayCat ? obj->m_DisplayCat : '?'),
-                    obj->m_lat, obj->m_lon, obj->Scamin, AttributesText(obj));
+                    "Legend probe:   %s prim %d at %.5f %.5f scamin %d -> %s [%s%s%s] "
+                    "\"%s\" | %s | %s",
+                    feature, obj->Primitive_type, object.lat, object.lon,
+                    object.scamin, ok ? resolved.symbol : wxString("?"),
+                    resolved.table, resolved.conditional ? ", CS" : "",
+                    resolved.fromDefault ? ", default" : "",
+                    m_chart_symbols.SymbolDescription(resolved.symbol),
+                    m_chart_symbols.ClassDescription(object.className),
+                    meanings);
+            }
+
+            if (ok && !resolved.symbol.IsEmpty() && !imageTested) {
+                imageTested = true;
+                const wxImage picture =
+                    m_chart_symbols.SymbolImage(resolved.symbol, g_color_scheme);
+                wxLogMessage(
+                    "Legend probe: symbol picture %s: %s %dx%d alpha %d mask %d",
+                    resolved.symbol, picture.IsOk() ? "ok" : "MISSING",
+                    picture.IsOk() ? picture.GetWidth() : 0,
+                    picture.IsOk() ? picture.GetHeight() : 0,
+                    picture.IsOk() && picture.HasAlpha(),
+                    picture.IsOk() && picture.HasMask());
             }
         }
+
         for (const auto &entry : perPrim)
             wxLogMessage("Legend probe:   prim %d: %d objects", entry.first, entry.second);
         for (const auto &entry : perClass)
             wxLogMessage("Legend probe:   %4d x %s", entry.second, entry.first);
+        wxLogMessage("Legend probe: %zu distinct symbols, %d objects without symbol",
+                     perSymbol.size(), noSymbol);
+        for (const auto &entry : perSymbol)
+            wxLogMessage("Legend probe:   %4d x %s \"%s\"", entry.second, entry.first,
+                         m_chart_symbols.SymbolDescription(entry.first));
 
         objects->Clear();
         delete objects;

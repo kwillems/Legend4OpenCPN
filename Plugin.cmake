@@ -48,6 +48,8 @@ set(PKG_INFO_URL "https://github.com/kwillems/Legend4OpenCPN")
 set(SRC
     src/legend_pi.h
     src/legend_pi.cpp
+    src/chart_symbols.h
+    src/chart_symbols.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

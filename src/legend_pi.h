@@ -11,6 +11,7 @@
 #define _LEGEND_PI_H_
 
 #include "ocpn_plugin.h"
+#include "chart_symbols.h"
 
 #include <map>
 #include <set>
@@ -252,6 +253,8 @@ private:
     wxTimer m_loading_timer;
     wxTimer m_prefetch_timer;
     wxTimer m_visibility_timer;
+
+    ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
     bool m_prefetch_scheduled;
     bool m_showing_loading_page;
 
