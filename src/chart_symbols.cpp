@@ -251,9 +251,12 @@ void ChartSymbols::LoadObjectClasses(const wxString &path)
     wxStringTokenizer lines(ReadTextFile(path), "\r\n", wxTOKEN_STRTOK);
     while (lines.HasMoreTokens()) {
         const wxArrayString fields = SplitCsvLine(lines.GetNextToken());
+        long code = 0;
         if (fields.GetCount() >= 3 && !fields[2].IsEmpty() &&
-            wxIsdigit(fields[0][0]))
+            fields[0].ToLong(&code)) {
             m_class_descriptions[fields[2]] = fields[1];
+            m_class_acronyms[static_cast<int>(code)] = fields[2];
+        }
     }
 }
 
@@ -267,6 +270,7 @@ void ChartSymbols::LoadAttributes(const wxString &path)
         if (fields.GetCount() >= 3 && fields[0].ToLong(&code) &&
             !fields[2].IsEmpty()) {
             m_attribute_codes[fields[2]] = static_cast<int>(code);
+            m_attribute_acronyms[static_cast<int>(code)] = fields[2];
             m_attribute_names[fields[2]] = fields[1];
         }
     }
@@ -569,6 +573,18 @@ wxString ChartSymbols::ClassDescription(const wxString &className) const
 {
     auto found = m_class_descriptions.find(className);
     return found == m_class_descriptions.end() ? wxString() : found->second;
+}
+
+wxString ChartSymbols::ClassAcronym(int code) const
+{
+    auto found = m_class_acronyms.find(code);
+    return found == m_class_acronyms.end() ? wxString() : found->second;
+}
+
+wxString ChartSymbols::AttributeAcronym(int code) const
+{
+    auto found = m_attribute_acronyms.find(code);
+    return found == m_attribute_acronyms.end() ? wxString() : found->second;
 }
 
 wxString ChartSymbols::AttributeName(const wxString &acronym) const

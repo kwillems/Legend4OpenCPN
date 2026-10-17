@@ -52,6 +52,8 @@ set(SRC
     src/chart_symbols.cpp
     src/ocharts_source.h
     src/ocharts_source.cpp
+    src/s57_source.h
+    src/s57_source.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

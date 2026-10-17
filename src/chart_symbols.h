@@ -77,6 +77,9 @@ public:
     wxString SymbolDescription(const wxString &symbol) const;
     wxString ClassDescription(const wxString &className) const;
     wxString AttributeName(const wxString &acronym) const;
+    // Acronyms for the numeric codes used inside S-57 files.
+    wxString ClassAcronym(int code) const;
+    wxString AttributeAcronym(int code) const;
     // Meaning of an enumerated value ("1" of BOYSHP -> "conical (nun,
     // ogival)"); list values are translated one by one.
     wxString AttributeValueMeaning(
@@ -120,7 +123,9 @@ private:
     std::map<wxString, std::vector<Lookup>> m_lookups; // class -> file order
     std::map<wxString, Symbol> m_symbols;
     std::map<wxString, wxString> m_class_descriptions;
+    std::map<int, wxString> m_class_acronyms;
     std::map<wxString, int> m_attribute_codes;
+    std::map<int, wxString> m_attribute_acronyms;
     std::map<wxString, wxString> m_attribute_names;
     std::map<int, std::map<wxString, wxString>> m_expected_input;
     std::map<int, wxImage> m_sheets; // colour scheme -> raster sheet

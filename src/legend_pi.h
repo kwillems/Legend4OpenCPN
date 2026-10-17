@@ -13,6 +13,7 @@
 #include "ocpn_plugin.h"
 #include "chart_symbols.h"
 #include "ocharts_source.h"
+#include "s57_source.h"
 
 #include <map>
 #include <set>
@@ -264,7 +265,9 @@ private:
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
+    S57Source m_s57;
     bool m_ocharts_available = false;
+    bool m_chart_sources_available = false; // any chart source has cells
     bool m_show_chart_objects = true; // setting, kept in legend.ini
     int m_chart_object_total = 0;     // listed chart objects in view
     int m_chart_objects_hidden = 0;   // in view, but not shown at this scale

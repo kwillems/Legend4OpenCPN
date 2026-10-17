@@ -893,6 +893,10 @@ int legend_pi::Init()
     m_ocharts.SetCacheFile(
         GetConfigDirectory() + wxFileName::GetPathSeparator() +
         "ocharts-cells.txt");
+    m_s57.SetCacheFile(
+        GetConfigDirectory() + wxFileName::GetPathSeparator() +
+        "s57-cells.txt");
+    m_s57.SetCatalogue(&m_chart_symbols);
 
     return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
            WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
@@ -1862,6 +1866,7 @@ void legend_pi::CreateLegendWindow()
             if (href.StartsWith("legend-refresh:")) {
                 m_markdown_view->CallAfter([this]() {
                     m_ocharts.Rescan();
+                    m_s57.Rescan();
                     ShowDynamicLegend(true);
                 });
                 return;
@@ -2949,16 +2954,36 @@ void legend_pi::CollectChartObjects(
     m_chart_object_total = 0;
     m_chart_objects_hidden = 0;
 
-    m_ocharts_available = m_ocharts.Available();
-    if (!m_ocharts_available)
-        return;
-
     EnsureChartSymbols();
     if (!m_chart_symbols.IsLoaded())
         return;
 
     wxStopWatch watch;
-    const std::vector<ChartObject> objects = m_ocharts.PointObjectsInView(vp);
+
+    // Two sources: the o-charts plugin for its encrypted cells, and this
+    // plugin's own reader for plain ENC cells. Where both cover the same
+    // water, an object counts once.
+    std::vector<ChartObject> objects;
+    m_ocharts_available = m_ocharts.Available();
+    if (m_ocharts_available)
+        objects = m_ocharts.PointObjectsInView(vp);
+
+    std::set<wxString> seen;
+    for (const ChartObject &object : objects) {
+        seen.insert(wxString::Format(
+            "%s|%.5f|%.5f", object.className, object.lat, object.lon));
+    }
+
+    const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp);
+    for (const ChartObject &object : enc) {
+        const wxString key = wxString::Format(
+            "%s|%.5f|%.5f", object.className, object.lat, object.lon);
+        if (seen.insert(key).second)
+            objects.push_back(object);
+    }
+
+    m_chart_sources_available = m_ocharts_available || m_s57.CellCount() > 0;
+
     const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
 
     for (const ChartObject &object : objects) {
@@ -3030,9 +3055,9 @@ void legend_pi::CollectChartObjects(
 
     // The list is rebuilt on every pause of the chart; log only what changed.
     const wxString summary = wxString::Format(
-        "Legend: chart objects: %s; %d listed, %d hidden",
-        m_ocharts.LastDiagnostics(), m_chart_object_total,
-        m_chart_objects_hidden);
+        "Legend: chart objects: %s; %s; %d listed, %d hidden",
+        m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
+        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden);
     if (summary != m_chart_objects_logged) {
         m_chart_objects_logged = summary;
         wxLogMessage("%s, %ld ms", summary, watch.Time());
@@ -3362,7 +3387,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             links.push_back("<a href=\"legend-reorder:\">Volgorde wijzigen</a>");
 
         // Chart symbols can be switched off, for a legend of waypoints only.
-        if (m_ocharts_available || !m_show_chart_objects) {
+        if (m_chart_sources_available || !m_show_chart_objects) {
             links.push_back(
                 m_show_chart_objects
                     ? "<a href=\"legend-chart-toggle:\">Kaartsymbolen uit</a>"
@@ -3642,7 +3667,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         if (showHeadings)
             html << " Klik op een kopje om de groep in of uit te klappen.";
         if (m_show_chart_objects && m_chart_object_total > 0)
-            html << " Kaartsymbolen komen uit de o-charts in beeld.";
+            html << " Kaartsymbolen komen uit de kaarten in beeld.";
         html << "</font></p>";
     }
 
