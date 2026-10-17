@@ -136,6 +136,10 @@ private:
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void MarkAllOfDynamicGroup(size_t index);
+
+    // Phase 0 probe: chart objects of o-charts cells through the o-charts
+    // plugin's own chart class. Logs only; nothing is shown or stored.
+    void ProbeChartObjects();
     void ClearDynamicImages();
 
     // Meaning of a symbol shown in the legend, see ResolveLabel().

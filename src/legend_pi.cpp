@@ -39,6 +39,7 @@
 #include <wx/stopwatch.h>
 #include <wx/textfile.h>
 #include <wx/utils.h>
+#include <wx/xml/xml.h>
 
 #include <algorithm>
 #include <functional>
@@ -1840,8 +1841,10 @@ void legend_pi::CreateLegendWindow()
             }
 
             if (href.StartsWith("legend-refresh:")) {
-                m_markdown_view->CallAfter(
-                    [this]() { ShowDynamicLegend(true); });
+                m_markdown_view->CallAfter([this]() {
+                    ProbeChartObjects();
+                    ShowDynamicLegend(true);
+                });
                 return;
             }
 
@@ -3784,4 +3787,296 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     glPopAttrib();
 
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 0 probe: can this plugin read the objects of an o-charts cell through
+// the chart class of the o-charts plugin, the way OpenCPN does for "Chart
+// object query"? Everything goes to the log; nothing is shown or stored.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// All element contents and attributes of an XML tree as "path=value".
+void FlattenXml(
+    const wxXmlNode *node,
+    const wxString &prefix,
+    wxArrayString &out,
+    int depth)
+{
+    if (!node || depth > 6)
+        return;
+
+    for (const wxXmlNode *child = node->GetChildren(); child;
+         child = child->GetNext()) {
+        if (child->GetType() != wxXML_ELEMENT_NODE)
+            continue;
+
+        const wxString name =
+            prefix.IsEmpty() ? child->GetName() : prefix + "/" + child->GetName();
+
+        wxString content = child->GetNodeContent();
+        content.Trim(true).Trim(false);
+        if (!content.IsEmpty())
+            out.Add(name + "=" + content.Left(160));
+
+        for (const wxXmlAttribute *attr = child->GetAttributes(); attr;
+             attr = attr->GetNext())
+            out.Add(name + "@" + attr->GetName() + "=" + attr->GetValue().Left(160));
+
+        FlattenXml(child, name, out, depth + 1);
+    }
+}
+
+wxString StripHtml(const wxString &html)
+{
+    wxString text;
+    bool inTag = false;
+    for (wxUniChar c : html) {
+        if (c == '<') inTag = true;
+        else if (c == '>') { inTag = false; text += ' '; }
+        else if (!inTag) text += c;
+    }
+    text.Replace("&nbsp;", " ");
+    text.Replace("&amp;", "&");
+    while (text.Replace("  ", " ") > 0) {}
+    return text;
+}
+
+struct ProbeCell
+{
+    wxString path;
+    bool hasBox = false;
+    double latMin = 0, latMax = 0, lonMin = 0, lonMax = 0;
+    int nativeScale = 0;
+};
+
+// Creates a chart object of the o-charts plugin. The class is registered
+// with wxWidgets by that plugin, like OpenCPN itself uses it.
+PlugInChartBaseExtendedPlus2 *CreateOChart(wxString &usedClass)
+{
+    for (const char *name : {"oesuChart", "oeuSENCChart"}) {
+        wxObject *object = wxCreateDynamicObject(name);
+        if (!object)
+            continue;
+
+        usedClass = name;
+        auto *chart = dynamic_cast<PlugInChartBaseExtendedPlus2 *>(object);
+        if (!chart) {
+            wxLogMessage("Legend probe: %s created but dynamic_cast failed; "
+                         "using static_cast", name);
+            chart = static_cast<PlugInChartBaseExtendedPlus2 *>(object);
+        }
+        return chart;
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+void legend_pi::ProbeChartObjects()
+{
+    if (!m_viewport_valid) {
+        wxLogMessage("Legend probe: no viewport yet");
+        return;
+    }
+
+    wxStopWatch total;
+    const double lat = m_viewport.clat;
+    const double lon = m_viewport.clon;
+
+    wxLogMessage(
+        "Legend probe: start, centre %.5f %.5f, chart scale 1:%.0f, "
+        "%dx%d px, %.4f ppm",
+        lat, lon, static_cast<double>(m_viewport.chart_scale),
+        m_viewport.pix_width, m_viewport.pix_height,
+        m_viewport.view_scale_ppm);
+
+    // 1. The chart database: which entries exist, and what does an entry
+    //    look like? The first entry and the first .oesu entry are logged in
+    //    full, so the format is known for the next step.
+    std::vector<ProbeCell> cells;
+    int entries = 0;
+    bool loggedOesu = false;
+
+    for (int index = 0; index < 20000; ++index) {
+        wxXmlDocument doc = GetChartDatabaseEntryXML(index, false);
+        if (!doc.IsOk() || !doc.GetRoot())
+            break;
+        ++entries;
+
+        wxArrayString lines;
+        FlattenXml(doc.GetRoot(), "", lines, 0);
+
+        wxString path;
+        double box[4] = {0, 0, 0, 0};
+        bool have[4] = {false, false, false, false};
+
+        for (const wxString &line : lines) {
+            const wxString key = line.BeforeFirst('=').Lower();
+            const wxString value = line.AfterFirst('=');
+
+            if (path.IsEmpty() && value.Contains("/") &&
+                (key.Contains("path") || key.Contains("file")))
+                path = value;
+
+            double d = 0;
+            if (!value.ToCDouble(&d) && !value.ToDouble(&d))
+                continue;
+            if (key.Contains("lat") && key.Contains("min")) { box[0] = d; have[0] = true; }
+            else if (key.Contains("lat") && key.Contains("max")) { box[1] = d; have[1] = true; }
+            else if (key.Contains("lon") && key.Contains("min")) { box[2] = d; have[2] = true; }
+            else if (key.Contains("lon") && key.Contains("max")) { box[3] = d; have[3] = true; }
+        }
+
+        const bool isOesu = path.Lower().EndsWith(".oesu");
+
+        if (index == 0 || (isOesu && !loggedOesu)) {
+            wxLogMessage("Legend probe: database entry %d (%s):", index,
+                         isOesu ? "oesu" : "first");
+            for (const wxString &line : lines)
+                wxLogMessage("Legend probe:   %s", line);
+            if (isOesu)
+                loggedOesu = true;
+        }
+
+        if (!isOesu)
+            continue;
+
+        ProbeCell cell;
+        cell.path = path;
+        cell.hasBox = have[0] && have[1] && have[2] && have[3];
+        cell.latMin = box[0]; cell.latMax = box[1];
+        cell.lonMin = box[2]; cell.lonMax = box[3];
+        cells.push_back(cell);
+    }
+
+    wxLogMessage("Legend probe: %d database entries, %zu .oesu cells, %ld ms",
+                 entries, cells.size(), total.Time());
+
+    if (cells.empty()) {
+        wxLogMessage("Legend probe: no .oesu cells in the chart database; stop");
+        return;
+    }
+
+    // 2. Which cells cover the centre? Use the box from the database when it
+    //    was found, otherwise a header-only init of the cell gives its extent.
+    wxString usedClass;
+    std::vector<ProbeCell> covering;
+    int headerInits = 0;
+
+    for (const ProbeCell &cell : cells) {
+        if (cell.hasBox) {
+            if (lat < cell.latMin || lat > cell.latMax ||
+                lon < cell.lonMin || lon > cell.lonMax)
+                continue;
+        }
+
+        if (headerInits >= 40) {
+            wxLogMessage("Legend probe: header-init cap reached");
+            break;
+        }
+
+        wxStopWatch watch;
+        PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
+        if (!chart) {
+            wxLogMessage("Legend probe: cannot create o-charts chart class; stop");
+            return;
+        }
+        ++headerInits;
+
+        const int result = chart->Init(cell.path, PI_HEADER_ONLY);
+        ExtentPI extent = {0, 0, 0, 0};
+        const bool hasExtent = result == 0 && chart->GetChartExtent(&extent);
+        const int scale = result == 0 ? chart->GetNativeScale() : 0;
+
+        wxLogMessage(
+            "Legend probe: header %s -> init %d, extent %s [%.4f..%.4f, %.4f..%.4f], "
+            "scale 1:%d, %ld ms",
+            wxFileName(cell.path).GetFullName(), result, hasExtent ? "ok" : "none",
+            extent.SLAT, extent.NLAT, extent.WLON, extent.ELON, scale, watch.Time());
+
+        delete chart;
+
+        if (result != 0 || !hasExtent)
+            continue;
+
+        if (lat >= extent.SLAT && lat <= extent.NLAT &&
+            lon >= extent.WLON && lon <= extent.ELON) {
+            ProbeCell found = cell;
+            found.nativeScale = scale;
+            covering.push_back(found);
+        }
+    }
+
+    wxLogMessage("Legend probe: %zu cells cover the centre (class %s)",
+                 covering.size(), usedClass);
+
+    if (covering.empty())
+        return;
+
+    // 3. The most detailed covering cell: full init and an object query
+    //    around the centre, like OpenCPN's object query but with a radius
+    //    of a quarter of the screen width.
+    std::sort(covering.begin(), covering.end(),
+              [](const ProbeCell &a, const ProbeCell &b) {
+                  return a.nativeScale < b.nativeScale;
+              });
+    const ProbeCell &best = covering.front();
+
+    wxStopWatch watch;
+    PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
+    const int result = chart->Init(best.path, PI_FULL_INIT);
+    wxLogMessage("Legend probe: full init %s -> %d, %ld ms",
+                 wxFileName(best.path).GetFullName(), result, watch.Time());
+
+    if (result != 0) {
+        delete chart;
+        return;
+    }
+
+    PlugIn_ViewPort vp = m_viewport;
+    const float radiusDeg = static_cast<float>(
+        (vp.pix_width / 4.0) / (vp.view_scale_ppm * 1852.0 * 60.0));
+
+    watch.Start();
+    ListOfPI_S57Obj *objects =
+        chart->GetObjRuleListAtLatLon(
+            static_cast<float>(lat), static_cast<float>(lon), radiusDeg, &vp);
+    wxLogMessage("Legend probe: query radius %.4f deg -> %d objects, %ld ms",
+                 radiusDeg, objects ? static_cast<int>(objects->GetCount()) : -1,
+                 watch.Time());
+
+    if (objects) {
+        std::map<wxString, int> perClass;
+        int shown = 0;
+        for (ListOfPI_S57Obj::Node *node = objects->GetFirst(); node;
+             node = node->GetNext()) {
+            PI_S57Obj *obj = node->GetData();
+            if (!obj)
+                continue;
+            const wxString feature = wxString::FromAscii(obj->FeatureName);
+            ++perClass[feature];
+            if (shown < 12) {
+                ++shown;
+                wxLogMessage(
+                    "Legend probe:   %s prim %d at %.5f %.5f scamin %d attrs %d",
+                    feature, obj->Primitive_type, obj->m_lat, obj->m_lon,
+                    obj->Scamin, obj->n_attr);
+            }
+        }
+        for (const auto &entry : perClass)
+            wxLogMessage("Legend probe:   %4d x %s", entry.second, entry.first);
+
+        watch.Start();
+        const wxString description = StripHtml(chart->CreateObjDescriptions(objects));
+        wxLogMessage("Legend probe: descriptions %zu chars, %ld ms; start: %s",
+                     description.length(), watch.Time(), description.Left(700));
+
+        objects->Clear();
+        delete objects;
+    }
+
+    delete chart;
+    wxLogMessage("Legend probe: done in %ld ms", total.Time());
 }
