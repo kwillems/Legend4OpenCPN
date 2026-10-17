@@ -20,6 +20,7 @@
 #include <wx/button.h>
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
+#include <wx/graphics.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/file.h>
@@ -676,13 +677,88 @@ void MarkerColours(wxColour &outline, wxColour &highlight)
     }
 }
 
-// A chart scale as people write it: "1:12.000".
-wxString FormatScale(int scale)
+// A chart scale in a few characters: "1:22k", "1:1,5M".
+wxString FormatScaleShort(int scale)
 {
-    wxString digits = wxString::Format("%d", scale);
-    for (int at = static_cast<int>(digits.length()) - 3; at > 0; at -= 3)
-        digits.insert(static_cast<size_t>(at), ".");
-    return "1:" + digits;
+    if (scale >= 1000000) {
+        const double millions = scale / 1000000.0;
+        wxString text = millions == std::floor(millions)
+                            ? wxString::Format("%.0f", millions)
+                            : wxString::Format("%.1f", millions);
+        text.Replace(".", ",");
+        return "1:" + text + "M";
+    }
+    if (scale >= 1000)
+        return wxString::Format("1:%dk", (scale + 500) / 1000);
+    return wxString::Format("1:%d", scale);
+}
+
+// Blends an image towards a colour: faded icons for rows the chart does
+// not draw at this scale.
+wxImage FadeImage(const wxImage &image, const wxColour &towards, double amount)
+{
+    if (!image.IsOk())
+        return image;
+
+    wxImage faded = image.Copy();
+    unsigned char *data = faded.GetData();
+    const size_t pixels =
+        static_cast<size_t>(faded.GetWidth()) * faded.GetHeight();
+    const unsigned char target[3] = {
+        towards.Red(), towards.Green(), towards.Blue()};
+
+    for (size_t i = 0; i < pixels; ++i) {
+        for (int c = 0; c < 3; ++c) {
+            unsigned char &v = data[i * 3 + c];
+            v = static_cast<unsigned char>(
+                std::lround(v + (target[c] - v) * amount));
+        }
+    }
+    return faded;
+}
+
+// A small eye, closed (a stroke through it) for rows hidden at this
+// scale, drawn on the row colour.
+wxImage EyeIcon(bool open, const wxColour &colour, const wxColour &background)
+{
+    const int width = 20;
+    const int height = 13;
+
+    wxBitmap bitmap(width, height, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.4)));
+            gc->SetBrush(*wxTRANSPARENT_BRUSH);
+
+            // The lid: two curves from corner to corner.
+            const double y = height / 2.0;
+            wxGraphicsPath lens = gc->CreatePath();
+            lens.MoveToPoint(1.5, y);
+            lens.AddQuadCurveToPoint(width / 2.0, -height * 0.45, width - 1.5, y);
+            lens.AddQuadCurveToPoint(width / 2.0, height * 1.45, 1.5, y);
+            gc->StrokePath(lens);
+
+            // The pupil.
+            gc->SetBrush(wxBrush(colour));
+            const double radius = height / 4.5;
+            gc->DrawEllipse(width / 2.0 - radius, y - radius, 2 * radius, 2 * radius);
+
+            if (!open) {
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.6)));
+                gc->StrokeLine(3.0, height - 1.5, width - 3.0, 1.5);
+            }
+            delete gc;
+        }
+        dc.SelectObject(wxNullBitmap);
+    }
+
+    return bitmap.ConvertToImage();
 }
 
 // Colours of the legend view. Fixed values instead of the system colours:
@@ -2019,8 +2095,11 @@ void legend_pi::CreateLegendWindow()
                     static_cast<size_t>(hit.index) < m_dynamic_groups.size()) {
                     const DynamicGroup &group = m_dynamic_groups[hit.index];
                     if (group.hiddenAtScale) {
-                        tip = "Op deze schaal niet getekend; een klik zoomt in "
-                              "tot het dichtstbijzijnde exemplaar zichtbaar is";
+                        tip = "Op deze schaal niet getekend";
+                        if (group.visibleFrom > 0)
+                            tip << ", zichtbaar vanaf " << FormatScaleShort(group.visibleFrom);
+                        tip << "; een klik zoomt in tot het dichtstbijzijnde "
+                               "exemplaar zichtbaar is";
                     }
                     if (group.chartSymbol)
                         tip = "Kaartsymbool " + group.symbol + ". " + tip;
@@ -3166,10 +3245,12 @@ void legend_pi::CollectChartObjects(
 
     // The list is rebuilt on every pause of the chart; log only what changed.
     const wxString summary = wxString::Format(
-        "Legend: chart objects: %s; %s; %d listed, %d hidden, %zu class probes%s",
+        "Legend: chart objects: %s; %s; %d listed, %d hidden, %d hidden by scale "
+        "listed, %zu class probes%s",
         m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
         m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden,
-        shownCache.size(), unanswered > 0 ? " (PLIB gave no answer)" : "");
+        m_chart_objects_scale_hidden, shownCache.size(),
+        unanswered > 0 ? " (PLIB gave no answer)" : "");
     if (summary != m_chart_objects_logged) {
         m_chart_objects_logged = summary;
         wxLogMessage("%s, %ld ms", summary, watch.Time());
@@ -3738,6 +3819,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     iconBox,
                     palette.iconTiles ? &palette.tile : nullptr,
                     tilePadding);
+
+                // The chart does not draw these at this scale: faded.
+                if (group.hiddenAtScale)
+                    image = FadeImage(image, rowColour, 0.55);
             }
 
             if (image.IsOk()) {
@@ -3771,13 +3856,21 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         "</font>";
             }
             if (group.hiddenAtScale) {
-                // Not drawn on the chart at this scale; a click zooms in.
+                // Not drawn on the chart at this scale: a closed eye and the
+                // scale at which it appears; a click zooms in.
                 label = "<font color=\"" + hex(muted) + "\">" + label +
                         "</font>";
+
+                const wxString eyeName = wxString::Format(
+                    "legend_dyn_%d_eye_%zu.png", m_dynamic_generation, i);
+                wxMemoryFSHandler::AddFile(
+                    eyeName, EyeIcon(false, muted, rowColour), wxBITMAP_TYPE_PNG);
+                m_dynamic_image_names.push_back(eyeName);
+
+                label << "&nbsp; <img src=\"memory:" << eyeName << "\">";
                 if (group.visibleFrom > 0) {
-                    label << " <font size=\"-1\" color=\"" << hex(muted)
-                          << "\">zichtbaar vanaf "
-                          << FormatScale(group.visibleFrom) << "</font>";
+                    label << " <font size=\"-1\" color=\"" << hex(muted) << "\">"
+                          << FormatScaleShort(group.visibleFrom) << "</font>";
                 }
             }
             if (isActive)
