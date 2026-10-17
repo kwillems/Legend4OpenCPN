@@ -1980,6 +1980,14 @@ void legend_pi::CreateLegendWindow()
             case HitKind::Row:
                 tip = "Naar het dichtstbijzijnde exemplaar; nog een klik gaat "
                       "naar het volgende";
+                // The symbol name is what symbolen.txt needs for a chart
+                // symbol; the list itself shows only the description.
+                if (hit.index >= 0 &&
+                    static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
+                    m_dynamic_groups[hit.index].chartSymbol) {
+                    tip = "Kaartsymbool " + m_dynamic_groups[hit.index].symbol +
+                          ". " + tip;
+                }
                 break;
             case HitKind::Section:
                 tip = hit.index >= 0 &&

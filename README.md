@@ -37,12 +37,17 @@ Bij nul of één item wordt overbodige navigatie niet getoond of uitgeschakeld. 
 
 Markdown wordt verwerkt met [MD4C](https://github.com/mity/md4c).
 
-## Dynamische legenda (waypoints in beeld)
+## Dynamische legenda (symbolen in beeld)
 
 Het eerste item in de keuzelijst is altijd de dynamische legenda. Die toont
-de waypoint-symbolen (waaronder die uit GPX-bestanden en GPX-lagen) die op dat
-moment in het kaartbeeld zichtbaar zijn, gegroepeerd per symbool met het
-aantal (`×7`). Elk symbool wordt getoond met zijn eigen icoon.
+de symbolen die op dat moment in het kaartbeeld zichtbaar zijn, gegroepeerd
+per symbool met het aantal (`×7`):
+
+- de waypoint-symbolen, waaronder die uit GPX-bestanden en GPX-lagen, met
+  hun eigen icoon;
+- de kaartsymbolen van o-charts-kaarten (boeien, bakens, lichten, toptekens,
+  meerpalen enzovoort), met het plaatje zoals OpenCPN het op de kaart tekent.
+  Zie *Kaartsymbolen* hieronder.
 
 ### Bediening
 
@@ -58,8 +63,13 @@ aantal (`×7`). Elk symbool wordt getoond met zijn eigen icoon.
   en teller staan.
 - Het verbergen of tonen van een GPX-laag wordt vanzelf opgemerkt; de lijst
   past zich binnen enkele seconden aan.
-- **Ververs** laadt alle waypoints opnieuw. Gebruik dit na het verplaatsen van
-  een waypoint of het wijzigen van een icoon zonder dat de kaart beweegt.
+- De teller rechts in een rij (`×7 ◎`) is een knop: een klik wijst alle
+  exemplaren van dat symbool in beeld tegelijk aan.
+- Boven elk klikbaar onderdeel verschijnt een tooltip die zegt wat een klik
+  doet.
+- **Ververs** laadt alle waypoints opnieuw en inventariseert de kaartcellen
+  opnieuw. Gebruik dit na het verplaatsen van een waypoint of het wijzigen
+  van een icoon zonder dat de kaart beweegt.
 
 ### Kopjes, in- en uitklappen en volgorde
 
@@ -69,7 +79,8 @@ verdeeld.
 - Klik op een kopje (▼/▶) om de groep in of uit te klappen. Een ingeklapte
   groep toont het aantal symbolen en waypoints in beeld en een strook met de
   eerste iconen.
-- **Alles inklappen** en **Alles uitklappen** staan bovenaan de lijst.
+- Bovenaan staat één link die wisselt tussen **Alles inklappen** en **Alles
+  uitklappen**, afhankelijk van wat er nog openstaat.
 - Welke kopjes ingeklapt zijn, wordt per kopjesnaam onthouden, ook na het
   herstarten van OpenCPN.
 - **Volgorde wijzigen** toont alleen de kopjes, met grote knoppen ▲ en ▼ die
@@ -77,8 +88,42 @@ verdeeld.
   `symbolen.txt` bewaard. **Klaar** brengt je terug naar de lijst.
 - Symbolen die onder geen kopje vallen, staan onderaan onder **Overig**.
 
+### Kaartsymbolen (o-charts)
+
+De plugin leest de puntobjecten van de o-charts-cellen (`.oesu`) in beeld via
+de kaartklasse van de o-charts-plugin zelf, op dezelfde manier als OpenCPN dat
+doet voor *Kaartobjectgegevens*. De o-charts-plugin blijft de ontsleuteling en
+de licentiecontrole doen; de plugin slaat geen kaartgegevens op en exporteert
+niets. Alleen de dekking en schaal van elke cel worden bewaard
+(`ocharts-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
+
+- Elk object krijgt het S-52-symbool dat OpenCPN ervoor kiest, met dezelfde
+  opzoektabellen (`chartsymbols.xml`) en dezelfde symboolstijl (vereenvoudigd
+  of papieren kaart). Het plaatje komt van het symboolblad voor dag, schemer
+  of nacht.
+- Objecten die op de huidige schaal verborgen zijn (SCAMIN) en de categorie
+  "Overig", die OpenCPN standaard niet toont, blijven weg. Lijn- en
+  vlakobjecten (kustlijn, dieptegebieden) doen niet mee.
+- Cellen die veel gedetailleerder zijn dan het kaartbeeld worden
+  overgeslagen, zoals ook de quilt van OpenCPN ze niet toont. Er blijven
+  hooguit zestien cellen tegelijk geopend.
+- Symbolen zonder regel in `symbolen.txt` staan onder het kopje
+  **Kaartsymbolen**, vóór **Overig**. De tekst is dan de Engelse
+  S-52-omschrijving, bijvoorbeeld "Pillar buoy, lateral-r". In `symbolen.txt`
+  gebruik je de symboolnaam, bijvoorbeeld `BOYPIL60 = Rode pilaarton` of
+  `LIGHTS* = Licht`; de tooltip van een rij toont die naam.
+- De link **Kaartsymbolen uit** / **aan** in het kopblok schakelt dit deel
+  van de legenda uit of in; de keuze wordt bewaard.
+
+Dit werkt alleen als de o-charts-plugin geladen is. Gewone, onversleutelde
+ENC-kaarten (S-57) worden nog niet gelezen; dat is de volgende stap.
+
 ### Weergave
 
+- De legenda volgt de kleurenschema's dag, schemer en nacht van OpenCPN
+  (de knop met zon en maan): venster, tekst, iconen, PNG-legenda's en de
+  markering op de kaart dimmen mee. Overdag volgt het venster de lichte of
+  donkere weergave van macOS.
 - De iconen volgen de schaalfactor voor kaartobjecten in de instellingen van
   OpenCPN, zodat ze even groot zijn als op de kaart. Tekst en knoppen behouden
   hun grootte.
@@ -91,9 +136,11 @@ verdeeld.
 
 ### Beperkingen
 
-- Kaartsymbolen van ENC- en o-charts-kaarten worden (nog) niet getoond. De
-  plugin-API geeft die objecten niet direct door; mogelijke routes worden
-  onderzocht.
+- Kaartsymbolen komen alleen uit o-charts-kaarten; onversleutelde
+  ENC-kaarten (S-57) volgen later. De plugin-API geeft kaartobjecten niet
+  direct door.
+- Welke weergavecategorie OpenCPN gebruikt (standaard, alles) kan de plugin
+  niet opvragen; de legenda gaat uit van de standaardcategorie.
 - De markering is getest met **OpenGL ingeschakeld**. Zonder OpenGL wordt de
   markering niet betrouwbaar getoond.
 - Iconen worden gelezen uit de PNG-bestanden van OpenCPN (`UserIcons` en de
@@ -169,10 +216,10 @@ PNG-bestanden in de hoofdmap worden als afzonderlijke legenda-items getoond. Afb
 De interne configuratie van de plugin wordt apart opgeslagen onder:
 
 ```text
-~/Library/Application Support/OpenCPN/Legend/
+~/Library/Preferences/opencpn/Legend/
 ```
 
-Daar staat onder andere `legend.ini`. Daarin worden het laatst gekozen item, de vensterpositie en -grootte en de ingeklapte kopjes van de dynamische legenda bewaard.
+Dat is de map `Legend` in de privémap van OpenCPN. Daar staan `legend.ini`, met het laatst gekozen item, de vensterpositie en -grootte, de ingeklapte kopjes en de schakelaar voor kaartsymbolen, en `ocharts-cells.txt`, de cache met de dekking van de o-charts-cellen.
 
 De locatie van de gebruikersmap is op dit moment nog vast. Een instelbare locatie is voorzien voor een latere versie.
 
@@ -374,8 +421,12 @@ Legend4OpenCPN/
 ├── data/
 │   └── legend_toolbar.png
 ├── src/
-│   ├── legend_pi.cpp
-│   └── legend_pi.h
+│   ├── legend_pi.cpp        # plugin, venster en dynamische legenda
+│   ├── legend_pi.h
+│   ├── chart_symbols.cpp    # S-52-symbolen en S-57-catalogus van OpenCPN
+│   ├── chart_symbols.h
+│   ├── ocharts_source.cpp   # kaartobjecten via de o-charts-plugin
+│   └── ocharts_source.h
 ├── third_party/
 │   └── md4c/              # Git-submodule
 ├── opencpn-libs/          # Git-submodule
@@ -400,11 +451,11 @@ Voor volgende versies zijn onder andere interessant:
 
 Voor de dynamische legenda in het bijzonder:
 
-- de kleurenschema's dag, schemer en nacht van OpenCPN volgen;
 - betekenissen bewerken vanuit de legenda zelf;
 - gegevens van het gekozen object tonen, zoals lichtkarakter, doorvaarthoogte en marifoonkanaal;
 - instelbaar ook symbolen tonen die op de huidige schaal verborgen zijn;
-- symbolen uit ENC-kaarten (S-57) en o-charts;
+- symbolen uit onversleutelde ENC-kaarten (S-57), naast die van o-charts;
+- vanaf een klik op de kaart naar de rij in de legenda;
 - een Engelse vertaling van het venster.
 
 Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
