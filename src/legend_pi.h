@@ -14,6 +14,7 @@
 #include "chart_symbols.h"
 #include "ocharts_source.h"
 #include "s57_source.h"
+#include "display_settings.h"
 
 #include <map>
 #include <set>
@@ -266,6 +267,8 @@ private:
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
     S57Source m_s57;
+    DisplaySettings m_display_settings; // category and class filter of OpenCPN
+    int m_plib_state_hash = 0;          // OpenCPN's vector display settings
     bool m_ocharts_available = false;
     bool m_chart_sources_available = false; // any chart source has cells
     bool m_show_chart_objects = true; // setting, kept in legend.ini

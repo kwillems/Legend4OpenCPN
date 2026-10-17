@@ -898,6 +898,13 @@ int legend_pi::Init()
         "s57-cells.txt");
     m_s57.SetCatalogue(&m_chart_symbols);
 
+    // OpenCPN's own configuration file, read for its vector display settings.
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (privateDir && !privateDir->IsEmpty()) {
+        m_display_settings.SetFile(
+            *privateDir + wxFileName::GetPathSeparator() + "opencpn.ini");
+    }
+
     return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
            WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
            WANTS_OPENGL_OVERLAY_CALLBACK |
@@ -2296,6 +2303,19 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
         !m_showing_loading_page)
         RenderDynamicLegend(true);
 
+    // The vector display settings of OpenCPN changed (category, object
+    // classes, symbol style): the chart symbols in the list follow.
+    const int plibHash = PI_GetPLIBStateHash();
+    if (plibHash != m_plib_state_hash) {
+        const bool first = m_plib_state_hash == 0;
+        m_plib_state_hash = plibHash;
+        if (!first && !m_showing_loading_page && m_show_chart_objects) {
+            m_display_settings.Refresh(true);
+            RefreshDynamicLegendKeepingState();
+            return;
+        }
+    }
+
     // A repaint without movement may come from hiding or showing a layer.
     // Not restarted on every repaint, so the marker animation cannot keep
     // postponing the check.
@@ -2305,6 +2325,13 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
 
 void legend_pi::CheckVisibilityChanges()
 {
+    // OpenCPN wrote new display settings to its configuration file.
+    if (IsDynamicLegendVisible() && !m_loading && !m_showing_loading_page &&
+        m_show_chart_objects && m_display_settings.Refresh()) {
+        RefreshDynamicLegendKeepingState();
+        return;
+    }
+
     if (!IsDynamicLegendVisible() || m_loading || !m_viewport_valid ||
         m_waypoint_cache.empty() ||
         m_waypoint_cache.size() != m_waypoint_guids.GetCount())
@@ -2985,6 +3012,7 @@ void legend_pi::CollectChartObjects(
     m_chart_sources_available = m_ocharts_available || m_s57.CellCount() > 0;
 
     const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
+    m_display_settings.Refresh();
 
     for (const ChartObject &object : objects) {
         if (object.scamin > 0 && vp.chart_scale > object.scamin) {
@@ -2997,7 +3025,9 @@ void legend_pi::CollectChartObjects(
             resolved.symbol.IsEmpty())
             continue;
 
-        if (resolved.displayCat == "Other" || resolved.displayCat == "Mariners") {
+        // The chart's display category and, for mariner's standard, the
+        // user's list of object classes.
+        if (!m_display_settings.Shows(object.className, resolved.displayCat)) {
             ++m_chart_objects_hidden;
             continue;
         }
