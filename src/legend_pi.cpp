@@ -3828,21 +3828,6 @@ void FlattenXml(
     }
 }
 
-wxString StripHtml(const wxString &html)
-{
-    wxString text;
-    bool inTag = false;
-    for (wxUniChar c : html) {
-        if (c == '<') inTag = true;
-        else if (c == '>') { inTag = false; text += ' '; }
-        else if (!inTag) text += c;
-    }
-    text.Replace("&nbsp;", " ");
-    text.Replace("&amp;", "&");
-    while (text.Replace("  ", " ") > 0) {}
-    return text;
-}
-
 struct ProbeCell
 {
     wxString path;
@@ -3850,6 +3835,72 @@ struct ProbeCell
     double latMin = 0, latMax = 0, lonMin = 0, lonMax = 0;
     int nativeScale = 0;
 };
+
+// Extents found with a header-only init, kept between runs.
+struct ProbeExtent
+{
+    ExtentPI extent;
+    int nativeScale;
+};
+std::map<wxString, ProbeExtent> g_probe_extents;
+
+// Layout of an attribute value inside OpenCPN (s52s57.h). The API header
+// only declares the array type; the o-charts plugin fills it with this
+// layout, and OpenCPN reads it the same way.
+struct LegendS57attVal
+{
+    void *value;
+    char valType;
+};
+WX_DEFINE_ARRAY_PTR(LegendS57attVal *, LegendS57attValArray);
+
+// Value of an attribute as text. Only known type codes are decoded; the
+// raw code is shown for anything else, so the encoding can be learned.
+wxString AttributeValueText(const LegendS57attVal *val)
+{
+    if (!val || !val->value)
+        return "<null>";
+
+    switch (val->valType) {
+    case 0:
+    case 'I':
+        return wxString::Format("%d", *static_cast<const int *>(val->value));
+    case 2:
+    case 'R':
+        return wxString::Format("%g", *static_cast<const double *>(val->value));
+    case 4:
+    case 'S': {
+        const char *text = static_cast<const char *>(val->value);
+        wxString out = wxString::FromUTF8(text);
+        if (out.IsEmpty() && *text)
+            out = wxString::From8BitData(text);
+        return out;
+    }
+    default:
+        return wxString::Format("<type %d>", static_cast<int>(val->valType));
+    }
+}
+
+// "ACRONYM=value; ..." for all attributes of an object.
+wxString AttributesText(const PI_S57Obj *obj)
+{
+    wxString out;
+    if (!obj->att_array || !obj->attVal || obj->n_attr <= 0)
+        return out;
+
+    const auto *values =
+        reinterpret_cast<const LegendS57attValArray *>(obj->attVal);
+    const int count =
+        std::min(obj->n_attr, static_cast<int>(values->GetCount()));
+
+    for (int i = 0; i < count; ++i) {
+        if (!out.IsEmpty())
+            out << "; ";
+        out << wxString::From8BitData(obj->att_array + 6 * i, 6).Trim()
+            << "=" << AttributeValueText(values->Item(i)).Left(60);
+    }
+    return out;
+}
 
 // Creates a chart object of the o-charts plugin. The class is registered
 // with wxWidgets by that plugin, like OpenCPN itself uses it.
@@ -3972,34 +4023,35 @@ void legend_pi::ProbeChartObjects()
                 continue;
         }
 
-        if (headerInits >= 40) {
-            wxLogMessage("Legend probe: header-init cap reached");
-            break;
-        }
-
-        wxStopWatch watch;
-        PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
-        if (!chart) {
-            wxLogMessage("Legend probe: cannot create o-charts chart class; stop");
-            return;
-        }
-        ++headerInits;
-
-        const int result = chart->Init(cell.path, PI_HEADER_ONLY);
         ExtentPI extent = {0, 0, 0, 0};
-        const bool hasExtent = result == 0 && chart->GetChartExtent(&extent);
-        const int scale = result == 0 ? chart->GetNativeScale() : 0;
+        int scale = 0;
 
-        wxLogMessage(
-            "Legend probe: header %s -> init %d, extent %s [%.4f..%.4f, %.4f..%.4f], "
-            "scale 1:%d, %ld ms",
-            wxFileName(cell.path).GetFullName(), result, hasExtent ? "ok" : "none",
-            extent.SLAT, extent.NLAT, extent.WLON, extent.ELON, scale, watch.Time());
+        auto known = g_probe_extents.find(cell.path);
+        if (known != g_probe_extents.end()) {
+            extent = known->second.extent;
+            scale = known->second.nativeScale;
+        }
+        else {
+            PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
+            if (!chart) {
+                wxLogMessage("Legend probe: cannot create o-charts chart class; stop");
+                return;
+            }
+            ++headerInits;
 
-        delete chart;
+            const int result = chart->Init(cell.path, PI_HEADER_ONLY);
+            const bool hasExtent = result == 0 && chart->GetChartExtent(&extent);
+            scale = result == 0 ? chart->GetNativeScale() : 0;
+            delete chart;
 
-        if (result != 0 || !hasExtent)
-            continue;
+            if (result != 0 || !hasExtent) {
+                wxLogMessage("Legend probe: header %s -> init %d, no extent",
+                             wxFileName(cell.path).GetFullName(), result);
+                continue;
+            }
+
+            g_probe_extents[cell.path] = {extent, scale};
+        }
 
         if (lat >= extent.SLAT && lat <= extent.NLAT &&
             lon >= extent.WLON && lon <= extent.ELON) {
@@ -4009,8 +4061,14 @@ void legend_pi::ProbeChartObjects()
         }
     }
 
-    wxLogMessage("Legend probe: %zu cells cover the centre (class %s)",
-                 covering.size(), usedClass);
+    wxLogMessage(
+        "Legend probe: %d header inits, %zu extents known, %zu cells cover "
+        "the centre (class %s), %ld ms so far",
+        headerInits, g_probe_extents.size(), covering.size(), usedClass,
+        total.Time());
+    for (const ProbeCell &cell : covering)
+        wxLogMessage("Legend probe:   covering %s 1:%d",
+                     wxFileName(cell.path).GetFullName(), cell.nativeScale);
 
     if (covering.empty())
         return;
@@ -4047,8 +4105,11 @@ void legend_pi::ProbeChartObjects()
                  radiusDeg, objects ? static_cast<int>(objects->GetCount()) : -1,
                  watch.Time());
 
+    // CreateObjDescriptions() of the o-charts plugin crashes when called on
+    // a chart it did not render itself, so the attributes are read directly.
     if (objects) {
         std::map<wxString, int> perClass;
+        std::map<int, int> perPrim;
         int shown = 0;
         for (ListOfPI_S57Obj::Node *node = objects->GetFirst(); node;
              node = node->GetNext()) {
@@ -4056,22 +4117,23 @@ void legend_pi::ProbeChartObjects()
             if (!obj)
                 continue;
             const wxString feature = wxString::FromAscii(obj->FeatureName);
-            ++perClass[feature];
-            if (shown < 12) {
+            ++perClass[wxString::Format("%s/prim%d", feature, obj->Primitive_type)];
+            ++perPrim[obj->Primitive_type];
+
+            // Areas are of no use to the legend; show the others.
+            if (shown < 25 && obj->Primitive_type != 2) {
                 ++shown;
                 wxLogMessage(
-                    "Legend probe:   %s prim %d at %.5f %.5f scamin %d attrs %d",
-                    feature, obj->Primitive_type, obj->m_lat, obj->m_lon,
-                    obj->Scamin, obj->n_attr);
+                    "Legend probe:   %s prim %d cat %c at %.5f %.5f scamin %d: %s",
+                    feature, obj->Primitive_type,
+                    static_cast<char>(obj->m_DisplayCat ? obj->m_DisplayCat : '?'),
+                    obj->m_lat, obj->m_lon, obj->Scamin, AttributesText(obj));
             }
         }
+        for (const auto &entry : perPrim)
+            wxLogMessage("Legend probe:   prim %d: %d objects", entry.first, entry.second);
         for (const auto &entry : perClass)
             wxLogMessage("Legend probe:   %4d x %s", entry.second, entry.first);
-
-        watch.Start();
-        const wxString description = StripHtml(chart->CreateObjDescriptions(objects));
-        wxLogMessage("Legend probe: descriptions %zu chars, %ld ms; start: %s",
-                     description.length(), watch.Time(), description.Left(700));
 
         objects->Clear();
         delete objects;
