@@ -23,6 +23,7 @@
 #include <wx/graphics.h>
 #include <wx/dir.h>
 #include <wx/display.h>
+#include <wx/gdicmn.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filesys.h>
@@ -2370,13 +2371,14 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
     m_viewport = vp;
     m_viewport_valid = (vp.pix_width > 0 && vp.pix_height > 0);
 
-    if (m_log_next_viewport && m_viewport_valid) {
+    if (m_log_next_viewport && m_viewport_valid &&
+        vp.chart_scale != m_logged_chart_scale) {
         m_log_next_viewport = false;
         wxLogMessage(
-            "Legend: viewport after zoom: chart scale 1:%.0f, ppm %.6f, "
-            "%dx%d px, centre %.4f %.4f",
-            static_cast<double>(vp.chart_scale), vp.view_scale_ppm,
-            vp.pix_width, vp.pix_height, vp.clat, vp.clon);
+            "Legend: viewport after zoom: displayed scale 1:%.0f, chart scale "
+            "1:%.0f, ppm %.6f, %dx%d px",
+            DisplayedScale(vp), static_cast<double>(vp.chart_scale),
+            vp.view_scale_ppm, vp.pix_width, vp.pix_height);
     }
 
     if (m_viewport_valid && !m_prefetch_scheduled) {
@@ -3067,6 +3069,42 @@ void legend_pi::MoveSection(int section, int delta)
     RenderDynamicLegend(true);
 }
 
+double legend_pi::DisplayedScale(const PlugIn_ViewPort &vp) const
+{
+    if (vp.pix_width <= 0 || vp.view_scale_ppm <= 0.0)
+        return 0.0;
+
+    // Pixels per true metre: a short north-south line through the centre.
+    PlugIn_ViewPort view = vp;
+    const double halfDegrees = 0.005; // about 556 m each way
+    wxPoint south;
+    wxPoint north;
+    GetCanvasPixLL(&view, &south, vp.clat - halfDegrees, vp.clon);
+    GetCanvasPixLL(&view, &north, vp.clat + halfDegrees, vp.clon);
+    const double pixels = std::hypot(
+        static_cast<double>(north.x - south.x),
+        static_cast<double>(north.y - south.y));
+    const double metres = 2.0 * halfDegrees * 111194.9;
+    if (pixels <= 0.0)
+        return 0.0;
+    const double truePpm = pixels / metres;
+
+    // Physical pixels per metre of the display: logical size in pixels and
+    // in millimetres, times the content scale of a Retina display.
+    double displayPpm = 0.0;
+    const wxSize sizePx = wxGetDisplaySize();
+    const wxSize sizeMm = wxGetDisplaySizeMM();
+    double content = 1.0;
+    if (wxWindow *canvas = GetOCPNCanvasWindow())
+        content = canvas->GetContentScaleFactor();
+    if (sizePx.x > 0 && sizeMm.x > 0)
+        displayPpm = sizePx.x * content / (sizeMm.x / 1000.0);
+    if (displayPpm <= 0.0)
+        displayPpm = 96.0 / 0.0254 * content;
+
+    return displayPpm / truePpm;
+}
+
 void legend_pi::EnsureChartSymbols()
 {
     if (m_chart_symbols.IsLoaded() || m_chart_symbols_tried)
@@ -3281,6 +3319,9 @@ void legend_pi::CollectDynamicLegend()
     LoadMeanings();
 
     const PlugIn_ViewPort vp = m_viewport;
+    m_displayed_scale = DisplayedScale(vp);
+    const double scaleForLimits =
+        m_displayed_scale > 0.0 ? m_displayed_scale : vp.chart_scale;
 
     // Longitudes may be offset by 360 degrees relative to the viewport.
     auto lonInView = [&vp](double lon) {
@@ -3300,7 +3341,7 @@ void legend_pi::CollectDynamicLegend()
 
         // Waypoints with a scale limit disappear when zoomed out too far;
         // with the setting on they get a row of their own.
-        const bool hiddenByScale = wp.useScamin && vp.chart_scale > wp.scamin;
+        const bool hiddenByScale = wp.useScamin && scaleForLimits > wp.scamin;
         if (hiddenByScale && !m_show_hidden_at_scale)
             continue;
 
@@ -3983,27 +4024,23 @@ void legend_pi::GoToDynamicGroup(size_t index)
     if (scale <= 0.0)
         scale = 0.1;
 
+    const double displayed = m_viewport_valid ? DisplayedScale(m_viewport) : 0.0;
     const bool zoomIn =
         group.hiddenAtScale && group.visibleFrom > 0 && m_viewport_valid &&
-        m_viewport.chart_scale > 0.0f;
+        displayed > 0.0;
     if (zoomIn) {
+        // The limit is compared with the scale of the status bar; the view
+        // scale (pixels per metre) is inversely proportional to it.
         const double target = group.visibleFrom * 0.8;
-        scale = m_viewport.view_scale_ppm * m_viewport.chart_scale / target;
+        scale = m_viewport.view_scale_ppm * displayed / target;
 
-        // OpenCPN knows a chart scale and a "true" scale corrected for the
-        // latitude; which one its status bar and its scale limits use is
-        // checked against this line.
-        const double kPi = 3.14159265358979323846;
-        const double cosLat = std::cos(m_viewport.clat * kPi / 180.0);
         wxLogMessage(
-            "Legend: zoom for %s: chart scale 1:%.0f (x cos lat = 1:%.0f, "
-            "/ cos lat = 1:%.0f), ppm %.6f -> target 1:%.0f for limit 1:%d, "
-            "requested ppm %.6f, lat %.3f",
-            group.key, static_cast<double>(m_viewport.chart_scale),
-            m_viewport.chart_scale * cosLat, m_viewport.chart_scale / cosLat,
-            m_viewport.view_scale_ppm, target, group.visibleFrom, scale,
-            m_viewport.clat);
+            "Legend: zoom for %s: displayed scale 1:%.0f (viewport chart scale "
+            "1:%.0f, ppm %.6f) -> target 1:%.0f for limit 1:%d, requested ppm %.6f",
+            group.key, displayed, static_cast<double>(m_viewport.chart_scale),
+            m_viewport.view_scale_ppm, target, group.visibleFrom, scale);
         m_log_next_viewport = true;
+        m_logged_chart_scale = m_viewport.chart_scale;
     }
 
     // Only move the chart when the object is not comfortably in view.

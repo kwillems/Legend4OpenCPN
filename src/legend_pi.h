@@ -276,6 +276,14 @@ private:
     DisplaySettings m_display_settings; // category and class filter of OpenCPN
     int m_plib_state_hash = 0;          // OpenCPN's vector display settings
     bool m_log_next_viewport = false;   // diagnostics after a zoom
+    float m_logged_chart_scale = 0.0f;
+
+    // The scale OpenCPN shows in its status bar and compares waypoint
+    // scale limits with: physical screen pixels per metre divided by the
+    // pixels per true metre at the view centre. The plugin viewport's
+    // chart_scale is a different, nominal figure.
+    double DisplayedScale(const PlugIn_ViewPort &vp) const;
+    double m_displayed_scale = 0.0; // for the viewport last collected
     bool m_ocharts_available = false;
     bool m_chart_sources_available = false; // any chart source has cells
     bool m_show_chart_objects = true; // setting, kept in legend.ini
