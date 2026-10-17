@@ -41,6 +41,7 @@
 #include <wx/utils.h>
 
 #include <algorithm>
+#include <functional>
 #include <cmath>
 #include <memory>
 #include <set>
@@ -496,6 +497,141 @@ const char *kMeaningsTemplate =
     "# 022           = Groene spitse ton\n"
     "\n";
 
+// OpenCPN's colour scheme (day, dusk, night), set through SetColorScheme().
+PI_ColorScheme g_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
+
+bool IsDimScheme()
+{
+    return g_color_scheme == PI_GLOBAL_COLOR_SCHEME_DUSK ||
+           g_color_scheme == PI_GLOBAL_COLOR_SCHEME_NIGHT;
+}
+
+// Brightness of icons and images in the current scheme. OpenCPN has darker
+// symbol sets for dusk and night; user icons only exist in one version, so
+// they are dimmed instead.
+double SchemeDim()
+{
+    switch (g_color_scheme) {
+    case PI_GLOBAL_COLOR_SCHEME_DUSK:
+        return 0.55;
+    case PI_GLOBAL_COLOR_SCHEME_NIGHT:
+        return 0.3;
+    default:
+        return 1.0;
+    }
+}
+
+wxString SchemeName(PI_ColorScheme scheme)
+{
+    switch (scheme) {
+    case PI_GLOBAL_COLOR_SCHEME_DUSK:
+        return "dusk";
+    case PI_GLOBAL_COLOR_SCHEME_NIGHT:
+        return "night";
+    case PI_GLOBAL_COLOR_SCHEME_DAY:
+        return "day";
+    default:
+        return "rgb";
+    }
+}
+
+wxColour BlendColour(const wxColour &a, const wxColour &b, double amount)
+{
+    auto mix = [amount](unsigned char x, unsigned char y) {
+        return static_cast<unsigned char>(std::lround(x + (y - x) * amount));
+    };
+    return wxColour(
+        mix(a.Red(), b.Red()),
+        mix(a.Green(), b.Green()),
+        mix(a.Blue(), b.Blue()));
+}
+
+// Darkens the colours of an image, keeping its transparency.
+wxImage DimImage(const wxImage &image, double dim)
+{
+    if (!image.IsOk() || dim >= 1.0)
+        return image;
+
+    wxImage dimmed = image.Copy();
+    unsigned char *data = dimmed.GetData();
+    const size_t count =
+        static_cast<size_t>(dimmed.GetWidth()) * dimmed.GetHeight() * 3;
+
+    for (size_t i = 0; i < count; ++i)
+        data[i] = static_cast<unsigned char>(std::lround(data[i] * dim));
+
+    // A mask colour must follow, or the transparent area changes.
+    if (dimmed.HasMask()) {
+        dimmed.SetMaskColour(
+            static_cast<unsigned char>(std::lround(image.GetMaskRed() * dim)),
+            static_cast<unsigned char>(std::lround(image.GetMaskGreen() * dim)),
+            static_cast<unsigned char>(std::lround(image.GetMaskBlue() * dim)));
+    }
+
+    return dimmed;
+}
+
+// Flattens an icon on a background with only the icon itself dimmed.
+// flatten() draws the icon on a given colour. Drawing it on black and on
+// white gives its colour and its coverage, from which the dimmed icon on
+// the real background follows.
+wxImage FlattenDimmed(
+    const std::function<wxImage(const wxColour &)> &flatten,
+    const wxColour &background,
+    double dim)
+{
+    if (dim >= 1.0)
+        return flatten(background);
+
+    const wxImage onBlack = flatten(*wxBLACK);
+    const wxImage onWhite = flatten(*wxWHITE);
+
+    if (!onBlack.IsOk() || !onWhite.IsOk() ||
+        onBlack.GetSize() != onWhite.GetSize())
+        return DimImage(flatten(background), dim);
+
+    wxImage result(onBlack.GetWidth(), onBlack.GetHeight(), false);
+    const unsigned char *k = onBlack.GetData();
+    const unsigned char *w = onWhite.GetData();
+    unsigned char *out = result.GetData();
+    const unsigned char bg[3] = {
+        background.Red(), background.Green(), background.Blue()};
+    const size_t pixels =
+        static_cast<size_t>(result.GetWidth()) * result.GetHeight();
+
+    for (size_t i = 0; i < pixels; ++i) {
+        for (int c = 0; c < 3; ++c) {
+            const size_t at = i * 3 + c;
+            const int uncovered = std::max(0, w[at] - k[at]); // 255 * (1 - a)
+            const double value = k[at] * dim + bg[c] * uncovered / 255.0;
+            out[at] = static_cast<unsigned char>(
+                std::min(255L, std::max(0L, std::lround(value))));
+        }
+    }
+
+    return result;
+}
+
+// Marker on the chart: bright by day, subdued in dusk and night so it does
+// not spoil night vision, but still distinct from the chart.
+void MarkerColours(wxColour &outline, wxColour &highlight)
+{
+    switch (g_color_scheme) {
+    case PI_GLOBAL_COLOR_SCHEME_DUSK:
+        outline = wxColour(150, 150, 150);
+        highlight = wxColour(190, 0, 85);
+        break;
+    case PI_GLOBAL_COLOR_SCHEME_NIGHT:
+        outline = wxColour(45, 45, 45);
+        highlight = wxColour(150, 35, 35);
+        break;
+    default:
+        outline = wxColour(255, 255, 255);
+        highlight = wxColour(255, 0, 110);
+        break;
+    }
+}
+
 // Colours of the legend view. Fixed values instead of the system colours:
 // on macOS the dynamic system colours turn into white when converted to
 // RGB in dark mode, which left white text on a white page.
@@ -514,8 +650,48 @@ struct LegendPalette
     wxColour headerRule; // line between that block and the list
 };
 
+// Dusk and night: the dialog colours of OpenCPN itself, so the legend dims
+// along with the rest of the screen. Fixed dark colours when OpenCPN does
+// not provide usable ones.
+LegendPalette GetDimPalette()
+{
+    const bool night = g_color_scheme == PI_GLOBAL_COLOR_SCHEME_NIGHT;
+
+    wxColour background;
+    wxColour text;
+    const bool fromOpenCPN =
+        GetGlobalColor("DILG1", &background) && GetGlobalColor("UITX1", &text);
+
+    auto luminance = [](const wxColour &c) {
+        return 0.299 * c.Red() + 0.587 * c.Green() + 0.114 * c.Blue();
+    };
+
+    if (!fromOpenCPN || !background.IsOk() || !text.IsOk() ||
+        std::fabs(luminance(background) - luminance(text)) < 30.0) {
+        background = night ? wxColour(18, 18, 18) : wxColour(52, 52, 54);
+        text = night ? wxColour(120, 96, 96) : wxColour(185, 185, 185);
+    }
+
+    LegendPalette palette;
+    palette.background = background;
+    palette.text = text;
+    palette.muted = BlendColour(text, background, 0.4);
+    palette.stripe = BlendColour(background, text, 0.07);
+    palette.active = BlendColour(background, text, 0.22);
+    palette.rule = BlendColour(background, text, 0.25);
+    palette.link = text; // no bright blue in the dark
+    palette.iconTiles = false; // a light tile would glare
+    palette.tile = background;
+    palette.header = BlendColour(background, text, 0.1);
+    palette.headerRule = BlendColour(background, text, 0.35);
+    return palette;
+}
+
 LegendPalette GetLegendPalette()
 {
+    if (IsDimScheme())
+        return GetDimPalette();
+
     if (wxSystemSettings::GetAppearance().IsDark()) {
         return {
             wxColour(30, 30, 30),    // background
@@ -1297,6 +1473,8 @@ void legend_pi::UpdateImageScale()
             wxIMAGE_QUALITY_HIGH);
     }
 
+    displayImage = DimImage(displayImage, SchemeDim());
+
     m_legend_bitmap->SetBitmap(wxBitmap(displayImage));
 
     // The image page is a normal panel, not a scrolled window. The bitmap
@@ -1864,6 +2042,14 @@ void legend_pi::ApplyViewColours()
     m_markdown_view->SetBackgroundColour(palette.background);
     m_markdown_view->SetForegroundColour(palette.text);
     m_markdown_view->Refresh();
+
+    // The page of PNG legends darkens along in dusk and night; by day it
+    // keeps the normal window colour.
+    if (m_image_page) {
+        m_image_page->SetBackgroundColour(
+            IsDimScheme() ? palette.background : wxNullColour);
+        m_image_page->Refresh();
+    }
 }
 
 void legend_pi::ToggleLegendWindow()
@@ -1880,6 +2066,30 @@ void legend_pi::ToggleLegendWindow()
         m_legend_window->Show();
         m_legend_window->Raise();
     }
+}
+
+void legend_pi::SetColorScheme(PI_ColorScheme cs)
+{
+    if (cs == g_color_scheme)
+        return;
+
+    g_color_scheme = cs;
+
+    const LegendPalette palette = GetLegendPalette();
+    wxLogMessage(
+        "Legend: colour scheme %s, background %s, text %s",
+        SchemeName(cs),
+        HtmlColour(palette.background),
+        HtmlColour(palette.text));
+
+    ApplyViewColours();
+
+    if (m_legend_window && m_legend_window->IsShown() &&
+        !m_legend_files.IsEmpty())
+        ShowLegend(m_legend_index);
+
+    if (m_marker_active)
+        RefreshAllCanvases();
 }
 
 void legend_pi::OnToolbarToolCallback(int id)
@@ -2762,15 +2972,22 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             palette.iconTiles ? palette.tile : rowColours[i];
 
         // First choice: the icon's own PNG file. Fall back to asking
-        // OpenCPN for the bitmap.
-        wxImage image = LoadIconFromFile(group.key, iconBackground);
+        // OpenCPN for the bitmap. In dusk and night the icon is dimmed, the
+        // background it sits on is not.
+        const wxString key = group.key;
+        auto flatten = [&key](const wxColour &colour) {
+            wxImage drawn = LoadIconFromFile(key, colour);
 
-        if (!image.IsOk()) {
-            wxBitmap bitmap = GetIcon_PlugIn(group.key);
+            if (!drawn.IsOk()) {
+                wxBitmap bitmap = GetIcon_PlugIn(key);
 
-            if (bitmap.IsOk())
-                image = FlattenIcon(bitmap, iconBackground, group.key);
-        }
+                if (bitmap.IsOk())
+                    drawn = FlattenIcon(bitmap, colour, key);
+            }
+            return drawn;
+        };
+
+        wxImage image = FlattenDimmed(flatten, iconBackground, SchemeDim());
 
         if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3) {
             const int width = std::max(
@@ -3268,10 +3485,12 @@ bool legend_pi::RenderOverlayMultiCanvas(
 
     dc.SetBrush(*wxTRANSPARENT_BRUSH);
 
-    const wxColour highlight(255, 0, 110);
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
 
-    // White outline first, so the marker stands out on any chart colour.
-    dc.SetPen(wxPen(*wxWHITE, 7));
+    // Outline first, so the marker stands out on any chart colour.
+    dc.SetPen(wxPen(outline, 7));
     dc.DrawCircle(centre, radius);
     dc.DrawLine(centre.x - radius - 12, centre.y, centre.x - radius + 2, centre.y);
     dc.DrawLine(centre.x + radius - 2, centre.y, centre.x + radius + 12, centre.y);
@@ -3354,13 +3573,17 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
         glEnd();
     };
 
-    // White outline first, so the marker stands out on any chart colour.
-    glColor4ub(255, 255, 255, 255);
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
+
+    // Outline first, so the marker stands out on any chart colour.
+    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
     glLineWidth(7.0f);
     circle(cx, cy, radius);
     ticks(cx, cy, radius, 12.0);
 
-    glColor4ub(255, 0, 110, 255);
+    glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
     glLineWidth(3.0f);
     circle(cx, cy, radius);
     ticks(cx, cy, radius, 10.0);

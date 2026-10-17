@@ -88,6 +88,7 @@ public:
     wxString GetLongDescription() override;
 
     void OnToolbarToolCallback(int id) override;
+    void SetColorScheme(PI_ColorScheme cs) override;
     void SetCurrentViewPort(PlugIn_ViewPort &vp) override;
 
     using opencpn_plugin_118::RenderOverlayMultiCanvas;
