@@ -301,6 +301,8 @@ private:
     PlugIn_ViewPort m_collected_viewport;
     bool m_collected_viewport_valid;
     wxTimer m_auto_refresh_timer;
+    PlugIn_ViewPort m_pending_viewport; // view that last (re)started the timer
+    static bool ViewportMoved(const PlugIn_ViewPort &a, const PlugIn_ViewPort &b);
 
     bool m_marker_active;
     std::vector<std::pair<double, double>> m_marker_positions; // lat, lon

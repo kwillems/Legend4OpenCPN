@@ -917,6 +917,7 @@ legend_pi::legend_pi(void *ppimgr)
 {
     m_viewport = PlugIn_ViewPort();
     m_collected_viewport = PlugIn_ViewPort();
+    m_pending_viewport = PlugIn_ViewPort();
 
     m_marker_timer.Bind(
         wxEVT_TIMER,
@@ -2391,21 +2392,18 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
 
     // OpenCPN calls this on every repaint, also while the marker animates.
     // Only a real change of position, zoom, rotation or window size counts.
-    const PlugIn_ViewPort &old = m_collected_viewport;
-
     const bool changed =
-        !m_collected_viewport_valid ||
-        std::fabs(vp.clat - old.clat) > 1e-7 ||
-        std::fabs(vp.clon - old.clon) > 1e-7 ||
-        std::fabs(vp.view_scale_ppm - old.view_scale_ppm) >
-            1e-6 * old.view_scale_ppm ||
-        std::fabs(vp.rotation - old.rotation) > 1e-4 ||
-        vp.pix_width != old.pix_width ||
-        vp.pix_height != old.pix_height;
+        !m_collected_viewport_valid || ViewportMoved(vp, m_collected_viewport);
 
     // Wait until the chart has stopped moving before rebuilding the list.
+    // The wait restarts only while the chart keeps moving: repaints of a
+    // still chart (the marker animation) must not keep postponing it.
     if (changed) {
-        m_auto_refresh_timer.StartOnce(400);
+        if (!m_auto_refresh_timer.IsRunning() ||
+            ViewportMoved(vp, m_pending_viewport)) {
+            m_pending_viewport = vp;
+            m_auto_refresh_timer.StartOnce(400);
+        }
         return;
     }
 
@@ -2505,6 +2503,16 @@ void legend_pi::CheckVisibilityChanges()
             return;
         }
     }
+}
+
+bool legend_pi::ViewportMoved(const PlugIn_ViewPort &a, const PlugIn_ViewPort &b)
+{
+    return std::fabs(a.clat - b.clat) > 1e-7 ||
+           std::fabs(a.clon - b.clon) > 1e-7 ||
+           std::fabs(a.view_scale_ppm - b.view_scale_ppm) >
+               1e-6 * b.view_scale_ppm ||
+           std::fabs(a.rotation - b.rotation) > 1e-4 ||
+           a.pix_width != b.pix_width || a.pix_height != b.pix_height;
 }
 
 bool legend_pi::IsDynamicLegendVisible() const
