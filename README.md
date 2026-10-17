@@ -88,14 +88,22 @@ verdeeld.
   `symbolen.txt` bewaard. **Klaar** brengt je terug naar de lijst.
 - Symbolen die onder geen kopje vallen, staan onderaan onder **Overig**.
 
-### Kaartsymbolen (o-charts)
+### Kaartsymbolen (o-charts en ENC)
 
-De plugin leest de puntobjecten van de o-charts-cellen (`.oesu`) in beeld via
-de kaartklasse van de o-charts-plugin zelf, op dezelfde manier als OpenCPN dat
-doet voor *Kaartobjectgegevens*. De o-charts-plugin blijft de ontsleuteling en
-de licentiecontrole doen; de plugin slaat geen kaartgegevens op en exporteert
-niets. Alleen de dekking en schaal van elke cel worden bewaard
-(`ocharts-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
+De plugin leest de puntobjecten van de vectorkaarten in beeld uit twee
+bronnen:
+
+- **o-charts-cellen** (`.oesu`) via de kaartklasse van de o-charts-plugin
+  zelf, op dezelfde manier als OpenCPN dat doet voor *Kaartobjectgegevens*.
+  De o-charts-plugin blijft de ontsleuteling en de licentiecontrole doen; de
+  plugin slaat geen kaartgegevens op en exporteert niets.
+- **Gewone ENC-cellen** (S-57, `.000` met bijwerkingen `.001` enzovoort),
+  zoals de gratis binnenvaartkaarten van Rijkswaterstaat, met een eigen
+  lezer in de plugin.
+
+Waar beide bronnen hetzelfde water bedekken, telt een object één keer.
+Alleen de dekking en schaal van elke cel worden bewaard (`ocharts-cells.txt`
+en `s57-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
 
 - Elk object krijgt het S-52-symbool dat OpenCPN ervoor kiest, met dezelfde
   opzoektabellen (`chartsymbols.xml`) en dezelfde symboolstijl (vereenvoudigd
@@ -115,8 +123,8 @@ niets. Alleen de dekking en schaal van elke cel worden bewaard
 - De link **Kaartsymbolen uit** / **aan** in het kopblok schakelt dit deel
   van de legenda uit of in; de keuze wordt bewaard.
 
-Dit werkt alleen als de o-charts-plugin geladen is. Gewone, onversleutelde
-ENC-kaarten (S-57) worden nog niet gelezen; dat is de volgende stap.
+De o-charts-bron werkt alleen als de o-charts-plugin geladen is. Versleutelde
+S-63-cellen worden niet gelezen.
 
 ### Weergave
 
@@ -136,9 +144,11 @@ ENC-kaarten (S-57) worden nog niet gelezen; dat is de volgende stap.
 
 ### Beperkingen
 
-- Kaartsymbolen komen alleen uit o-charts-kaarten; onversleutelde
-  ENC-kaarten (S-57) volgen later. De plugin-API geeft kaartobjecten niet
-  direct door.
+- Kaartsymbolen komen uit o-charts- en S-57-cellen; andere kaartformaten
+  (CM93, rasterkaarten, S-63) doen niet mee. De plugin-API geeft
+  kaartobjecten niet direct door.
+- Bijwerkingen van ENC-cellen worden toegepast op objecten, kenmerken en
+  knooppunten; zeldzame vormen van bijwerkingen kunnen worden gemist.
 - Welke weergavecategorie OpenCPN gebruikt (standaard, alles) kan de plugin
   niet opvragen; de legenda gaat uit van de standaardcategorie.
 - De markering is getest met **OpenGL ingeschakeld**. Zonder OpenGL wordt de
@@ -219,7 +229,7 @@ De interne configuratie van de plugin wordt apart opgeslagen onder:
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-Dat is de map `Legend` in de privémap van OpenCPN. Daar staan `legend.ini`, met het laatst gekozen item, de vensterpositie en -grootte, de ingeklapte kopjes en de schakelaar voor kaartsymbolen, en `ocharts-cells.txt`, de cache met de dekking van de o-charts-cellen.
+Dat is de map `Legend` in de privémap van OpenCPN. Daar staan `legend.ini`, met het laatst gekozen item, de vensterpositie en -grootte, de ingeklapte kopjes en de schakelaar voor kaartsymbolen, en de caches `ocharts-cells.txt` en `s57-cells.txt` met de dekking van de kaartcellen.
 
 De locatie van de gebruikersmap is op dit moment nog vast. Een instelbare locatie is voorzien voor een latere versie.
 
@@ -426,7 +436,9 @@ Legend4OpenCPN/
 │   ├── chart_symbols.cpp    # S-52-symbolen en S-57-catalogus van OpenCPN
 │   ├── chart_symbols.h
 │   ├── ocharts_source.cpp   # kaartobjecten via de o-charts-plugin
-│   └── ocharts_source.h
+│   ├── ocharts_source.h
+│   ├── s57_source.cpp       # kaartobjecten uit ENC-cellen (S-57)
+│   └── s57_source.h
 ├── third_party/
 │   └── md4c/              # Git-submodule
 ├── opencpn-libs/          # Git-submodule
@@ -454,7 +466,6 @@ Voor de dynamische legenda in het bijzonder:
 - betekenissen bewerken vanuit de legenda zelf;
 - gegevens van het gekozen object tonen, zoals lichtkarakter, doorvaarthoogte en marifoonkanaal;
 - instelbaar ook symbolen tonen die op de huidige schaal verborgen zijn;
-- symbolen uit onversleutelde ENC-kaarten (S-57), naast die van o-charts;
 - vanaf een klik op de kaart naar de rij in de legenda;
 - een Engelse vertaling van het venster.
 
