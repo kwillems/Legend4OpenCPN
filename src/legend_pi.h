@@ -221,6 +221,10 @@ private:
 
     std::set<wxString> m_collapsed_sections;
     bool m_reorder_mode = false;
+
+    // Chart object scale factor of OpenCPN the list was last drawn with;
+    // row icons follow it, so they match the size on the chart.
+    double m_rendered_icon_scale = 1.0;
     std::vector<wxString> m_rendered_headings; // index = id in the page
 
     // Icon name -> first description line shared by all its waypoints.

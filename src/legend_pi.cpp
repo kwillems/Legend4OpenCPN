@@ -1922,6 +1922,15 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
         return;
     }
 
+    // The chart object scale factor was changed in the options: redraw the
+    // list so its icons follow.
+    const double scale = GetOCPNChartScaleFactor_Plugin();
+    if (scale > 0.0 &&
+        std::fabs(std::min(4.0, std::max(0.5, static_cast<double>(scale))) -
+                  m_rendered_icon_scale) > 1e-3 &&
+        !m_showing_loading_page)
+        RenderDynamicLegend(true);
+
     // A repaint without movement may come from hiding or showing a layer.
     // Not restarted on every repaint, so the marker animation cannot keep
     // postponing the check.
@@ -2692,6 +2701,21 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     const int kMaxIconBox = 64;
     const int tilePadding = palette.iconTiles ? 3 : 0;
 
+    // Row icons follow OpenCPN's chart object scale factor, so they look as
+    // large as on the chart. Text does not: that is a matter of the user
+    // interface, not of chart objects.
+    const double rawScale = GetOCPNChartScaleFactor_Plugin();
+    double iconScale = rawScale > 0.0 ? rawScale : 1.0;
+    iconScale = std::min(4.0, std::max(0.5, iconScale));
+
+    if (std::fabs(iconScale - m_rendered_icon_scale) > 1e-3) {
+        wxLogMessage(
+            "Legend: chart object scale factor %.2f (OpenCPN: %.2f)",
+            iconScale,
+            rawScale);
+    }
+    m_rendered_icon_scale = iconScale;
+
     std::vector<wxImage> icons(m_dynamic_groups.size());
     std::vector<wxColour> rowColours(m_dynamic_groups.size());
     int iconBox = 16;
@@ -2746,6 +2770,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             if (bitmap.IsOk())
                 image = FlattenIcon(bitmap, iconBackground, group.key);
+        }
+
+        if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3) {
+            const int width = std::max(
+                1, static_cast<int>(std::lround(image.GetWidth() * iconScale)));
+            const int height = std::max(
+                1, static_cast<int>(std::lround(image.GetHeight() * iconScale)));
+            image = image.Scale(width, height, wxIMAGE_QUALITY_HIGH);
         }
 
         if (image.IsOk() && !collapsed[i]) {
