@@ -109,9 +109,13 @@ en `s57-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
   opzoektabellen (`chartsymbols.xml`) en dezelfde symboolstijl (vereenvoudigd
   of papieren kaart). Het plaatje komt van het symboolblad voor dag, schemer
   of nacht.
-- Objecten die op de huidige schaal verborgen zijn (SCAMIN) en de categorie
-  "Overig", die OpenCPN standaard niet toont, blijven weg. Lijn- en
-  vlakobjecten (kustlijn, dieptegebieden) doen niet mee.
+- De legenda toont dezelfde objecten als de kaart. Per objectklasse vraagt de
+  plugin aan de tekenbibliotheek van OpenCPN of die klasse op dit moment
+  getekend wordt, met de weergavecategorie (Basis, Standaard, Alles,
+  Gebruikers standaard), de lijst van aan- en uitgezette klassen en de
+  schaalgrens (SCAMIN) zoals OpenCPN ze nu gebruikt. Verander je een
+  instelling, dan past de lijst zich direct aan. Lijn- en vlakobjecten
+  (kustlijn, dieptegebieden) doen niet mee.
 - Cellen die veel gedetailleerder zijn dan het kaartbeeld worden
   overgeslagen, zoals ook de quilt van OpenCPN ze niet toont. Er blijven
   hooguit zestien cellen tegelijk geopend.
@@ -149,8 +153,6 @@ S-63-cellen worden niet gelezen.
   kaartobjecten niet direct door.
 - Bijwerkingen van ENC-cellen worden toegepast op objecten, kenmerken en
   knooppunten; zeldzame vormen van bijwerkingen kunnen worden gemist.
-- Welke weergavecategorie OpenCPN gebruikt (standaard, alles) kan de plugin
-  niet opvragen; de legenda gaat uit van de standaardcategorie.
 - De markering is getest met **OpenGL ingeschakeld**. Zonder OpenGL wordt de
   markering niet betrouwbaar getoond.
 - Iconen worden gelezen uit de PNG-bestanden van OpenCPN (`UserIcons` en de
@@ -438,7 +440,9 @@ Legend4OpenCPN/
 │   ├── ocharts_source.cpp   # kaartobjecten via de o-charts-plugin
 │   ├── ocharts_source.h
 │   ├── s57_source.cpp       # kaartobjecten uit ENC-cellen (S-57)
-│   └── s57_source.h
+│   ├── s57_source.h
+│   ├── display_settings.cpp # wat de kaart tekent: navraag bij OpenCPN
+│   └── display_settings.h
 ├── third_party/
 │   └── md4c/              # Git-submodule
 ├── opencpn-libs/          # Git-submodule
