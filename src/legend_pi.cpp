@@ -3014,20 +3014,38 @@ void legend_pi::CollectChartObjects(
     const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
     m_display_settings.Refresh();
 
-    for (const ChartObject &object : objects) {
-        if (object.scamin > 0 && vp.chart_scale > object.scamin) {
-            ++m_chart_objects_hidden;
-            continue;
-        }
+    // Whether the chart draws objects of a class with a scale limit: asked
+    // of OpenCPN once per class and limit, with its configuration file as
+    // fallback.
+    std::map<wxString, bool> shownCache;
+    int unanswered = 0;
 
+    for (const ChartObject &object : objects) {
         ChartSymbols::Resolved resolved;
         if (!m_chart_symbols.Resolve(object, simplified, &resolved) ||
             resolved.symbol.IsEmpty())
             continue;
 
-        // The chart's display category and, for mariner's standard, the
-        // user's list of object classes.
-        if (!m_display_settings.Shows(object.className, resolved.displayCat)) {
+        const wxString shownKey =
+            wxString::Format("%s|%d", object.className, object.scamin);
+        auto cached = shownCache.find(shownKey);
+        bool shown;
+        if (cached != shownCache.end()) {
+            shown = cached->second;
+        }
+        else {
+            bool answered = false;
+            shown = m_display_settings.ChartShows(
+                object.className, object.scamin, vp, &answered);
+            if (!answered) {
+                ++unanswered;
+                shown = m_display_settings.Shows(object.className, resolved.displayCat) &&
+                        !(object.scamin > 0 && vp.chart_scale > object.scamin);
+            }
+            shownCache[shownKey] = shown;
+        }
+
+        if (!shown) {
             ++m_chart_objects_hidden;
             continue;
         }
@@ -3085,9 +3103,10 @@ void legend_pi::CollectChartObjects(
 
     // The list is rebuilt on every pause of the chart; log only what changed.
     const wxString summary = wxString::Format(
-        "Legend: chart objects: %s; %s; %d listed, %d hidden",
+        "Legend: chart objects: %s; %s; %d listed, %d hidden, %zu class probes%s",
         m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
-        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden);
+        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden,
+        shownCache.size(), unanswered > 0 ? " (PLIB gave no answer)" : "");
     if (summary != m_chart_objects_logged) {
         m_chart_objects_logged = summary;
         wxLogMessage("%s, %ld ms", summary, watch.Time());

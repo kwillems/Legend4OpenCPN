@@ -9,9 +9,90 @@
 
 #include "display_settings.h"
 
+#include <cstring>
+
 #include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/log.h>
+
+// The API declares PI_S57Obj but OpenCPN does not export its constructor;
+// plugins that use the class define it themselves, as the chart plugins
+// do. Everything starts empty; the destructor owns nothing.
+PI_S57Obj::PI_S57Obj()
+{
+    std::memset(FeatureName, 0, sizeof(FeatureName));
+    Primitive_type = 0;
+    att_array = nullptr;
+    attVal = nullptr;
+    n_attr = 0;
+    iOBJL = -1;
+    Index = -1;
+    x = y = z = 0.0;
+    npt = 0;
+    geoPt = nullptr;
+    geoPtz = nullptr;
+    geoPtMulti = nullptr;
+    pPolyTessGeo = nullptr;
+    m_lat = m_lon = 0.0;
+    chart_ref_lat = chart_ref_lon = 0.0;
+    lat_min = lat_max = lon_min = lon_max = 0.0;
+    Scamin = 1000000000;
+    bIsClone = false;
+    nRef = 0;
+    bIsAton = false;
+    bIsAssociable = false;
+    m_n_lsindex = 0;
+    m_lsindex_array = nullptr;
+    m_n_edge_max_points = 0;
+    m_chart_context = nullptr;
+    m_DisplayCat = PI_STANDARD;
+    S52_Context = nullptr;
+    child = nullptr;
+    next = nullptr;
+    x_rate = y_rate = 1.0;
+    x_origin = y_origin = 0.0;
+    auxParm0 = auxParm1 = auxParm2 = auxParm3 = 0;
+    m_ls_list = nullptr;
+    m_bcategory_mutable = false;
+    m_DPRI = -1;
+}
+
+PI_S57Obj::~PI_S57Obj()
+{
+}
+
+bool DisplaySettings::ChartShows(
+    const wxString &className,
+    int scamin,
+    const PlugIn_ViewPort &vp,
+    bool *answered) const
+{
+    *answered = false;
+
+    // A point object of the class at the centre of the view, without
+    // attributes: the default lookup of the class decides.
+    PI_S57Obj probe;
+    const wxCharBuffer ascii = className.ToAscii();
+    if (!ascii.data() || !*ascii.data())
+        return true;
+    std::strncpy(probe.FeatureName, ascii.data(), sizeof(probe.FeatureName) - 1);
+    probe.Primitive_type = 0; // point
+    probe.m_lat = probe.lat_min = probe.lat_max = probe.chart_ref_lat = vp.clat;
+    probe.m_lon = probe.lon_min = probe.lon_max = probe.chart_ref_lon = vp.clon;
+    probe.Scamin = scamin > 0 ? scamin : 1000000000;
+
+    if (!PI_PLIBSetContext(&probe) || !probe.S52_Context)
+        return true;
+
+    PlugIn_ViewPort view = vp;
+    const bool shown = PI_PLIBObjectRenderCheck(&probe, &view);
+
+    PI_PLIBFreeContext(probe.S52_Context);
+    probe.S52_Context = nullptr;
+
+    *answered = true;
+    return shown;
+}
 
 bool DisplaySettings::Refresh(bool force)
 {
@@ -24,8 +105,9 @@ bool DisplaySettings::Refresh(bool force)
         return false;
     m_modified = modified;
 
-    // Read only; the file belongs to OpenCPN.
-    wxLogNull quiet;
+    // Read only; the file belongs to OpenCPN. Its warnings stay quiet, our
+    // own message below does not.
+    wxLogNull *quiet = new wxLogNull;
     wxFileConfig config(
         wxEmptyString, wxEmptyString, m_path, wxEmptyString,
         wxCONFIG_USE_LOCAL_FILE);
@@ -53,6 +135,8 @@ bool DisplaySettings::Refresh(bool force)
         config.Read(name, &value, 1L);
         visible[name.Mid(3).Upper()] = value != 0;
     }
+
+    delete quiet;
 
     const bool changed = newCategory != m_category || visible != m_classVisible;
     m_category = newCategory;
