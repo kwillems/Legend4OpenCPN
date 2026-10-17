@@ -72,6 +72,9 @@ const wxString kLegendRowIdPrefix = "legend-row-";
 // Id of a heading in the dynamic legend, followed by its number on the page.
 const wxString kLegendSectionIdPrefix = "legend-section-";
 
+// Id of the counter of a row, which marks all objects of that symbol.
+const wxString kLegendAllIdPrefix = "legend-all-";
+
 // Ids of the move buttons in the order edit mode, followed by the heading
 // number in symbolen.txt.
 const wxString kLegendMoveUpIdPrefix = "legend-move-up-";
@@ -820,8 +823,6 @@ legend_pi::legend_pi(void *ppimgr)
       m_showing_loading_page(false),
       m_collected_viewport_valid(false),
       m_marker_active(false),
-      m_marker_lat(0.0),
-      m_marker_lon(0.0),
       m_marker_phase(0),
       m_window_x(-1),
       m_window_y(-1),
@@ -1860,7 +1861,7 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, Section, MoveUp, MoveDown };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -1882,6 +1883,7 @@ void legend_pi::CreateLegendWindow()
             {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
             {HitKind::MoveDown,
              legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+            {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
             {HitKind::Row, legendView->RowAt(pos)},
             {HitKind::Section, legendView->SectionAt(pos)}};
 
@@ -1920,6 +1922,9 @@ void legend_pi::CreateLegendWindow()
                 case HitKind::Row:
                     GoToDynamicGroup(static_cast<size_t>(hit.index));
                     break;
+                case HitKind::All:
+                    MarkAllOfDynamicGroup(static_cast<size_t>(hit.index));
+                    break;
                 case HitKind::Section:
                     ToggleSection(static_cast<size_t>(hit.index));
                     break;
@@ -1935,18 +1940,63 @@ void legend_pi::CreateLegendWindow()
             });
         });
 
+    // Tooltips explain what a click does; they change only when the mouse
+    // moves to another kind of target, so they do not flicker.
+    auto shownTip = std::make_shared<wxString>();
+
     m_markdown_view->Bind(
         wxEVT_MOTION,
-        [hitAt, legendView](wxMouseEvent &event) {
-            legendView->SetRowCursor(
-                hitAt(event.GetPosition()).kind != HitKind::None);
+        [this, hitAt, legendView, shownTip](wxMouseEvent &event) {
+            const Hit hit = hitAt(event.GetPosition());
+            legendView->SetRowCursor(hit.kind != HitKind::None);
+
+            wxString tip;
+            switch (hit.kind) {
+            case HitKind::All:
+                tip = "Alle exemplaren in beeld tegelijk aanwijzen";
+                break;
+            case HitKind::Row:
+                tip = "Naar het dichtstbijzijnde exemplaar; nog een klik gaat "
+                      "naar het volgende";
+                break;
+            case HitKind::Section:
+                tip = hit.index >= 0 &&
+                              static_cast<size_t>(hit.index) <
+                                  m_rendered_headings.size() &&
+                              m_collapsed_sections.count(
+                                  m_rendered_headings[hit.index]) > 0
+                          ? "Groep uitklappen"
+                          : "Groep inklappen";
+                break;
+            case HitKind::MoveUp:
+                tip = "Kopje omhoog";
+                break;
+            case HitKind::MoveDown:
+                tip = "Kopje omlaag";
+                break;
+            case HitKind::None:
+                break;
+            }
+
+            if (tip != *shownTip) {
+                *shownTip = tip;
+                if (tip.IsEmpty())
+                    m_markdown_view->UnsetToolTip();
+                else
+                    m_markdown_view->SetToolTip(tip);
+            }
+
             event.Skip();
         });
 
     m_markdown_view->Bind(
         wxEVT_LEAVE_WINDOW,
-        [legendView](wxMouseEvent &event) {
+        [this, legendView, shownTip](wxMouseEvent &event) {
             legendView->SetRowCursor(false);
+            if (!shownTip->IsEmpty()) {
+                shownTip->Clear();
+                m_markdown_view->UnsetToolTip();
+            }
             event.Skip();
         });
 
@@ -3367,9 +3417,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 label = "<b>" + label + "</b>";
 
             // Every cell of the row carries the row id, so a click anywhere
-            // in the row can be traced back to its symbol.
+            // in the row can be traced back to its symbol. The counter is a
+            // button of its own: it marks all objects of the symbol at once.
             const wxString rowId =
                 wxString::Format("%s%zu", kLegendRowIdPrefix, i);
+            const wxString allId =
+                wxString::Format("%s%zu", kLegendAllIdPrefix, i);
 
             html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
                  << "<td id=\"" << rowId << "\" width=\"" << iconCell + 10
@@ -3379,16 +3432,18 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 html << "<img src=\"memory:" << group.imageName << "\">";
             html << "</td><td id=\"" << rowId << "\" valign=\"middle\">"
                  << label << "</td>"
-                 << "<td id=\"" << rowId
+                 << "<td id=\"" << allId
                  << "\" align=\"right\" valign=\"middle\" nowrap>"
                  << "<font color=\"" << hex(isActive ? foreground : muted)
-                 << "\">" << countText << "</font></td></tr>";
+                 << "\">" << countText << "&nbsp;<font size=\"+1\">&#9678;"
+                 << "</font></font></td></tr>";
         }
 
         html << "</table>";
         html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
-                "Klik op een rij om naar het dichtstbijzijnde symbool te gaan. "
-                "Nog een klik gaat naar het volgende. De lijst past zich "
+                "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; "
+                "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
+                "exemplaren in beeld tegelijk aan te wijzen. De lijst past zich "
                 "vanzelf aan als je de kaart verschuift of zoomt.";
         if (showHeadings)
             html << " Klik op een kopje om de groep in of uit te klappen.";
@@ -3490,6 +3545,22 @@ void legend_pi::GoToDynamicGroup(size_t index)
 }
 
 
+// Marks every object of a symbol in view at once. The chart does not move:
+// they are all in view already. The counter of the row stays as it is.
+void legend_pi::MarkAllOfDynamicGroup(size_t index)
+{
+    if (index >= m_dynamic_groups.size())
+        return;
+
+    const DynamicGroup &group = m_dynamic_groups[index];
+    if (group.positions.empty())
+        return;
+
+    m_active_group_key = group.key;
+    ShowMarkers(group.positions);
+    RenderDynamicLegend(true);
+}
+
 void legend_pi::RefreshAllCanvases()
 {
     const int count = GetCanvasCount();
@@ -3504,8 +3575,17 @@ void legend_pi::RefreshAllCanvases()
 
 void legend_pi::ShowMarker(double lat, double lon)
 {
-    m_marker_lat = lat;
-    m_marker_lon = lon;
+    ShowMarkers({{lat, lon}});
+}
+
+// Marks one or more positions for about six seconds.
+void legend_pi::ShowMarkers(
+    const std::vector<std::pair<double, double>> &positions)
+{
+    if (positions.empty())
+        return;
+
+    m_marker_positions = positions;
     m_marker_phase = 0;
     m_marker_active = true;
 
@@ -3540,6 +3620,26 @@ void legend_pi::OnMarkerTimer()
     RefreshAllCanvases();
 }
 
+// Screen positions of the marked objects on a canvas, leaving out those
+// far outside it.
+std::vector<wxPoint> legend_pi::MarkerCentres(PlugIn_ViewPort *vp) const
+{
+    std::vector<wxPoint> centres;
+
+    for (const auto &position : m_marker_positions) {
+        wxPoint centre;
+        GetCanvasPixLL(vp, &centre, position.first, position.second);
+
+        if (centre.x < -60 || centre.y < -60 ||
+            centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
+            continue;
+
+        centres.push_back(centre);
+    }
+
+    return centres;
+}
+
 bool legend_pi::RenderOverlayMultiCanvas(
     wxDC &dc,
     PlugIn_ViewPort *vp,
@@ -3555,11 +3655,8 @@ bool legend_pi::RenderOverlayMultiCanvas(
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    wxPoint centre;
-    GetCanvasPixLL(vp, &centre, m_marker_lat, m_marker_lon);
-
-    if (centre.x < -60 || centre.y < -60 ||
-        centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
+    const std::vector<wxPoint> centres = MarkerCentres(vp);
+    if (centres.empty())
         return false;
 
     const int radius = 16;
@@ -3571,24 +3668,34 @@ bool legend_pi::RenderOverlayMultiCanvas(
     wxColour highlight;
     MarkerColours(outline, highlight);
 
-    // Outline first, so the marker stands out on any chart colour.
-    dc.SetPen(wxPen(outline, 7));
-    dc.DrawCircle(centre, radius);
-    dc.DrawLine(centre.x - radius - 12, centre.y, centre.x - radius + 2, centre.y);
-    dc.DrawLine(centre.x + radius - 2, centre.y, centre.x + radius + 12, centre.y);
-    dc.DrawLine(centre.x, centre.y - radius - 12, centre.x, centre.y - radius + 2);
-    dc.DrawLine(centre.x, centre.y + radius - 2, centre.x, centre.y + radius + 12);
+    for (const wxPoint &centre : centres) {
+        // Outline first, so the marker stands out on any chart colour.
+        dc.SetPen(wxPen(outline, 7));
+        dc.DrawCircle(centre, radius);
+        dc.DrawLine(centre.x - radius - 12, centre.y,
+                    centre.x - radius + 2, centre.y);
+        dc.DrawLine(centre.x + radius - 2, centre.y,
+                    centre.x + radius + 12, centre.y);
+        dc.DrawLine(centre.x, centre.y - radius - 12,
+                    centre.x, centre.y - radius + 2);
+        dc.DrawLine(centre.x, centre.y + radius - 2,
+                    centre.x, centre.y + radius + 12);
 
-    dc.SetPen(wxPen(highlight, 3));
-    dc.DrawCircle(centre, radius);
-    dc.DrawLine(centre.x - radius - 10, centre.y, centre.x - radius + 2, centre.y);
-    dc.DrawLine(centre.x + radius - 2, centre.y, centre.x + radius + 10, centre.y);
-    dc.DrawLine(centre.x, centre.y - radius - 10, centre.x, centre.y - radius + 2);
-    dc.DrawLine(centre.x, centre.y + radius - 2, centre.x, centre.y + radius + 10);
+        dc.SetPen(wxPen(highlight, 3));
+        dc.DrawCircle(centre, radius);
+        dc.DrawLine(centre.x - radius - 10, centre.y,
+                    centre.x - radius + 2, centre.y);
+        dc.DrawLine(centre.x + radius - 2, centre.y,
+                    centre.x + radius + 10, centre.y);
+        dc.DrawLine(centre.x, centre.y - radius - 10,
+                    centre.x, centre.y - radius + 2);
+        dc.DrawLine(centre.x, centre.y + radius - 2,
+                    centre.x, centre.y + radius + 10);
 
-    // A pulsing ring that draws the eye.
-    dc.SetPen(wxPen(highlight, 2));
-    dc.DrawCircle(centre, radius + 8 + pulse * 3);
+        // A pulsing ring that draws the eye.
+        dc.SetPen(wxPen(highlight, 2));
+        dc.DrawCircle(centre, radius + 8 + pulse * 3);
+    }
 
     return true;
 }
@@ -3609,15 +3716,10 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    wxPoint centre;
-    GetCanvasPixLL(vp, &centre, m_marker_lat, m_marker_lon);
-
-    if (centre.x < -60 || centre.y < -60 ||
-        centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
+    const std::vector<wxPoint> centres = MarkerCentres(vp);
+    if (centres.empty())
         return false;
 
-    const double cx = centre.x;
-    const double cy = centre.y;
     const double radius = 16.0;
     const int pulse = m_marker_phase % 10;
 
@@ -3659,20 +3761,25 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     wxColour highlight;
     MarkerColours(outline, highlight);
 
-    // Outline first, so the marker stands out on any chart colour.
-    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-    glLineWidth(7.0f);
-    circle(cx, cy, radius);
-    ticks(cx, cy, radius, 12.0);
+    for (const wxPoint &centre : centres) {
+        const double cx = centre.x;
+        const double cy = centre.y;
 
-    glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
-    glLineWidth(3.0f);
-    circle(cx, cy, radius);
-    ticks(cx, cy, radius, 10.0);
+        // Outline first, so the marker stands out on any chart colour.
+        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+        glLineWidth(7.0f);
+        circle(cx, cy, radius);
+        ticks(cx, cy, radius, 12.0);
 
-    // A pulsing ring that draws the eye.
-    glLineWidth(2.0f);
-    circle(cx, cy, radius + 8.0 + pulse * 3.0);
+        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
+        glLineWidth(3.0f);
+        circle(cx, cy, radius);
+        ticks(cx, cy, radius, 10.0);
+
+        // A pulsing ring that draws the eye.
+        glLineWidth(2.0f);
+        circle(cx, cy, radius + 8.0 + pulse * 3.0);
+    }
 
     glPopAttrib();
 

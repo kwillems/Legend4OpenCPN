@@ -135,6 +135,7 @@ private:
     void CheckVisibilityChanges();
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
+    void MarkAllOfDynamicGroup(size_t index);
     void ClearDynamicImages();
 
     // Meaning of a symbol shown in the legend, see ResolveLabel().
@@ -161,6 +162,8 @@ private:
 
     // Temporary marker on the chart for the object chosen in the legend
     void ShowMarker(double lat, double lon);
+    void ShowMarkers(const std::vector<std::pair<double, double>> &positions);
+    std::vector<wxPoint> MarkerCentres(PlugIn_ViewPort *vp) const;
     void StopMarker();
     void OnMarkerTimer();
     void RefreshAllCanvases();
@@ -255,8 +258,7 @@ private:
     wxTimer m_auto_refresh_timer;
 
     bool m_marker_active;
-    double m_marker_lat;
-    double m_marker_lon;
+    std::vector<std::pair<double, double>> m_marker_positions; // lat, lon
     int m_marker_phase;
     wxTimer m_marker_timer;
 
