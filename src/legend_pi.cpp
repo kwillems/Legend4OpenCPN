@@ -2370,6 +2370,15 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
     m_viewport = vp;
     m_viewport_valid = (vp.pix_width > 0 && vp.pix_height > 0);
 
+    if (m_log_next_viewport && m_viewport_valid) {
+        m_log_next_viewport = false;
+        wxLogMessage(
+            "Legend: viewport after zoom: chart scale 1:%.0f, ppm %.6f, "
+            "%dx%d px, centre %.4f %.4f",
+            static_cast<double>(vp.chart_scale), vp.view_scale_ppm,
+            vp.pix_width, vp.pix_height, vp.clat, vp.clon);
+    }
+
     if (m_viewport_valid && !m_prefetch_scheduled) {
         m_prefetch_scheduled = true;
         m_prefetch_timer.StartOnce(5000);
@@ -3988,10 +3997,13 @@ void legend_pi::GoToDynamicGroup(size_t index)
         const double cosLat = std::cos(m_viewport.clat * kPi / 180.0);
         wxLogMessage(
             "Legend: zoom for %s: chart scale 1:%.0f (x cos lat = 1:%.0f, "
-            "/ cos lat = 1:%.0f) -> target 1:%.0f for limit 1:%d, lat %.3f",
+            "/ cos lat = 1:%.0f), ppm %.6f -> target 1:%.0f for limit 1:%d, "
+            "requested ppm %.6f, lat %.3f",
             group.key, static_cast<double>(m_viewport.chart_scale),
             m_viewport.chart_scale * cosLat, m_viewport.chart_scale / cosLat,
-            target, group.visibleFrom, m_viewport.clat);
+            m_viewport.view_scale_ppm, target, group.visibleFrom, scale,
+            m_viewport.clat);
+        m_log_next_viewport = true;
     }
 
     // Only move the chart when the object is not comfortably in view.

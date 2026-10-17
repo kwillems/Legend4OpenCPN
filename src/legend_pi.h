@@ -275,6 +275,7 @@ private:
     S57Source m_s57;
     DisplaySettings m_display_settings; // category and class filter of OpenCPN
     int m_plib_state_hash = 0;          // OpenCPN's vector display settings
+    bool m_log_next_viewport = false;   // diagnostics after a zoom
     bool m_ocharts_available = false;
     bool m_chart_sources_available = false; // any chart source has cells
     bool m_show_chart_objects = true; // setting, kept in legend.ini
