@@ -4032,24 +4032,11 @@ void legend_pi::GoToDynamicGroup(size_t index)
     if (scale <= 0.0)
         scale = 0.1;
 
-    const double displayed = m_viewport_valid ? DisplayedScale(m_viewport) : 0.0;
-    const bool zoomIn =
-        group.hiddenAtScale && group.visibleFrom > 0 && m_viewport_valid &&
-        displayed > 0.0;
-    if (zoomIn) {
-        // The limit is compared with the scale of the status bar; the view
-        // scale (pixels per metre) is inversely proportional to it.
-        const double target = group.visibleFrom * 0.8;
-        scale = m_viewport.view_scale_ppm * displayed / target;
-
-        wxLogMessage(
-            "Legend: zoom for %s: displayed scale 1:%.0f (viewport chart scale "
-            "1:%.0f, ppm %.6f) -> target 1:%.0f for limit 1:%d, requested ppm %.6f",
-            group.key, displayed, static_cast<double>(m_viewport.chart_scale),
-            m_viewport.view_scale_ppm, target, group.visibleFrom, scale);
-        m_log_next_viewport = true;
-        m_logged_chart_scale = m_viewport.chart_scale;
-    }
+    const double zoomScale =
+        group.hiddenAtScale ? ViewScaleForLimit(group.visibleFrom) : 0.0;
+    const bool zoomIn = zoomScale > 0.0;
+    if (zoomIn)
+        scale = zoomScale;
 
     // Only move the chart when the object is not comfortably in view.
     // Otherwise the chart stays where it is and the marker shows the spot.
@@ -4069,19 +4056,8 @@ void legend_pi::GoToDynamicGroup(size_t index)
             pixel.y <= m_viewport.pix_height - marginY;
     }
 
-    if (!comfortablyVisible) {
-        wxWindow *canvas = PluginGetFocusCanvas();
-        if (!canvas)
-            canvas = GetCanvasByIndex(0);
-
-        if (canvas) {
-            CanvasJumpToPosition(
-                canvas, position.first, position.second, scale);
-        }
-        else {
-            JumpToPosition(position.first, position.second, scale);
-        }
-    }
+    if (!comfortablyVisible)
+        JumpTo(position.first, position.second, scale);
 
     ShowMarker(position.first, position.second);
 
@@ -4091,6 +4067,43 @@ void legend_pi::GoToDynamicGroup(size_t index)
 
 // Marks every object of a symbol in view at once. The chart does not move:
 // they are all in view already. The counter of the row stays as it is.
+// The view scale at which objects with this limit are just drawn: the
+// limit is compared with the scale of the status bar, and the view scale
+// is inversely proportional to that.
+double legend_pi::ViewScaleForLimit(int limit)
+{
+    if (limit <= 0 || !m_viewport_valid)
+        return 0.0;
+
+    const double displayed = DisplayedScale(m_viewport);
+    if (displayed <= 0.0)
+        return 0.0;
+
+    const double target = limit * 0.8;
+    const double scale = m_viewport.view_scale_ppm * displayed / target;
+
+    wxLogMessage(
+        "Legend: zoom: displayed scale 1:%.0f (viewport chart scale 1:%.0f, "
+        "ppm %.6f) -> target 1:%.0f for limit 1:%d, requested ppm %.6f",
+        displayed, static_cast<double>(m_viewport.chart_scale),
+        m_viewport.view_scale_ppm, target, limit, scale);
+    m_log_next_viewport = true;
+    m_logged_chart_scale = m_viewport.chart_scale;
+    return scale;
+}
+
+void legend_pi::JumpTo(double lat, double lon, double viewScale)
+{
+    wxWindow *canvas = PluginGetFocusCanvas();
+    if (!canvas)
+        canvas = GetCanvasByIndex(0);
+
+    if (canvas)
+        CanvasJumpToPosition(canvas, lat, lon, viewScale);
+    else
+        JumpToPosition(lat, lon, viewScale);
+}
+
 void legend_pi::MarkAllOfDynamicGroup(size_t index)
 {
     if (index >= m_dynamic_groups.size())
@@ -4099,6 +4112,23 @@ void legend_pi::MarkAllOfDynamicGroup(size_t index)
     const DynamicGroup &group = m_dynamic_groups[index];
     if (group.positions.empty())
         return;
+
+    // A row hidden at this scale: zoom in to its limit around the middle
+    // of its objects first, so the marked objects can be seen.
+    if (group.hiddenAtScale) {
+        const double zoomScale = ViewScaleForLimit(group.visibleFrom);
+        if (zoomScale > 0.0) {
+            double lat = 0.0;
+            double lon = 0.0;
+            for (const auto &position : group.positions) {
+                lat += position.first;
+                lon += position.second;
+            }
+            lat /= group.positions.size();
+            lon /= group.positions.size();
+            JumpTo(lat, lon, zoomScale);
+        }
+    }
 
     m_active_group_key = group.key;
     ShowMarkers(group.positions);

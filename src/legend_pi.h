@@ -151,6 +151,10 @@ private:
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void MarkAllOfDynamicGroup(size_t index);
+    // View scale (pixels per metre) at which a scale limit is just passed,
+    // or 0 when it cannot be computed.
+    double ViewScaleForLimit(int limit);
+    void JumpTo(double lat, double lon, double viewScale);
 
     // Chart objects of the o-charts cells in view, grouped by symbol.
     void EnsureChartSymbols();
