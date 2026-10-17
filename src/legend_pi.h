@@ -12,6 +12,7 @@
 
 #include "ocpn_plugin.h"
 #include "chart_symbols.h"
+#include "ocharts_source.h"
 
 #include <map>
 #include <set>
@@ -42,6 +43,11 @@ struct DynamicGroup
     wxString imageName; // name in the in-memory file system (may be empty)
     std::vector<std::pair<double, double>> positions; // lat, lon; nearest first
     int current = -1; // last position shown by a click, -1 = none yet
+
+    // Chart objects (o-charts) are grouped by S-52 symbol instead of by
+    // waypoint icon; the picture then comes from OpenCPN's symbol sheet.
+    bool chartSymbol = false;
+    wxString symbol;
 };
 
 // One line of symbolen.txt: icon name (may hold one '*'), meaning (may be
@@ -138,9 +144,10 @@ private:
     void GoToDynamicGroup(size_t index);
     void MarkAllOfDynamicGroup(size_t index);
 
-    // Phase 0 probe: chart objects of o-charts cells through the o-charts
-    // plugin's own chart class. Logs only; nothing is shown or stored.
-    void ProbeChartObjects();
+    // Chart objects of the o-charts cells in view, grouped by symbol.
+    void EnsureChartSymbols();
+    void CollectChartObjects(
+        const PlugIn_ViewPort &vp, std::map<wxString, DynamicGroup> *groups);
     void ClearDynamicImages();
 
     // Meaning of a symbol shown in the legend, see ResolveLabel().
@@ -255,6 +262,12 @@ private:
     wxTimer m_visibility_timer;
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
+    bool m_chart_symbols_tried = false;
+    OChartsSource m_ocharts;
+    bool m_ocharts_available = false;
+    bool m_show_chart_objects = true; // setting, kept in legend.ini
+    int m_chart_object_total = 0;     // listed chart objects in view
+    int m_chart_objects_hidden = 0;   // in view, but not shown at this scale
     bool m_prefetch_scheduled;
     bool m_showing_loading_page;
 

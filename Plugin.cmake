@@ -50,6 +50,8 @@ set(SRC
     src/legend_pi.cpp
     src/chart_symbols.h
     src/chart_symbols.cpp
+    src/ocharts_source.h
+    src/ocharts_source.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

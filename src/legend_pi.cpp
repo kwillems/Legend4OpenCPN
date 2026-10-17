@@ -39,7 +39,6 @@
 #include <wx/stopwatch.h>
 #include <wx/textfile.h>
 #include <wx/utils.h>
-#include <wx/xml/xml.h>
 
 #include <algorithm>
 #include <functional>
@@ -891,6 +890,10 @@ int legend_pi::Init()
     EnsureDirectories();
     LoadConfig();
 
+    m_ocharts.SetCacheFile(
+        GetConfigDirectory() + wxFileName::GetPathSeparator() +
+        "ocharts-cells.txt");
+
     return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
            WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
            WANTS_OPENGL_OVERLAY_CALLBACK |
@@ -908,6 +911,9 @@ bool legend_pi::DeInit()
     m_prefetch_timer.Stop();
     m_visibility_timer.Stop();
     m_loading = false;
+
+    // Charts of the o-charts plugin must go before this plugin is unloaded.
+    m_ocharts.Close();
     ClearDynamicImages();
 
     if (m_legend_window) {
@@ -1093,6 +1099,8 @@ void legend_pi::LoadConfig()
     if (m_window_height < 300)
         m_window_height = 300;
 
+    config.Read("ShowChartObjects", &m_show_chart_objects, true);
+
     wxString collapsed;
     config.Read("CollapsedSections", &collapsed, "");
     m_collapsed_sections.clear();
@@ -1127,6 +1135,7 @@ void legend_pi::SaveConfig() const
     for (const wxString &name : m_collapsed_sections)
         collapsed.Add(name);
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
+    config.Write("ShowChartObjects", m_show_chart_objects);
 
     config.Flush();
 }
@@ -1840,9 +1849,19 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            if (href.StartsWith("legend-chart-toggle:")) {
+                m_markdown_view->CallAfter([this]() {
+                    m_show_chart_objects = !m_show_chart_objects;
+                    SaveConfig();
+                    RefreshDynamicLegendKeepingState();
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
             if (href.StartsWith("legend-refresh:")) {
                 m_markdown_view->CallAfter([this]() {
-                    ProbeChartObjects();
+                    m_ocharts.Rescan();
                     ShowDynamicLegend(true);
                 });
                 return;
@@ -2774,6 +2793,11 @@ wxString legend_pi::SectionName(int section) const
     if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
         return m_meaning_sections[static_cast<size_t>(section)];
 
+    // Chart symbols not mentioned in symbolen.txt have a heading of their
+    // own, before the waypoints without heading.
+    if (section == -2)
+        return "Kaartsymbolen";
+
     return "Overig";
 }
 
@@ -2798,6 +2822,7 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
     if (collapsed) {
         for (const wxString &name : m_meaning_sections)
             m_collapsed_sections.insert(name);
+        m_collapsed_sections.insert(SectionName(-2));
         m_collapsed_sections.insert(SectionName(-1));
     }
 
@@ -2889,6 +2914,117 @@ void legend_pi::MoveSection(int section, int delta)
     RenderDynamicLegend(true);
 }
 
+void legend_pi::EnsureChartSymbols()
+{
+    if (m_chart_symbols.IsLoaded() || m_chart_symbols_tried)
+        return;
+    m_chart_symbols_tried = true;
+
+    wxString *shared = GetpSharedDataLocation();
+    wxFileName dir(shared ? *shared : wxString(), "");
+    dir.AppendDir("s57data");
+
+    wxStopWatch watch;
+    const bool ok = m_chart_symbols.Load(dir.GetPath());
+    wxLogMessage("Legend: S-52 tables %s from %s, %ld ms",
+                 ok ? "loaded" : "NOT found", dir.GetPath(), watch.Time());
+}
+
+// Adds the chart objects of the o-charts cells in view to the groups, one
+// group per S-52 symbol, so the legend shows the symbols as the chart draws
+// them. Objects the chart hides at this scale, and the "Other" category
+// that OpenCPN hides by default, are counted but not listed.
+void legend_pi::CollectChartObjects(
+    const PlugIn_ViewPort &vp,
+    std::map<wxString, DynamicGroup> *groups)
+{
+    m_chart_object_total = 0;
+    m_chart_objects_hidden = 0;
+
+    m_ocharts_available = m_ocharts.Available();
+    if (!m_ocharts_available)
+        return;
+
+    EnsureChartSymbols();
+    if (!m_chart_symbols.IsLoaded())
+        return;
+
+    wxStopWatch watch;
+    const std::vector<ChartObject> objects = m_ocharts.PointObjectsInView(vp);
+    const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
+
+    for (const ChartObject &object : objects) {
+        if (object.scamin > 0 && vp.chart_scale > object.scamin) {
+            ++m_chart_objects_hidden;
+            continue;
+        }
+
+        ChartSymbols::Resolved resolved;
+        if (!m_chart_symbols.Resolve(object, simplified, &resolved) ||
+            resolved.symbol.IsEmpty())
+            continue;
+
+        if (resolved.displayCat == "Other" || resolved.displayCat == "Mariners") {
+            ++m_chart_objects_hidden;
+            continue;
+        }
+
+        const wxString key = "s52:" + resolved.symbol;
+        DynamicGroup &group = (*groups)[key];
+
+        if (group.key.IsEmpty()) {
+            group.key = key;
+            group.chartSymbol = true;
+            group.symbol = resolved.symbol;
+
+            // The S-52 description of the symbol; when there is none, the
+            // object class with its colour and shape, e.g. "Topmark · red,
+            // cylinder (can)".
+            wxString description =
+                m_chart_symbols.SymbolDescription(resolved.symbol);
+
+            if (description.IsEmpty()) {
+                description = m_chart_symbols.ClassDescription(object.className);
+
+                wxString details;
+                for (const char *acronym : {"COLOUR", "BOYSHP", "BCNSHP",
+                                            "TOPSHP", "CATLAM", "CATCAM",
+                                            "CATSPM"}) {
+                    const wxString *value = object.Attribute(acronym);
+                    if (!value)
+                        continue;
+                    const wxString meaning =
+                        m_chart_symbols.AttributeValueMeaning(acronym, *value);
+                    if (meaning.IsEmpty())
+                        continue;
+                    if (!details.IsEmpty())
+                        details << ", ";
+                    details << meaning;
+                }
+
+                if (!details.IsEmpty())
+                    description << wxString::FromUTF8(" \u00b7 ") << details;
+            }
+
+            if (!description.IsEmpty())
+                description = description.Left(1).Upper() + description.Mid(1);
+
+            ResolveLabel(resolved.symbol, description, group);
+
+            // Not mentioned in symbolen.txt: under its own heading.
+            if (group.order == (1 << 30))
+                group.section = -2;
+        }
+
+        group.positions.emplace_back(object.lat, object.lon);
+        ++m_chart_object_total;
+    }
+
+    wxLogMessage("Legend: chart objects: %s; %d listed, %d hidden, %ld ms",
+                 m_ocharts.LastDiagnostics(), m_chart_object_total,
+                 m_chart_objects_hidden, watch.Time());
+}
+
 void legend_pi::CollectDynamicLegend()
 {
     m_dynamic_groups.clear();
@@ -2945,6 +3081,11 @@ void legend_pi::CollectDynamicLegend()
         ++m_dynamic_total;
     }
 
+    if (m_show_chart_objects)
+        CollectChartObjects(vp, &groups);
+    else
+        m_chart_object_total = m_chart_objects_hidden = 0;
+
     // Order the positions of every group from near to far, measured from
     // the centre of the screen.
     const double kPi = 3.14159265358979323846;
@@ -2981,10 +3122,16 @@ void legend_pi::CollectDynamicLegend()
         m_dynamic_groups.begin(),
         m_dynamic_groups.end(),
         [](const DynamicGroup &a, const DynamicGroup &b) {
-            // Headings in file order, "Overig" (-1) last; within a heading
-            // the order of symbolen.txt, then the icon name.
-            const int sa = a.section < 0 ? 1 << 30 : a.section;
-            const int sb = b.section < 0 ? 1 << 30 : b.section;
+            // Headings in file order, then "Kaartsymbolen" (-2) and "Overig"
+            // (-1); within a heading the order of symbolen.txt, then the
+            // icon name.
+            auto rank = [](int section) {
+                if (section == -2)
+                    return (1 << 30) - 1;
+                return section < 0 ? 1 << 30 : section;
+            };
+            const int sa = rank(a.section);
+            const int sb = rank(b.section);
             if (sa != sb)
                 return sa < sb;
             if (a.order != b.order)
@@ -3094,23 +3241,35 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         const wxColour iconBackground =
             palette.iconTiles ? palette.tile : rowColours[i];
 
-        // First choice: the icon's own PNG file. Fall back to asking
-        // OpenCPN for the bitmap. In dusk and night the icon is dimmed, the
-        // background it sits on is not.
-        const wxString key = group.key;
-        auto flatten = [&key](const wxColour &colour) {
-            wxImage drawn = LoadIconFromFile(key, colour);
+        wxImage image;
 
-            if (!drawn.IsOk()) {
-                wxBitmap bitmap = GetIcon_PlugIn(key);
+        if (group.chartSymbol) {
+            // Chart symbols come from OpenCPN's symbol sheet of the current
+            // colour scheme, which already has dusk and night versions.
+            const wxImage picture =
+                m_chart_symbols.SymbolImage(group.symbol, g_color_scheme);
+            if (picture.IsOk())
+                image = FlattenImage(picture, iconBackground);
+        }
+        else {
+            // First choice: the icon's own PNG file. Fall back to asking
+            // OpenCPN for the bitmap. In dusk and night the icon is dimmed,
+            // the background it sits on is not.
+            const wxString key = group.key;
+            auto flatten = [&key](const wxColour &colour) {
+                wxImage drawn = LoadIconFromFile(key, colour);
 
-                if (bitmap.IsOk())
-                    drawn = FlattenIcon(bitmap, colour, key);
-            }
-            return drawn;
-        };
+                if (!drawn.IsOk()) {
+                    wxBitmap bitmap = GetIcon_PlugIn(key);
 
-        wxImage image = FlattenDimmed(flatten, iconBackground, SchemeDim());
+                    if (bitmap.IsOk())
+                        drawn = FlattenIcon(bitmap, colour, key);
+                }
+                return drawn;
+            };
+
+            image = FlattenDimmed(flatten, iconBackground, SchemeDim());
+        }
 
         if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3) {
             const int width = std::max(
@@ -3153,7 +3312,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     }
     else {
         html << static_cast<int>(m_dynamic_groups.size()) << " symbolen"
-             << " &middot; " << m_dynamic_total << " waypoints in beeld";
+             << " &middot; " << m_dynamic_total << " waypoints";
+        if (m_show_chart_objects && m_chart_object_total > 0)
+            html << " &middot; " << m_chart_object_total << " kaartobjecten";
+        html << " in beeld";
     }
 
     html << "</font></td></tr>";
@@ -3162,9 +3324,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "<tr><td colspan=\"2\"><a href=\"legend-reorder-done:\">"
              << "<b>Klaar</b></a></td></tr>";
     }
-    else if (showHeadings && m_viewport_valid) {
-        html << "<tr><td colspan=\"2\"><font size=\"-1\">";
-        if (!m_dynamic_groups.empty()) {
+    else if (m_viewport_valid) {
+        std::vector<wxString> links;
+
+        if (showHeadings && !m_dynamic_groups.empty()) {
             // One link that does what makes sense now: fold everything in
             // while any group in view is open, otherwise fold out.
             bool anyOpen = false;
@@ -3176,14 +3339,28 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 }
             }
 
-            if (anyOpen)
-                html << "<a href=\"legend-collapse-all:\">Alles inklappen</a>";
-            else
-                html << "<a href=\"legend-expand-all:\">Alles uitklappen</a>";
-            html << " &middot; ";
+            links.push_back(
+                anyOpen ? "<a href=\"legend-collapse-all:\">Alles inklappen</a>"
+                        : "<a href=\"legend-expand-all:\">Alles uitklappen</a>");
         }
-        html << "<a href=\"legend-reorder:\">Volgorde wijzigen</a>"
-             << "</font></td></tr>";
+
+        if (showHeadings)
+            links.push_back("<a href=\"legend-reorder:\">Volgorde wijzigen</a>");
+
+        // Chart symbols can be switched off, for a legend of waypoints only.
+        if (m_ocharts_available || !m_show_chart_objects) {
+            links.push_back(
+                m_show_chart_objects
+                    ? "<a href=\"legend-chart-toggle:\">Kaartsymbolen uit</a>"
+                    : "<a href=\"legend-chart-toggle:\">Kaartsymbolen aan</a>");
+        }
+
+        if (!links.empty()) {
+            html << "<tr><td colspan=\"2\"><font size=\"-1\">";
+            for (size_t i = 0; i < links.size(); ++i)
+                html << (i > 0 ? " &middot; " : "") << links[i];
+            html << "</font></td></tr>";
+        }
     }
 
     html << "</table>";
@@ -3450,6 +3627,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 "vanzelf aan als je de kaart verschuift of zoomt.";
         if (showHeadings)
             html << " Klik op een kopje om de groep in of uit te klappen.";
+        if (m_show_chart_objects && m_chart_object_total > 0)
+            html << " Kaartsymbolen komen uit de o-charts in beeld.";
         html << "</font></p>";
     }
 
@@ -3787,454 +3966,4 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     glPopAttrib();
 
     return true;
-}
-
-// ---------------------------------------------------------------------------
-// Phase 0 probe: can this plugin read the objects of an o-charts cell through
-// the chart class of the o-charts plugin, the way OpenCPN does for "Chart
-// object query"? Everything goes to the log; nothing is shown or stored.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-// All element contents and attributes of an XML tree as "path=value".
-void FlattenXml(
-    const wxXmlNode *node,
-    const wxString &prefix,
-    wxArrayString &out,
-    int depth)
-{
-    if (!node || depth > 6)
-        return;
-
-    for (const wxXmlNode *child = node->GetChildren(); child;
-         child = child->GetNext()) {
-        if (child->GetType() != wxXML_ELEMENT_NODE)
-            continue;
-
-        const wxString name =
-            prefix.IsEmpty() ? child->GetName() : prefix + "/" + child->GetName();
-
-        wxString content = child->GetNodeContent();
-        content.Trim(true).Trim(false);
-        if (!content.IsEmpty())
-            out.Add(name + "=" + content.Left(160));
-
-        for (const wxXmlAttribute *attr = child->GetAttributes(); attr;
-             attr = attr->GetNext())
-            out.Add(name + "@" + attr->GetName() + "=" + attr->GetValue().Left(160));
-
-        FlattenXml(child, name, out, depth + 1);
-    }
-}
-
-struct ProbeCell
-{
-    wxString path;
-    bool hasBox = false;
-    double latMin = 0, latMax = 0, lonMin = 0, lonMax = 0;
-    int nativeScale = 0;
-};
-
-// Extents found with a header-only init, kept between runs.
-struct ProbeExtent
-{
-    ExtentPI extent;
-    int nativeScale;
-};
-std::map<wxString, ProbeExtent> g_probe_extents;
-
-// Layout of an attribute value inside OpenCPN (s52s57.h). The API header
-// only declares the array type; the o-charts plugin fills it with this
-// layout, and OpenCPN reads it the same way.
-struct LegendS57attVal
-{
-    void *value;
-    char valType;
-};
-WX_DEFINE_ARRAY_PTR(LegendS57attVal *, LegendS57attValArray);
-
-// Value of an attribute as text. Only known type codes are decoded; the
-// raw code is shown for anything else, so the encoding can be learned.
-wxString AttributeValueText(const LegendS57attVal *val)
-{
-    if (!val || !val->value)
-        return "<null>";
-
-    switch (val->valType) {
-    case 0:
-    case 'I':
-        return wxString::Format("%d", *static_cast<const int *>(val->value));
-    case 2:
-    case 'R':
-        return wxString::Format("%g", *static_cast<const double *>(val->value));
-    case 4:
-    case 'S': {
-        const char *text = static_cast<const char *>(val->value);
-        wxString out = wxString::FromUTF8(text);
-        if (out.IsEmpty() && *text)
-            out = wxString::From8BitData(text);
-        return out;
-    }
-    default:
-        return wxString::Format("<type %d>", static_cast<int>(val->valType));
-    }
-}
-
-// The object of the o-charts plugin as a source-independent chart object.
-ChartObject ToChartObject(const PI_S57Obj *obj)
-{
-    ChartObject object;
-    object.className = wxString::FromAscii(obj->FeatureName);
-    object.primitive = obj->Primitive_type;
-    object.lat = obj->m_lat;
-    object.lon = obj->m_lon;
-
-    if (obj->att_array && obj->attVal && obj->n_attr > 0) {
-        const auto *values =
-            reinterpret_cast<const LegendS57attValArray *>(obj->attVal);
-        const int count =
-            std::min(obj->n_attr, static_cast<int>(values->GetCount()));
-
-        for (int i = 0; i < count; ++i) {
-            wxString acronym = wxString::From8BitData(obj->att_array + 6 * i, 6);
-            acronym.Trim(true);
-            wxString value = AttributeValueText(values->Item(i));
-            if (value == "<null>")
-                value.Clear();
-            object.attributes.emplace_back(acronym, value);
-
-            // The Scamin field of the object is a sentinel; the attribute
-            // carries the real limit.
-            long scamin = 0;
-            if (acronym == "SCAMIN" && value.ToLong(&scamin) && scamin > 0)
-                object.scamin = static_cast<int>(scamin);
-        }
-    }
-
-    return object;
-}
-
-// "ACRONYM=value; ..." for all attributes of an object.
-wxString AttributesText(const PI_S57Obj *obj)
-{
-    wxString out;
-    if (!obj->att_array || !obj->attVal || obj->n_attr <= 0)
-        return out;
-
-    const auto *values =
-        reinterpret_cast<const LegendS57attValArray *>(obj->attVal);
-    const int count =
-        std::min(obj->n_attr, static_cast<int>(values->GetCount()));
-
-    for (int i = 0; i < count; ++i) {
-        if (!out.IsEmpty())
-            out << "; ";
-        out << wxString::From8BitData(obj->att_array + 6 * i, 6).Trim()
-            << "=" << AttributeValueText(values->Item(i)).Left(60);
-    }
-    return out;
-}
-
-// Creates a chart object of the o-charts plugin. The class is registered
-// with wxWidgets by that plugin, like OpenCPN itself uses it.
-PlugInChartBaseExtendedPlus2 *CreateOChart(wxString &usedClass)
-{
-    for (const char *name : {"oesuChart", "oeuSENCChart"}) {
-        wxObject *object = wxCreateDynamicObject(name);
-        if (!object)
-            continue;
-
-        usedClass = name;
-        auto *chart = dynamic_cast<PlugInChartBaseExtendedPlus2 *>(object);
-        if (!chart) {
-            wxLogMessage("Legend probe: %s created but dynamic_cast failed; "
-                         "using static_cast", name);
-            chart = static_cast<PlugInChartBaseExtendedPlus2 *>(object);
-        }
-        return chart;
-    }
-    return nullptr;
-}
-
-}  // namespace
-
-void legend_pi::ProbeChartObjects()
-{
-    if (!m_viewport_valid) {
-        wxLogMessage("Legend probe: no viewport yet");
-        return;
-    }
-
-    wxStopWatch total;
-    const double lat = m_viewport.clat;
-    const double lon = m_viewport.clon;
-
-    wxLogMessage(
-        "Legend probe: start, centre %.5f %.5f, chart scale 1:%.0f, "
-        "%dx%d px, %.4f ppm",
-        lat, lon, static_cast<double>(m_viewport.chart_scale),
-        m_viewport.pix_width, m_viewport.pix_height,
-        m_viewport.view_scale_ppm);
-
-    // 1. The chart database: which entries exist, and what does an entry
-    //    look like? The first entry and the first .oesu entry are logged in
-    //    full, so the format is known for the next step.
-    std::vector<ProbeCell> cells;
-    int entries = 0;
-    bool loggedOesu = false;
-
-    for (int index = 0; index < 20000; ++index) {
-        wxXmlDocument doc = GetChartDatabaseEntryXML(index, false);
-        if (!doc.IsOk() || !doc.GetRoot())
-            break;
-        ++entries;
-
-        wxArrayString lines;
-        FlattenXml(doc.GetRoot(), "", lines, 0);
-
-        wxString path;
-        double box[4] = {0, 0, 0, 0};
-        bool have[4] = {false, false, false, false};
-
-        for (const wxString &line : lines) {
-            const wxString key = line.BeforeFirst('=').Lower();
-            const wxString value = line.AfterFirst('=');
-
-            if (path.IsEmpty() && value.Contains("/") &&
-                (key.Contains("path") || key.Contains("file")))
-                path = value;
-
-            double d = 0;
-            if (!value.ToCDouble(&d) && !value.ToDouble(&d))
-                continue;
-            if (key.Contains("lat") && key.Contains("min")) { box[0] = d; have[0] = true; }
-            else if (key.Contains("lat") && key.Contains("max")) { box[1] = d; have[1] = true; }
-            else if (key.Contains("lon") && key.Contains("min")) { box[2] = d; have[2] = true; }
-            else if (key.Contains("lon") && key.Contains("max")) { box[3] = d; have[3] = true; }
-        }
-
-        const bool isOesu = path.Lower().EndsWith(".oesu");
-
-        if (index == 0 || (isOesu && !loggedOesu)) {
-            wxLogMessage("Legend probe: database entry %d (%s):", index,
-                         isOesu ? "oesu" : "first");
-            for (const wxString &line : lines)
-                wxLogMessage("Legend probe:   %s", line);
-            if (isOesu)
-                loggedOesu = true;
-        }
-
-        if (!isOesu)
-            continue;
-
-        ProbeCell cell;
-        cell.path = path;
-        cell.hasBox = have[0] && have[1] && have[2] && have[3];
-        cell.latMin = box[0]; cell.latMax = box[1];
-        cell.lonMin = box[2]; cell.lonMax = box[3];
-        cells.push_back(cell);
-    }
-
-    wxLogMessage("Legend probe: %d database entries, %zu .oesu cells, %ld ms",
-                 entries, cells.size(), total.Time());
-
-    if (cells.empty()) {
-        wxLogMessage("Legend probe: no .oesu cells in the chart database; stop");
-        return;
-    }
-
-    // 2. Which cells cover the centre? Use the box from the database when it
-    //    was found, otherwise a header-only init of the cell gives its extent.
-    wxString usedClass;
-    std::vector<ProbeCell> covering;
-    int headerInits = 0;
-
-    for (const ProbeCell &cell : cells) {
-        if (cell.hasBox) {
-            if (lat < cell.latMin || lat > cell.latMax ||
-                lon < cell.lonMin || lon > cell.lonMax)
-                continue;
-        }
-
-        ExtentPI extent = {0, 0, 0, 0};
-        int scale = 0;
-
-        auto known = g_probe_extents.find(cell.path);
-        if (known != g_probe_extents.end()) {
-            extent = known->second.extent;
-            scale = known->second.nativeScale;
-        }
-        else {
-            PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
-            if (!chart) {
-                wxLogMessage("Legend probe: cannot create o-charts chart class; stop");
-                return;
-            }
-            ++headerInits;
-
-            const int result = chart->Init(cell.path, PI_HEADER_ONLY);
-            const bool hasExtent = result == 0 && chart->GetChartExtent(&extent);
-            scale = result == 0 ? chart->GetNativeScale() : 0;
-            delete chart;
-
-            if (result != 0 || !hasExtent) {
-                wxLogMessage("Legend probe: header %s -> init %d, no extent",
-                             wxFileName(cell.path).GetFullName(), result);
-                continue;
-            }
-
-            g_probe_extents[cell.path] = {extent, scale};
-        }
-
-        if (lat >= extent.SLAT && lat <= extent.NLAT &&
-            lon >= extent.WLON && lon <= extent.ELON) {
-            ProbeCell found = cell;
-            found.nativeScale = scale;
-            covering.push_back(found);
-        }
-    }
-
-    wxLogMessage(
-        "Legend probe: %d header inits, %zu extents known, %zu cells cover "
-        "the centre (class %s), %ld ms so far",
-        headerInits, g_probe_extents.size(), covering.size(), usedClass,
-        total.Time());
-    for (const ProbeCell &cell : covering)
-        wxLogMessage("Legend probe:   covering %s 1:%d",
-                     wxFileName(cell.path).GetFullName(), cell.nativeScale);
-
-    if (covering.empty())
-        return;
-
-    // 3. The most detailed covering cell: full init and an object query
-    //    around the centre, like OpenCPN's object query but with a radius
-    //    of a quarter of the screen width.
-    std::sort(covering.begin(), covering.end(),
-              [](const ProbeCell &a, const ProbeCell &b) {
-                  return a.nativeScale < b.nativeScale;
-              });
-    const ProbeCell &best = covering.front();
-
-    wxStopWatch watch;
-    PlugInChartBaseExtendedPlus2 *chart = CreateOChart(usedClass);
-    const int result = chart->Init(best.path, PI_FULL_INIT);
-    wxLogMessage("Legend probe: full init %s -> %d, %ld ms",
-                 wxFileName(best.path).GetFullName(), result, watch.Time());
-
-    if (result != 0) {
-        delete chart;
-        return;
-    }
-
-    PlugIn_ViewPort vp = m_viewport;
-    const float radiusDeg = static_cast<float>(
-        (vp.pix_width / 4.0) / (vp.view_scale_ppm * 1852.0 * 60.0));
-
-    watch.Start();
-    ListOfPI_S57Obj *objects =
-        chart->GetObjRuleListAtLatLon(
-            static_cast<float>(lat), static_cast<float>(lon), radiusDeg, &vp);
-    wxLogMessage("Legend probe: query radius %.4f deg -> %d objects, %ld ms",
-                 radiusDeg, objects ? static_cast<int>(objects->GetCount()) : -1,
-                 watch.Time());
-
-    // CreateObjDescriptions() of the o-charts plugin crashes when called on
-    // a chart it did not render itself, so the attributes are read directly
-    // and the symbol and texts come from OpenCPN's own tables.
-    if (objects) {
-        watch.Start();
-        wxString *shared = GetpSharedDataLocation();
-        wxFileName s57dir(shared ? *shared : wxString(), "");
-        s57dir.AppendDir("s57data");
-        const bool loaded = m_chart_symbols.Load(s57dir.GetPath());
-        wxLogMessage(
-            "Legend probe: symbol tables %s from %s: %zu lookups, %zu symbols, %ld ms",
-            loaded ? "loaded" : "NOT loaded", s57dir.GetPath(),
-            m_chart_symbols.LookupCount(), m_chart_symbols.SymbolCount(),
-            watch.Time());
-
-        const int style = PI_GetPLIBSymbolStyle();
-        const bool simplified = style != PI_PAPER_CHART;
-        wxLogMessage("Legend probe: OpenCPN symbol style %d (%s)", style,
-                     simplified ? "simplified" : "paper chart");
-
-        std::map<wxString, int> perClass;
-        std::map<wxString, int> perSymbol;
-        std::map<int, int> perPrim;
-        int shown = 0;
-        int noSymbol = 0;
-        bool imageTested = false;
-
-        for (ListOfPI_S57Obj::Node *node = objects->GetFirst(); node;
-             node = node->GetNext()) {
-            PI_S57Obj *obj = node->GetData();
-            if (!obj)
-                continue;
-            const wxString feature = wxString::FromAscii(obj->FeatureName);
-            ++perClass[wxString::Format("%s/prim%d", feature, obj->Primitive_type)];
-            ++perPrim[obj->Primitive_type];
-
-            if (obj->Primitive_type == 2)
-                continue;
-
-            ChartObject object = ToChartObject(obj);
-            ChartSymbols::Resolved resolved;
-            const bool ok = loaded && m_chart_symbols.Resolve(object, simplified, &resolved);
-            if (!ok || resolved.symbol.IsEmpty())
-                ++noSymbol;
-            else
-                ++perSymbol[resolved.symbol];
-
-            if (shown < 25) {
-                ++shown;
-                wxString meanings;
-                for (const auto &attr : object.attributes) {
-                    const wxString meaning =
-                        m_chart_symbols.AttributeValueMeaning(attr.first, attr.second);
-                    if (!meaning.IsEmpty())
-                        meanings << attr.first << ": " << meaning.Left(40) << "; ";
-                }
-                wxLogMessage(
-                    "Legend probe:   %s prim %d at %.5f %.5f scamin %d -> %s [%s%s%s] "
-                    "\"%s\" | %s | %s",
-                    feature, obj->Primitive_type, object.lat, object.lon,
-                    object.scamin, ok ? resolved.symbol : wxString("?"),
-                    resolved.table, resolved.conditional ? ", CS" : "",
-                    resolved.fromDefault ? ", default" : "",
-                    m_chart_symbols.SymbolDescription(resolved.symbol),
-                    m_chart_symbols.ClassDescription(object.className),
-                    meanings);
-            }
-
-            if (ok && !resolved.symbol.IsEmpty() && !imageTested) {
-                imageTested = true;
-                const wxImage picture =
-                    m_chart_symbols.SymbolImage(resolved.symbol, g_color_scheme);
-                wxLogMessage(
-                    "Legend probe: symbol picture %s: %s %dx%d alpha %d mask %d",
-                    resolved.symbol, picture.IsOk() ? "ok" : "MISSING",
-                    picture.IsOk() ? picture.GetWidth() : 0,
-                    picture.IsOk() ? picture.GetHeight() : 0,
-                    picture.IsOk() && picture.HasAlpha(),
-                    picture.IsOk() && picture.HasMask());
-            }
-        }
-
-        for (const auto &entry : perPrim)
-            wxLogMessage("Legend probe:   prim %d: %d objects", entry.first, entry.second);
-        for (const auto &entry : perClass)
-            wxLogMessage("Legend probe:   %4d x %s", entry.second, entry.first);
-        wxLogMessage("Legend probe: %zu distinct symbols, %d objects without symbol",
-                     perSymbol.size(), noSymbol);
-        for (const auto &entry : perSymbol)
-            wxLogMessage("Legend probe:   %4d x %s \"%s\"", entry.second, entry.first,
-                         m_chart_symbols.SymbolDescription(entry.first));
-
-        objects->Clear();
-        delete objects;
-    }
-
-    delete chart;
-    wxLogMessage("Legend probe: done in %ld ms", total.Time());
 }
