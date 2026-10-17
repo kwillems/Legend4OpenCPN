@@ -546,13 +546,21 @@ wxString ChartSymbols::SymbolDescription(const wxString &symbol) const
     if (found == m_symbols.end())
         return wxString();
 
-    // "conical buoy, general, full-chart": the table qualifiers at the end
-    // say nothing about the object.
-    wxString text = found->second.description;
-    for (const char *suffix : {", paper-chart", ", full-chart", ", simplified",
-                               ", general"}) {
-        while (text.EndsWith(suffix))
-            text = text.Left(text.length() - wxString(suffix).length());
+    // "can buoy,yellow,full-chart" or "tower, black, full-chart and
+    // simplified": the parts that name the symbol table say nothing about
+    // the object and are dropped; the rest is joined again with ", ".
+    wxString text;
+    wxStringTokenizer parts(found->second.description, ",", wxTOKEN_STRTOK);
+    while (parts.HasMoreTokens()) {
+        wxString part = parts.GetNextToken();
+        part.Trim(true).Trim(false);
+        if (part.IsEmpty() || part == "general" ||
+            part.Contains("full-chart") || part.Contains("paper-chart") ||
+            part.Contains("simplified"))
+            continue;
+        if (!text.IsEmpty())
+            text << ", ";
+        text << part;
     }
     return text;
 }
