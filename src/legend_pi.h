@@ -13,12 +13,14 @@
 #include "ocpn_plugin.h"
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include <wx/arrstr.h>
 #include <wx/bitmap.h>
 #include <wx/button.h>
 #include <wx/choice.h>
+#include <wx/datetime.h>
 #include <wx/frame.h>
 #include <wx/html/htmlwin.h>
 #include <wx/panel.h>
@@ -33,9 +35,22 @@ struct DynamicGroup
 {
     wxString key;     // waypoint icon name
     wxString label;   // text shown in the legend
+    bool labelIsName = false; // no meaning known: label is the icon name
+    int section = -1;  // heading in symbolen.txt, -1 = none ("Overig")
+    int order = 1 << 30; // line in symbolen.txt; not listed = last
     wxString imageName; // name in the in-memory file system (may be empty)
     std::vector<std::pair<double, double>> positions; // lat, lon; nearest first
     int current = -1; // last position shown by a click, -1 = none yet
+};
+
+// One line of symbolen.txt: icon name (may hold one '*'), meaning (may be
+// empty: the line then only places the icon under its heading).
+struct SymbolMeaning
+{
+    wxString name;
+    wxString meaning;
+    int section = -1; // index in the list of headings, -1 = before any
+    int order = 0;    // position in the file
 };
 
 // What the dynamic legend needs of one waypoint. Asking OpenCPN for a
@@ -47,6 +62,7 @@ struct CachedWaypoint
     double lon = 0.0;
     wxString icon;
     wxString description;
+    wxString firstLine; // first line of the waypoint's own description
     bool visible = false;
     bool useScamin = false;
     double scamin = 0.0;
@@ -119,6 +135,26 @@ private:
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void ClearDynamicImages();
+
+    // Meaning of a symbol shown in the legend, see ResolveLabel().
+    wxString GetMeaningsFile() const;
+    void LoadMeanings();
+    void BuildCommonLines();
+
+    // Headings of the dynamic legend can be collapsed; the state is kept by
+    // heading name in legend.ini.
+    wxString SectionName(int section) const;
+    void ToggleSection(size_t renderedIndex);
+    void SetAllSectionsCollapsed(bool collapsed);
+
+    // Order edit mode: headings only, with buttons to move a heading up or
+    // down. The new order is written to symbolen.txt.
+    void SetReorderMode(bool on);
+    void MoveSection(int section, int delta);
+    void ResolveLabel(
+        const wxString &key,
+        const wxString &iconDescription,
+        DynamicGroup &group) const;
     bool IsDynamicLegendVisible() const;
     void OnAutoRefreshTimer();
 
@@ -175,6 +211,20 @@ private:
     int m_dynamic_generation;
     int m_dynamic_total;
     wxString m_active_group_key; // symbol clicked last, highlighted
+
+    // symbolen.txt: headings, lines in file order, and lookups into them.
+    std::vector<wxString> m_meaning_sections;
+    std::vector<SymbolMeaning> m_meanings;
+    std::map<wxString, size_t> m_meanings_exact;
+    std::vector<size_t> m_meanings_patterns;
+    wxDateTime m_meanings_modified;
+
+    std::set<wxString> m_collapsed_sections;
+    bool m_reorder_mode = false;
+    std::vector<wxString> m_rendered_headings; // index = id in the page
+
+    // Icon name -> first description line shared by all its waypoints.
+    std::map<wxString, wxString> m_common_lines;
 
     wxArrayString m_waypoint_guids;
     std::vector<CachedWaypoint> m_waypoint_cache; // same order as the GUIDs

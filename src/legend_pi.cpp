@@ -59,6 +59,14 @@ const wxString kDynamicGpxId = "@gpx-legend";
 // row number.
 const wxString kLegendRowIdPrefix = "legend-row-";
 
+// Id of a heading in the dynamic legend, followed by its number on the page.
+const wxString kLegendSectionIdPrefix = "legend-section-";
+
+// Ids of the move buttons in the order edit mode, followed by the heading
+// number in symbolen.txt.
+const wxString kLegendMoveUpIdPrefix = "legend-move-up-";
+const wxString kLegendMoveDownIdPrefix = "legend-move-down-";
+
 // The "memory:" file system handler for the icons of the dynamic legend.
 // Its code is compiled into this plugin, so it must be removed again in
 // DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
@@ -97,12 +105,19 @@ public:
     // Row of the dynamic legend at a window position, or -1.
     int RowAt(const wxPoint &windowPos) const
     {
-        const wxHtmlCell *root = GetInternalRepresentation();
-        if (!root)
-            return -1;
+        return HitAt(windowPos, kLegendRowIdPrefix);
+    }
 
-        const wxPoint pos = CalcUnscrolledPosition(windowPos);
-        return FindRow(root, pos.x - root->GetPosX(), pos.y - root->GetPosY());
+    // Heading of the dynamic legend at a window position, or -1.
+    int SectionAt(const wxPoint &windowPos) const
+    {
+        return HitAt(windowPos, kLegendSectionIdPrefix);
+    }
+
+    // Number after an id prefix of the cell at a window position, or -1.
+    int IdNumberAt(const wxPoint &windowPos, const wxString &prefix) const
+    {
+        return HitAt(windowPos, prefix);
     }
 
     void SetRowCursor(bool overRow)
@@ -166,9 +181,24 @@ protected:
     }
 
 private:
+    int HitAt(const wxPoint &windowPos, const wxString &prefix) const
+    {
+        const wxHtmlCell *root = GetInternalRepresentation();
+        if (!root)
+            return -1;
+
+        const wxPoint pos = CalcUnscrolledPosition(windowPos);
+        return FindId(
+            root, pos.x - root->GetPosX(), pos.y - root->GetPosY(), prefix);
+    }
+
     // x and y are relative to container. Table cells fill the full row
     // height, so a hit on any cell with a row id identifies the row.
-    static int FindRow(const wxHtmlCell *container, int x, int y)
+    static int FindId(
+        const wxHtmlCell *container,
+        int x,
+        int y,
+        const wxString &prefix)
     {
         for (const wxHtmlCell *cell = container->GetFirstChild();
              cell;
@@ -181,12 +211,12 @@ private:
                 continue;
 
             wxString rest;
-            long row = -1;
-            if (cell->GetId().StartsWith(kLegendRowIdPrefix, &rest) &&
-                rest.ToLong(&row))
-                return static_cast<int>(row);
+            long number = -1;
+            if (cell->GetId().StartsWith(prefix, &rest) &&
+                rest.ToLong(&number))
+                return static_cast<int>(number);
 
-            const int found = FindRow(cell, cx, cy);
+            const int found = FindId(cell, cx, cy, prefix);
             if (found >= 0)
                 return found;
         }
@@ -414,6 +444,58 @@ wxImage NormalizeIcon(
     return square;
 }
 
+// First non-empty line of a waypoint description, or empty when that line
+// cannot be a meaning (too long, or only a link).
+wxString FirstDescriptionLine(const wxString &description)
+{
+    wxString text = description;
+    text.Replace("\r", "\n");
+
+    wxString line;
+    for (const wxString &part : wxSplit(text, '\n', '\0')) {
+        line = part;
+        line.Trim(true).Trim(false);
+        if (!line.IsEmpty())
+            break;
+    }
+
+    if (line.length() > 160 || line.StartsWith("http://") ||
+        line.StartsWith("https://"))
+        return wxString();
+
+    return line;
+}
+
+// Written once into the legend folder, so the format explains itself.
+const char *kMeaningsTemplate =
+    "# Betekenis en indeling van symbolen in de dynamische legenda van\n"
+    "# Legend4OpenCPN.\n"
+    "#\n"
+    "# Per regel: icoonnaam = betekenis\n"
+    "# De icoonnaam is de bestandsnaam van het icoon zonder .png, zoals\n"
+    "# de legenda hem in grijs toont zolang er geen betekenis bekend is.\n"
+    "#\n"
+    "# Een '*' in de icoonnaam staat voor een willekeurig stuk tekst. Een '*'\n"
+    "# in de betekenis wordt vervangen door dat stuk. Exacte namen gaan voor,\n"
+    "# daarna telt het eerste passende patroon.\n"
+    "#\n"
+    "# Een regel [Kopje] begint een groep in de legenda. Kopjes en regels\n"
+    "# verschijnen in de volgorde van dit bestand; wat nergens onder valt,\n"
+    "# komt onder 'Overig'. Een lege betekenis ('vhf_* =') deelt een icoon\n"
+    "# alleen in; de tekst komt dan uit de beschrijving van de waypoints.\n"
+    "#\n"
+    "# Regels die met # beginnen worden overgeslagen. Wijzigingen zijn\n"
+    "# zichtbaar na Ververs of zodra de kaart verschuift.\n"
+    "#\n"
+    "# Voorbeeld:\n"
+    "# [Marifoon]\n"
+    "# vhf_b11b_*    = Meldplicht marifoon, kanaal *\n"
+    "# vhf_*         =\n"
+    "#\n"
+    "# [Betonning]\n"
+    "# 022           = Groene spitse ton\n"
+    "\n";
+
 // Colours of the legend view. Fixed values instead of the system colours:
 // on macOS the dynamic system colours turn into white when converted to
 // RGB in dark mode, which left white text on a white page.
@@ -428,6 +510,8 @@ struct LegendPalette
     wxColour link;
     bool iconTiles; // icons on a light tile, for contrast on a dark page
     wxColour tile;
+    wxColour header;     // tint behind the block above the list
+    wxColour headerRule; // line between that block and the list
 };
 
 LegendPalette GetLegendPalette()
@@ -442,7 +526,9 @@ LegendPalette GetLegendPalette()
             wxColour(64, 64, 68),    // rule
             wxColour(108, 180, 255), // link
             true,
-            wxColour(232, 232, 230)  // tile: light, like a paper chart
+            wxColour(232, 232, 230), // tile: light, like a paper chart
+            wxColour(38, 44, 52),    // header
+            wxColour(80, 98, 122)    // header rule
         };
     }
 
@@ -455,7 +541,9 @@ LegendPalette GetLegendPalette()
         wxColour(217, 217, 222),
         wxColour(10, 99, 201),
         false,
-        wxColour(255, 255, 255)
+        wxColour(255, 255, 255),
+        wxColour(234, 240, 247),
+        wxColour(157, 180, 211)
     };
 }
 
@@ -785,6 +873,14 @@ void legend_pi::LoadConfig()
 
     if (m_window_height < 300)
         m_window_height = 300;
+
+    wxString collapsed;
+    config.Read("CollapsedSections", &collapsed, "");
+    m_collapsed_sections.clear();
+    for (const wxString &name : wxSplit(collapsed, '\t', '\0')) {
+        if (!name.IsEmpty())
+            m_collapsed_sections.insert(name);
+    }
 }
 
 void legend_pi::SaveConfig() const
@@ -807,6 +903,11 @@ void legend_pi::SaveConfig() const
     config.Write("WindowY", m_window_y);
     config.Write("WindowWidth", m_window_width);
     config.Write("WindowHeight", m_window_height);
+
+    wxArrayString collapsed;
+    for (const wxString &name : m_collapsed_sections)
+        collapsed.Add(name);
+    config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
 
     config.Flush();
 }
@@ -1502,6 +1603,22 @@ void legend_pi::CreateLegendWindow()
         [this](wxHtmlLinkEvent &event) {
             wxString href = event.GetLinkInfo().GetHref();
 
+            if (href.StartsWith("legend-reorder:") ||
+                href.StartsWith("legend-reorder-done:")) {
+                const bool on = !href.StartsWith("legend-reorder-done:");
+                m_markdown_view->CallAfter([this, on]() { SetReorderMode(on); });
+                return;
+            }
+
+            if (href.StartsWith("legend-collapse-all:") ||
+                href.StartsWith("legend-expand-all:")) {
+                const bool collapse = href.StartsWith("legend-collapse-all:");
+                m_markdown_view->CallAfter([this, collapse]() {
+                    SetAllSectionsCollapsed(collapse);
+                });
+                return;
+            }
+
             if (href.StartsWith("legend-refresh:")) {
                 m_markdown_view->CallAfter(
                     [this]() { ShowDynamicLegend(true); });
@@ -1522,41 +1639,88 @@ void legend_pi::CreateLegendWindow()
     // Whole rows of the dynamic legend are clickable, not only the text.
     // A press and release on the same row counts as a click; dragging to
     // select text does not.
+    // Headings work the same way and fold their group in or out; in the
+    // order edit mode the arrow buttons move a heading.
+    enum class HitKind { None, Row, Section, MoveUp, MoveDown };
+    struct Hit
+    {
+        HitKind kind = HitKind::None;
+        int index = -1;
+        bool operator==(const Hit &other) const
+        {
+            return kind == other.kind && index == other.index;
+        }
+    };
+
     auto *legendView = static_cast<LegendHtmlWindow *>(m_markdown_view);
-    auto pressedRow = std::make_shared<int>(-1);
+
+    auto hitAt = [this, legendView](const wxPoint &pos) {
+        Hit hit;
+        if (m_current_legend_path != kDynamicGpxId)
+            return hit;
+
+        const std::pair<HitKind, int> candidates[] = {
+            {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
+            {HitKind::MoveDown,
+             legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+            {HitKind::Row, legendView->RowAt(pos)},
+            {HitKind::Section, legendView->SectionAt(pos)}};
+
+        for (const auto &candidate : candidates) {
+            if (candidate.second >= 0) {
+                hit.kind = candidate.first;
+                hit.index = candidate.second;
+                break;
+            }
+        }
+        return hit;
+    };
+
+    auto pressed = std::make_shared<Hit>();
 
     m_markdown_view->Bind(
         wxEVT_LEFT_DOWN,
-        [this, legendView, pressedRow](wxMouseEvent &event) {
-            *pressedRow = m_current_legend_path == kDynamicGpxId
-                              ? legendView->RowAt(event.GetPosition())
-                              : -1;
+        [hitAt, pressed](wxMouseEvent &event) {
+            *pressed = hitAt(event.GetPosition());
             event.Skip();
         });
 
     m_markdown_view->Bind(
         wxEVT_LEFT_UP,
-        [this, legendView, pressedRow](wxMouseEvent &event) {
+        [this, hitAt, pressed](wxMouseEvent &event) {
             event.Skip();
 
-            const int pressed = *pressedRow;
-            *pressedRow = -1;
+            const Hit hit = *pressed;
+            *pressed = Hit();
 
-            if (pressed < 0 || m_current_legend_path != kDynamicGpxId ||
-                legendView->RowAt(event.GetPosition()) != pressed)
+            if (hit.kind == HitKind::None || !(hitAt(event.GetPosition()) == hit))
                 return;
 
-            m_markdown_view->CallAfter([this, pressed]() {
-                GoToDynamicGroup(static_cast<size_t>(pressed));
+            m_markdown_view->CallAfter([this, hit]() {
+                switch (hit.kind) {
+                case HitKind::Row:
+                    GoToDynamicGroup(static_cast<size_t>(hit.index));
+                    break;
+                case HitKind::Section:
+                    ToggleSection(static_cast<size_t>(hit.index));
+                    break;
+                case HitKind::MoveUp:
+                    MoveSection(hit.index, -1);
+                    break;
+                case HitKind::MoveDown:
+                    MoveSection(hit.index, +1);
+                    break;
+                case HitKind::None:
+                    break;
+                }
             });
         });
 
     m_markdown_view->Bind(
         wxEVT_MOTION,
-        [this, legendView](wxMouseEvent &event) {
+        [hitAt, legendView](wxMouseEvent &event) {
             legendView->SetRowCursor(
-                m_current_legend_path == kDynamicGpxId &&
-                legendView->RowAt(event.GetPosition()) >= 0);
+                hitAt(event.GetPosition()).kind != HitKind::None);
             event.Skip();
         });
 
@@ -1874,6 +2038,11 @@ void legend_pi::RefreshDynamicLegendKeepingState()
 
         const DynamicGroup &old = *found->second;
 
+        // A change in symbolen.txt changes the text or place of the row.
+        if (old.label != group.label || old.section != group.section ||
+            old.order != group.order)
+            changed = true;
+
         // Same waypoints as before: keep the old order and counter, so
         // clicking on continues through the same sequence. Re-sorting
         // around the new centre would send the next click back to the
@@ -1916,6 +2085,198 @@ void legend_pi::ClearDynamicImages()
         wxMemoryFSHandler::RemoveFile(name);
 
     m_dynamic_image_names.clear();
+}
+
+wxString legend_pi::GetMeaningsFile() const
+{
+    return GetLegendDirectory() + wxFileName::GetPathSeparator() +
+           "symbolen.txt";
+}
+
+void legend_pi::LoadMeanings()
+{
+    const wxString path = GetMeaningsFile();
+
+    if (!wxFileName::FileExists(path)) {
+        wxFile file;
+        if (file.Create(path, false))
+            file.Write(wxString::FromUTF8(kMeaningsTemplate), wxConvUTF8);
+    }
+
+    // Read again only when the file changed.
+    const wxDateTime modified = wxFileName(path).GetModificationTime();
+    if (modified.IsValid() && m_meanings_modified.IsValid() &&
+        modified == m_meanings_modified)
+        return;
+
+    m_meanings_modified = modified;
+    m_meaning_sections.clear();
+    m_meanings.clear();
+    m_meanings_exact.clear();
+    m_meanings_patterns.clear();
+
+    wxTextFile file;
+    if (!file.Open(path, wxConvUTF8))
+        return;
+
+    int section = -1;
+
+    for (size_t i = 0; i < file.GetLineCount(); ++i) {
+        wxString line = file[i];
+        line.Trim(true).Trim(false);
+
+        if (line.IsEmpty() || line.StartsWith("#"))
+            continue;
+
+        if (line.StartsWith("[") && line.EndsWith("]")) {
+            wxString heading = line.Mid(1, line.length() - 2);
+            heading.Trim(true).Trim(false);
+            m_meaning_sections.push_back(heading);
+            section = static_cast<int>(m_meaning_sections.size()) - 1;
+            continue;
+        }
+
+        const int equals = line.Find('=');
+        if (equals == wxNOT_FOUND)
+            continue;
+
+        SymbolMeaning entry;
+        entry.name = line.Left(equals);
+        entry.meaning = line.Mid(equals + 1);
+        entry.name.Trim(true).Trim(false);
+        entry.meaning.Trim(true).Trim(false);
+        entry.section = section;
+        entry.order = static_cast<int>(m_meanings.size());
+
+        if (entry.name.IsEmpty())
+            continue;
+
+        const size_t index = m_meanings.size();
+        const bool pattern = entry.name.Find('*') != wxNOT_FOUND;
+        const wxString name = entry.name;
+        m_meanings.push_back(entry);
+
+        if (pattern)
+            m_meanings_patterns.push_back(index);
+        else if (m_meanings_exact.find(name) == m_meanings_exact.end())
+            m_meanings_exact[name] = index;
+    }
+
+    wxLogMessage(
+        "Legend: %zu symbol lines, %zu headings from %s",
+        m_meanings.size(),
+        m_meaning_sections.size(),
+        path);
+}
+
+void legend_pi::BuildCommonLines()
+{
+    struct State
+    {
+        wxString line;
+        int count = 0;
+        bool mixed = false;
+    };
+
+    std::map<wxString, State> states;
+
+    for (const CachedWaypoint &wp : m_waypoint_cache) {
+        State &state = states[wp.icon];
+
+        if (state.mixed)
+            continue;
+
+        if (wp.firstLine.IsEmpty() ||
+            (state.count > 0 && wp.firstLine != state.line)) {
+            state.mixed = true;
+            continue;
+        }
+
+        state.line = wp.firstLine;
+        ++state.count;
+    }
+
+    // A line shared by a single waypoint says something about that object,
+    // not about the symbol. Short lines such as a colour ("rood") are kept
+    // as a first indication; symbolen.txt can replace them.
+    m_common_lines.clear();
+    for (const auto &entry : states) {
+        const State &state = entry.second;
+
+        if (!state.mixed && state.count >= 2)
+            m_common_lines[entry.first] = state.line;
+    }
+}
+
+// Text, heading and position of a symbol. The text, best source first:
+// 1. symbolen.txt (exact name, then the first matching pattern);
+// 2. the first description line shared by all waypoints with this icon;
+// 3. OpenCPN's own description of the icon, when it differs from the name;
+// 4. the icon name itself (labelIsName is then set).
+// A line in symbolen.txt with an empty meaning only sets heading and
+// position; the text then comes from 2-4.
+void legend_pi::ResolveLabel(
+    const wxString &key,
+    const wxString &iconDescription,
+    DynamicGroup &group) const
+{
+    group.labelIsName = false;
+    group.section = -1;
+    group.order = 1 << 30;
+
+    const SymbolMeaning *entry = nullptr;
+    wxString meaning;
+
+    auto exact = m_meanings_exact.find(key);
+    if (exact != m_meanings_exact.end()) {
+        entry = &m_meanings[exact->second];
+        meaning = entry->meaning;
+    }
+    else {
+        for (size_t index : m_meanings_patterns) {
+            const SymbolMeaning &pattern = m_meanings[index];
+            const int star = pattern.name.Find('*');
+            const wxString prefix = pattern.name.Left(star);
+            const wxString suffix = pattern.name.Mid(star + 1);
+
+            if (key.length() < prefix.length() + suffix.length() ||
+                !key.StartsWith(prefix) || !key.EndsWith(suffix))
+                continue;
+
+            const wxString part = key.Mid(
+                prefix.length(),
+                key.length() - prefix.length() - suffix.length());
+
+            entry = &pattern;
+            meaning = pattern.meaning;
+            meaning.Replace("*", part);
+            break;
+        }
+    }
+
+    if (entry) {
+        group.section = entry->section;
+        group.order = entry->order;
+    }
+
+    if (!meaning.IsEmpty()) {
+        group.label = meaning;
+        return;
+    }
+
+    auto common = m_common_lines.find(key);
+    if (common != m_common_lines.end()) {
+        group.label = common->second;
+        return;
+    }
+
+    if (!iconDescription.IsEmpty() && iconDescription != key) {
+        group.label = iconDescription;
+        return;
+    }
+
+    group.labelIsName = true;
+    group.label = key;
 }
 
 bool legend_pi::StartWaypointLoading(bool reloadAll)
@@ -1993,6 +2354,7 @@ void legend_pi::OnLoadingTimer()
             entry.lon = wp->m_lon;
             entry.icon = wp->IconName;
             entry.description = wp->IconDescription;
+            entry.firstLine = FirstDescriptionLine(wp->m_MarkDescription);
             entry.visible = wp->IsVisible;
             entry.useScamin = wp->b_useScamin;
             entry.scamin = wp->scamin;
@@ -2020,6 +2382,8 @@ void legend_pi::FinishWaypointLoading()
     m_loading_cache.clear();
     m_loading_known.clear();
     m_loading_guids.Clear();
+
+    BuildCommonLines();
 
     wxLogMessage(
         "Legend: waypoint cache %zu waypoints, %d fetched in %lld ms",
@@ -2063,6 +2427,126 @@ void legend_pi::RenderLoadingPage()
     m_showing_loading_page = true;
 }
 
+wxString legend_pi::SectionName(int section) const
+{
+    if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
+        return m_meaning_sections[static_cast<size_t>(section)];
+
+    return "Overig";
+}
+
+void legend_pi::ToggleSection(size_t renderedIndex)
+{
+    if (renderedIndex >= m_rendered_headings.size())
+        return;
+
+    const wxString &name = m_rendered_headings[renderedIndex];
+
+    if (m_collapsed_sections.erase(name) == 0)
+        m_collapsed_sections.insert(name);
+
+    SaveConfig();
+    RenderDynamicLegend(true);
+}
+
+void legend_pi::SetAllSectionsCollapsed(bool collapsed)
+{
+    m_collapsed_sections.clear();
+
+    if (collapsed) {
+        for (const wxString &name : m_meaning_sections)
+            m_collapsed_sections.insert(name);
+        m_collapsed_sections.insert(SectionName(-1));
+    }
+
+    SaveConfig();
+    RenderDynamicLegend(true);
+}
+
+void legend_pi::SetReorderMode(bool on)
+{
+    m_reorder_mode = on;
+    RenderDynamicLegend(!on);
+}
+
+// Moves the block of a heading in symbolen.txt: the [Heading] line and
+// everything up to the next heading, comments included. Text before the
+// first heading stays in place.
+void legend_pi::MoveSection(int section, int delta)
+{
+    const int target = section + delta;
+    const int count = static_cast<int>(m_meaning_sections.size());
+
+    if (section < 0 || section >= count || target < 0 || target >= count)
+        return;
+
+    const wxString path = GetMeaningsFile();
+
+    wxTextFile file;
+    if (!file.Open(path, wxConvUTF8))
+        return;
+
+    auto isHeading = [](wxString line) {
+        line.Trim(true).Trim(false);
+        return line.StartsWith("[") && line.EndsWith("]");
+    };
+
+    std::vector<wxString> preamble;
+    std::vector<std::vector<wxString>> blocks;
+
+    for (size_t i = 0; i < file.GetLineCount(); ++i) {
+        const wxString &line = file[i];
+
+        if (isHeading(line))
+            blocks.emplace_back();
+
+        if (blocks.empty())
+            preamble.push_back(line);
+        else
+            blocks.back().push_back(line);
+    }
+
+    // The blocks must match the headings that were read; otherwise the
+    // file changed in the meantime and nothing is moved.
+    if (static_cast<int>(blocks.size()) != count) {
+        m_meanings_modified = wxDateTime();
+        RefreshDynamicLegendKeepingState();
+        RenderDynamicLegend(true);
+        return;
+    }
+
+    std::swap(blocks[static_cast<size_t>(section)],
+              blocks[static_cast<size_t>(target)]);
+
+    // One empty line between blocks, whatever order they end up in.
+    auto trimEnd = [](std::vector<wxString> &lines) {
+        while (!lines.empty() && wxString(lines.back()).Trim().IsEmpty())
+            lines.pop_back();
+    };
+
+    trimEnd(preamble);
+
+    file.Clear();
+    for (const wxString &line : preamble)
+        file.AddLine(line);
+
+    for (auto &block : blocks) {
+        trimEnd(block);
+        if (file.GetLineCount() > 0)
+            file.AddLine(wxEmptyString);
+        for (const wxString &line : block)
+            file.AddLine(line);
+    }
+
+    file.Write(wxTextFileType_None, wxConvUTF8);
+    file.Close();
+
+    // Read again even if the modification time did not visibly change.
+    m_meanings_modified = wxDateTime();
+    RefreshDynamicLegendKeepingState();
+    RenderDynamicLegend(true);
+}
+
 void legend_pi::CollectDynamicLegend()
 {
     m_dynamic_groups.clear();
@@ -2073,6 +2557,8 @@ void legend_pi::CollectDynamicLegend()
 
     if (!m_viewport_valid)
         return;
+
+    LoadMeanings();
 
     const PlugIn_ViewPort vp = m_viewport;
 
@@ -2110,8 +2596,7 @@ void legend_pi::CollectDynamicLegend()
 
         if (group.key.IsEmpty()) {
             group.key = key;
-            group.label =
-                wp.description.IsEmpty() ? key : wp.description;
+            ResolveLabel(key, wp.description, group);
         }
 
         group.positions.emplace_back(wp.lat, wp.lon);
@@ -2154,7 +2639,15 @@ void legend_pi::CollectDynamicLegend()
         m_dynamic_groups.begin(),
         m_dynamic_groups.end(),
         [](const DynamicGroup &a, const DynamicGroup &b) {
-            return a.label.CmpNoCase(b.label) < 0;
+            // Headings in file order, "Overig" (-1) last; within a heading
+            // the order of symbolen.txt, then the icon name.
+            const int sa = a.section < 0 ? 1 << 30 : a.section;
+            const int sb = b.section < 0 ? 1 << 30 : b.section;
+            if (sa != sb)
+                return sa < sb;
+            if (a.order != b.order)
+                return a.order < b.order;
+            return a.key.CmpNoCase(b.key) < 0;
         });
 }
 
@@ -2203,6 +2696,28 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     std::vector<wxColour> rowColours(m_dynamic_groups.size());
     int iconBox = 16;
 
+    // Headings only when symbolen.txt defines them; a collapsed heading
+    // hides its rows.
+    const bool showHeadings = !m_meaning_sections.empty();
+    std::vector<bool> collapsed(m_dynamic_groups.size(), false);
+    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        // In the order edit mode only the headings are shown.
+        collapsed[i] =
+            showHeadings &&
+            (m_reorder_mode ||
+             m_collapsed_sections.count(
+                 SectionName(m_dynamic_groups[i].section)) > 0);
+    }
+
+    // Stripes start again under every heading.
+    std::vector<size_t> stripeIndex(m_dynamic_groups.size());
+    for (size_t i = 0, n = 0; i < m_dynamic_groups.size(); ++i) {
+        if (i > 0 &&
+            m_dynamic_groups[i].section != m_dynamic_groups[i - 1].section)
+            n = 0;
+        stripeIndex[i] = n++;
+    }
+
     for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
         const DynamicGroup &group = m_dynamic_groups[i];
 
@@ -2210,10 +2725,15 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             !m_active_group_key.IsEmpty() && group.key == m_active_group_key;
 
         rowColours[i] =
-            isActive ? active : (i % 2 == 1 ? stripe : background);
+            isActive ? active
+                     : (stripeIndex[i] % 2 == 1 ? stripe : background);
 
         // Transparency is resolved against what ends up behind the icon:
-        // the tile in dark mode, otherwise the row itself.
+        // the tile in dark mode, otherwise the row itself. Icons of a
+        // collapsed group appear small next to the heading instead.
+        if (collapsed[i])
+            rowColours[i] = background;
+
         const wxColour iconBackground =
             palette.iconTiles ? palette.tile : rowColours[i];
 
@@ -2228,7 +2748,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 image = FlattenIcon(bitmap, iconBackground, group.key);
         }
 
-        if (image.IsOk()) {
+        if (image.IsOk() && !collapsed[i]) {
             iconBox = std::max(
                 iconBox,
                 std::min(kMaxIconBox,
@@ -2243,10 +2763,17 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     wxString html;
     html << "<html>" << LegendBodyTag(true);
 
-    // Title with the summary and Ververs on the line below it.
-    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"2\">"
-         << "<tr><td><font size=\"+1\"><b>Kaartlegenda</b></font></td></tr>"
-         << "<tr><td><font color=\"" << hex(muted) << "\">";
+    // Title with Ververs on the right, the summary below it and, with
+    // headings, the fold links on a line of their own. Nothing here is kept
+    // on one line by force, so a narrow window never scrolls sideways.
+    // The block sits on its own tint with a firmer line under it, so it
+    // stands apart from the list.
+    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\" "
+         << "bgcolor=\"" << hex(palette.header) << "\">"
+         << "<tr><td valign=\"bottom\"><font size=\"+1\"><b>Kaartlegenda"
+         << "</b></font></td><td align=\"right\" valign=\"bottom\">"
+         << "<a href=\"legend-refresh:\">Ververs</a></td></tr>"
+         << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">";
 
     if (!m_viewport_valid) {
         html << "De kaartpositie is nog niet bekend. Beweeg de kaart "
@@ -2257,22 +2784,206 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
              << " &middot; " << m_dynamic_total << " waypoints in beeld";
     }
 
-    html << "</font></td><td align=\"right\" nowrap>"
-         << "<a href=\"legend-refresh:\">Ververs</a></td></tr></table>";
+    html << "</font></td></tr>";
+
+    if (showHeadings && m_reorder_mode) {
+        html << "<tr><td colspan=\"2\"><a href=\"legend-reorder-done:\">"
+             << "<b>Klaar</b></a></td></tr>";
+    }
+    else if (showHeadings && m_viewport_valid) {
+        html << "<tr><td colspan=\"2\"><font size=\"-1\">";
+        if (!m_dynamic_groups.empty()) {
+            html << "<a href=\"legend-collapse-all:\">Alles inklappen</a>"
+                 << " &middot; "
+                 << "<a href=\"legend-expand-all:\">Alles uitklappen</a>"
+                 << " &middot; ";
+        }
+        html << "<a href=\"legend-reorder:\">Volgorde wijzigen</a>"
+             << "</font></td></tr>";
+    }
+
+    html << "</table>";
 
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
-         << "<tr><td bgcolor=\"" << hex(rule) << "\" height=\"1\"></td></tr>"
+         << "<tr><td bgcolor=\"" << hex(palette.headerRule)
+         << "\" height=\"2\"></td></tr>"
+         << "<tr><td height=\"6\"></td></tr>"
          << "</table>";
 
-    if (m_viewport_valid && m_dynamic_groups.empty()) {
+    if (showHeadings && m_reorder_mode) {
+        // Every heading of symbolen.txt, also those with nothing in view,
+        // with large buttons that also suit a finger on a tablet.
+        const int count = static_cast<int>(m_meaning_sections.size());
+        const size_t kStripIcons = 6;
+
+        html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\">";
+
+        for (int section = 0; section < count; ++section) {
+            const wxColour rowColour = section % 2 == 1 ? stripe : background;
+            size_t symbols = 0;
+            size_t waypoints = 0;
+            wxString strip;
+
+            for (size_t j = 0; j < m_dynamic_groups.size(); ++j) {
+                if (m_dynamic_groups[j].section != section)
+                    continue;
+
+                ++symbols;
+                waypoints += m_dynamic_groups[j].positions.size();
+
+                if (symbols > kStripIcons || !icons[j].IsOk())
+                    continue;
+
+                const wxImage small = NormalizeIcon(
+                    icons[j],
+                    rowColour,
+                    20,
+                    palette.iconTiles ? &palette.tile : nullptr,
+                    palette.iconTiles ? 2 : 0);
+
+                const wxString name = wxString::Format(
+                    "legend_dyn_%d_order_%zu.png", m_dynamic_generation, j);
+
+                wxMemoryFSHandler::AddFile(name, small, wxBITMAP_TYPE_PNG);
+                m_dynamic_image_names.push_back(name);
+                strip << "<img src=\"memory:" << name << "\"> ";
+            }
+
+            if (symbols > kStripIcons) {
+                strip << "<font color=\"" << hex(muted) << "\">+"
+                      << symbols - kStripIcons << "</font>";
+            }
+
+            auto button = [&](const wxString &prefix, const char *arrow,
+                              bool enabled) {
+                wxString cell;
+                cell << "<td width=\"44\" align=\"center\" valign=\"middle\"";
+                if (enabled)
+                    cell << " id=\"" << prefix << section << "\"";
+                cell << "><font size=\"+3\"";
+                if (!enabled)
+                    cell << " color=\"" << hex(rule) << "\"";
+                cell << ">" << arrow << "</font></td>";
+                return cell;
+            };
+
+            html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
+                 << "<td valign=\"middle\"><b>"
+                 << escape(m_meaning_sections[static_cast<size_t>(section)])
+                 << "</b><br><font size=\"-1\" color=\"" << hex(muted)
+                 << "\">";
+
+            if (symbols == 0)
+                html << "niets in beeld";
+            else
+                html << symbols << (symbols == 1 ? " symbool, " : " symbolen, ")
+                     << waypoints << " in beeld";
+
+            html << "</font></td><td align=\"right\" valign=\"middle\">"
+                 << strip << "</td>"
+                 << button(kLegendMoveUpIdPrefix, "&#9650;", section > 0)
+                 << button(kLegendMoveDownIdPrefix, "&#9660;",
+                           section < count - 1)
+                 << "</tr>";
+        }
+
+        html << "</table>"
+             << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
+             << "Tik of klik op &#9650; of &#9660; om een kopje te verplaatsen. "
+                "De volgorde wordt in symbolen.txt bewaard. 'Overig' staat "
+                "altijd onderaan.</font></p>";
+    }
+    else if (m_viewport_valid && m_dynamic_groups.empty()) {
         html << "<p><font color=\"" << hex(muted) << "\">"
              << "Geen zichtbare waypoints in dit kaartbeeld.</font></p>";
     }
     else if (m_viewport_valid) {
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
 
+        m_rendered_headings.clear();
+
         for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
             DynamicGroup &group = m_dynamic_groups[i];
+
+            if (showHeadings &&
+                (i == 0 || group.section != m_dynamic_groups[i - 1].section)) {
+                const wxString heading = SectionName(group.section);
+                const bool folded = collapsed[i];
+
+                // Symbols and waypoints of this group, and the icons shown
+                // next to a collapsed heading.
+                const size_t kStripIcons = 6;
+                size_t symbols = 0;
+                size_t waypoints = 0;
+                wxString strip;
+
+                for (size_t j = i; j < m_dynamic_groups.size() &&
+                                   m_dynamic_groups[j].section == group.section;
+                     ++j) {
+                    ++symbols;
+                    waypoints += m_dynamic_groups[j].positions.size();
+
+                    if (!folded || symbols > kStripIcons || !icons[j].IsOk())
+                        continue;
+
+                    const wxImage small = NormalizeIcon(
+                        icons[j],
+                        background,
+                        20,
+                        palette.iconTiles ? &palette.tile : nullptr,
+                        palette.iconTiles ? 2 : 0);
+
+                    const wxString name = wxString::Format(
+                        "legend_dyn_%d_strip_%zu.png",
+                        m_dynamic_generation,
+                        j);
+
+                    wxMemoryFSHandler::AddFile(name, small, wxBITMAP_TYPE_PNG);
+                    m_dynamic_image_names.push_back(name);
+                    strip << "<img src=\"memory:" << name << "\"> ";
+                }
+
+                if (folded && symbols > kStripIcons) {
+                    strip << "<font color=\"" << hex(muted) << "\">+"
+                          << symbols - kStripIcons << "</font>";
+                }
+
+                // Every cell of the heading carries its id, so a click
+                // anywhere on it folds the group in or out.
+                const wxString sectionId = wxString::Format(
+                    "%s%zu", kLegendSectionIdPrefix, m_rendered_headings.size());
+                m_rendered_headings.push_back(heading);
+
+                // Every group gets its own table; between them the heading
+                // with a thin line under it. Inside the row table the
+                // padding would turn the line into a thick bar.
+                html << "</table>"
+                     << "<table width=\"100%\" cellspacing=\"0\" "
+                        "cellpadding=\"0\">"
+                     << "<tr><td colspan=\"2\" height=\"" << (i == 0 ? 6 : 14)
+                     << "\"></td></tr>"
+                     << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
+                     << "<font size=\"+3\">"
+                     << (folded ? "&#9654;" : "&#9660;") << "</font>&nbsp;<b>"
+                     << escape(heading) << "</b> <font color=\"" << hex(muted)
+                     << "\">&middot; " << symbols
+                     << (symbols == 1 ? " symbool, " : " symbolen, ")
+                     << waypoints << " in beeld</font></td>"
+                     << "<td id=\"" << sectionId
+                     << "\" align=\"right\" valign=\"middle\">"
+                     << strip << "</td></tr>"
+                     << "<tr><td colspan=\"2\" height=\"4\"></td></tr>"
+                     << "<tr><td colspan=\"2\" bgcolor=\"" << hex(rule)
+                     << "\" height=\"1\"></td></tr></table>"
+                     << "<table width=\"100%\" cellspacing=\"0\" "
+                        "cellpadding=\"5\">";
+            }
+
+            if (collapsed[i]) {
+                group.imageName.Clear();
+                continue;
+            }
+
             group.imageName.Clear();
 
             const bool isActive =
@@ -2315,6 +3026,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             }
 
             wxString label = escape(group.label);
+            if (group.labelIsName) {
+                // No meaning known yet: the icon name, in grey, as it must
+                // be written in symbolen.txt.
+                label = "<font color=\"" + hex(muted) + "\">" + label +
+                        "</font>";
+            }
             if (isActive)
                 label = "<b>" + label + "</b>";
 
@@ -2341,7 +3058,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
                 "Klik op een rij om naar het dichtstbijzijnde symbool te gaan. "
                 "Nog een klik gaat naar het volgende. De lijst past zich "
-                "vanzelf aan als je de kaart verschuift of zoomt.</font></p>";
+                "vanzelf aan als je de kaart verschuift of zoomt.";
+        if (showHeadings)
+            html << " Klik op een kopje om de groep in of uit te klappen.";
+        html << "</font></p>";
     }
 
     html << "</body></html>";
