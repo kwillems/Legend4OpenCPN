@@ -26,17 +26,19 @@ namespace {
 // exists is used.
 const char *const kChartClasses[] = {"oesuChart", "oeuSENCChart"};
 
+// Cells queried for one view at most, the most detailed first.
+const size_t kMaxCellsPerView = 12;
+
 // Opened charts kept at the same time. Every open chart holds a decrypted
-// cell in memory, and opening one takes about a quarter of a second.
-const size_t kMaxOpenCharts = 6;
+// cell in memory, and opening one takes up to a quarter of a second. More
+// than one view's worth, so panning between views does not keep reopening
+// the same cells.
+const size_t kMaxOpenCharts = 16;
 
 // Cells more detailed than this factor times the view scale are skipped:
 // OpenCPN's quilt does not show them either, and their objects carry scale
 // limits that hide them anyway.
 const double kDetailFactor = 4.0;
-
-// Cells queried for one view at most, the most detailed first.
-const size_t kMaxCellsPerView = 12;
 
 // Layout of an attribute value inside OpenCPN (s52s57.h). The API only
 // declares the array type; the o-charts plugin fills it with this layout.

@@ -3020,9 +3020,15 @@ void legend_pi::CollectChartObjects(
         ++m_chart_object_total;
     }
 
-    wxLogMessage("Legend: chart objects: %s; %d listed, %d hidden, %ld ms",
-                 m_ocharts.LastDiagnostics(), m_chart_object_total,
-                 m_chart_objects_hidden, watch.Time());
+    // The list is rebuilt on every pause of the chart; log only what changed.
+    const wxString summary = wxString::Format(
+        "Legend: chart objects: %s; %d listed, %d hidden",
+        m_ocharts.LastDiagnostics(), m_chart_object_total,
+        m_chart_objects_hidden);
+    if (summary != m_chart_objects_logged) {
+        m_chart_objects_logged = summary;
+        wxLogMessage("%s, %ld ms", summary, watch.Time());
+    }
 }
 
 void legend_pi::CollectDynamicLegend()

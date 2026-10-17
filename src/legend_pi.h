@@ -268,6 +268,7 @@ private:
     bool m_show_chart_objects = true; // setting, kept in legend.ini
     int m_chart_object_total = 0;     // listed chart objects in view
     int m_chart_objects_hidden = 0;   // in view, but not shown at this scale
+    wxString m_chart_objects_logged;  // last log line, to log changes only
     bool m_prefetch_scheduled;
     bool m_showing_loading_page;
 
