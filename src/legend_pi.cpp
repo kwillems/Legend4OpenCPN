@@ -3112,10 +3112,22 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     else if (showHeadings && m_viewport_valid) {
         html << "<tr><td colspan=\"2\"><font size=\"-1\">";
         if (!m_dynamic_groups.empty()) {
-            html << "<a href=\"legend-collapse-all:\">Alles inklappen</a>"
-                 << " &middot; "
-                 << "<a href=\"legend-expand-all:\">Alles uitklappen</a>"
-                 << " &middot; ";
+            // One link that does what makes sense now: fold everything in
+            // while any group in view is open, otherwise fold out.
+            bool anyOpen = false;
+            for (const DynamicGroup &group : m_dynamic_groups) {
+                if (m_collapsed_sections.count(SectionName(group.section)) ==
+                    0) {
+                    anyOpen = true;
+                    break;
+                }
+            }
+
+            if (anyOpen)
+                html << "<a href=\"legend-collapse-all:\">Alles inklappen</a>";
+            else
+                html << "<a href=\"legend-expand-all:\">Alles uitklappen</a>";
+            html << " &middot; ";
         }
         html << "<a href=\"legend-reorder:\">Volgorde wijzigen</a>"
              << "</font></td></tr>";
