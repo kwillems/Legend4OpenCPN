@@ -346,7 +346,9 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
     return chart;
 }
 
-std::vector<ChartObject> OChartsSource::PointObjectsInView(const PlugIn_ViewPort &vp)
+std::vector<ChartObject> OChartsSource::PointObjectsInView(
+    const PlugIn_ViewPort &vp,
+    bool ignoreScaleLimits)
 {
     std::vector<ChartObject> objects;
     m_diagnostics.Clear();
@@ -393,6 +395,8 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(const PlugIn_ViewPort
         ++cellsRead;
 
         PlugIn_ViewPort query = vp;
+        if (ignoreScaleLimits)
+            query.chart_scale = 1.0f;
         ListOfPI_S57Obj *list = chart->GetObjRuleListAtLatLon(
             static_cast<float>(vp.clat), static_cast<float>(vp.clon), radius, &query);
         if (!list)

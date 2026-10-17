@@ -50,6 +50,12 @@ struct DynamicGroup
     // waypoint icon; the picture then comes from OpenCPN's symbol sheet.
     bool chartSymbol = false;
     wxString symbol;
+    wxString iconName; // waypoint icon to load; key may carry a suffix
+
+    // Members of this group are not drawn at the current scale (SCAMIN);
+    // visibleFrom is the chart scale at which the first one appears.
+    bool hiddenAtScale = false;
+    int visibleFrom = 0;
 };
 
 // One line of symbolen.txt: icon name (may hold one '*'), meaning (may be
@@ -272,6 +278,9 @@ private:
     bool m_ocharts_available = false;
     bool m_chart_sources_available = false; // any chart source has cells
     bool m_show_chart_objects = true; // setting, kept in legend.ini
+    bool m_show_hidden_at_scale = false; // setting: list scale-hidden symbols too
+    int m_dynamic_hidden = 0;            // waypoints in view hidden by scale
+    int m_chart_objects_scale_hidden = 0; // chart objects in view hidden by scale
     int m_chart_object_total = 0;     // listed chart objects in view
     int m_chart_objects_hidden = 0;   // in view, but not shown at this scale
     wxString m_chart_objects_logged;  // last log line, to log changes only

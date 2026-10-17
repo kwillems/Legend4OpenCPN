@@ -676,6 +676,15 @@ void MarkerColours(wxColour &outline, wxColour &highlight)
     }
 }
 
+// A chart scale as people write it: "1:12.000".
+wxString FormatScale(int scale)
+{
+    wxString digits = wxString::Format("%d", scale);
+    for (int at = static_cast<int>(digits.length()) - 3; at > 0; at -= 3)
+        digits.insert(static_cast<size_t>(at), ".");
+    return "1:" + digits;
+}
+
 // Colours of the legend view. Fixed values instead of the system colours:
 // on macOS the dynamic system colours turn into white when converted to
 // RGB in dark mode, which left white text on a white page.
@@ -1111,6 +1120,7 @@ void legend_pi::LoadConfig()
         m_window_height = 300;
 
     config.Read("ShowChartObjects", &m_show_chart_objects, true);
+    config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
 
     wxString collapsed;
     config.Read("CollapsedSections", &collapsed, "");
@@ -1147,6 +1157,7 @@ void legend_pi::SaveConfig() const
         collapsed.Add(name);
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
     config.Write("ShowChartObjects", m_show_chart_objects);
+    config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
 
     config.Flush();
 }
@@ -1860,6 +1871,16 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            if (href.StartsWith("legend-hidden-toggle:")) {
+                m_markdown_view->CallAfter([this]() {
+                    m_show_hidden_at_scale = !m_show_hidden_at_scale;
+                    SaveConfig();
+                    RefreshDynamicLegendKeepingState();
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
             if (href.StartsWith("legend-chart-toggle:")) {
                 m_markdown_view->CallAfter([this]() {
                     m_show_chart_objects = !m_show_chart_objects;
@@ -1995,10 +2016,14 @@ void legend_pi::CreateLegendWindow()
                 // The symbol name is what symbolen.txt needs for a chart
                 // symbol; the list itself shows only the description.
                 if (hit.index >= 0 &&
-                    static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
-                    m_dynamic_groups[hit.index].chartSymbol) {
-                    tip = "Kaartsymbool " + m_dynamic_groups[hit.index].symbol +
-                          ". " + tip;
+                    static_cast<size_t>(hit.index) < m_dynamic_groups.size()) {
+                    const DynamicGroup &group = m_dynamic_groups[hit.index];
+                    if (group.hiddenAtScale) {
+                        tip = "Op deze schaal niet getekend; een klik zoomt in "
+                              "tot het dichtstbijzijnde exemplaar zichtbaar is";
+                    }
+                    if (group.chartSymbol)
+                        tip = "Kaartsymbool " + group.symbol + ". " + tip;
                 }
                 break;
             case HitKind::Section:
@@ -2980,6 +3005,7 @@ void legend_pi::CollectChartObjects(
 {
     m_chart_object_total = 0;
     m_chart_objects_hidden = 0;
+    m_chart_objects_scale_hidden = 0;
 
     EnsureChartSymbols();
     if (!m_chart_symbols.IsLoaded())
@@ -2993,7 +3019,7 @@ void legend_pi::CollectChartObjects(
     std::vector<ChartObject> objects;
     m_ocharts_available = m_ocharts.Available();
     if (m_ocharts_available)
-        objects = m_ocharts.PointObjectsInView(vp);
+        objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale);
 
     std::set<wxString> seen;
     for (const ChartObject &object : objects) {
@@ -3045,18 +3071,48 @@ void legend_pi::CollectChartObjects(
             shownCache[shownKey] = shown;
         }
 
+        // Not drawn: by its scale limit, or because the class or category
+        // is switched off. Only the first kind can get a row of its own.
+        bool hiddenByScale = false;
         if (!shown) {
-            ++m_chart_objects_hidden;
-            continue;
+            if (!m_show_hidden_at_scale || object.scamin <= 0) {
+                ++m_chart_objects_hidden;
+                continue;
+            }
+
+            const wxString noScaleKey = object.className + "|0";
+            auto cachedNoScale = shownCache.find(noScaleKey);
+            bool shownWithoutScale;
+            if (cachedNoScale != shownCache.end()) {
+                shownWithoutScale = cachedNoScale->second;
+            }
+            else {
+                bool answered = false;
+                shownWithoutScale = m_display_settings.ChartShows(
+                    object.className, 0, vp, &answered);
+                if (!answered) {
+                    shownWithoutScale = m_display_settings.Shows(
+                        object.className, resolved.displayCat);
+                }
+                shownCache[noScaleKey] = shownWithoutScale;
+            }
+
+            if (!shownWithoutScale) {
+                ++m_chart_objects_hidden;
+                continue;
+            }
+            hiddenByScale = true;
         }
 
-        const wxString key = "s52:" + resolved.symbol;
+        const wxString key =
+            "s52:" + resolved.symbol + (hiddenByScale ? "|hidden" : "");
         DynamicGroup &group = (*groups)[key];
 
         if (group.key.IsEmpty()) {
             group.key = key;
             group.chartSymbol = true;
             group.symbol = resolved.symbol;
+            group.hiddenAtScale = hiddenByScale;
 
             // The S-52 description of the symbol; when there is none, the
             // object class with its colour and shape, e.g. "Topmark · red,
@@ -3098,7 +3154,14 @@ void legend_pi::CollectChartObjects(
         }
 
         group.positions.emplace_back(object.lat, object.lon);
-        ++m_chart_object_total;
+
+        if (hiddenByScale) {
+            group.visibleFrom = std::max(group.visibleFrom, object.scamin);
+            ++m_chart_objects_scale_hidden;
+        }
+        else {
+            ++m_chart_object_total;
+        }
     }
 
     // The list is rebuilt on every pause of the chart; log only what changed.
@@ -3117,6 +3180,7 @@ void legend_pi::CollectDynamicLegend()
 {
     m_dynamic_groups.clear();
     m_dynamic_total = 0;
+    m_dynamic_hidden = 0;
 
     m_collected_viewport = m_viewport;
     m_collected_viewport_valid = m_viewport_valid;
@@ -3144,8 +3208,10 @@ void legend_pi::CollectDynamicLegend()
         if (!wp.visible)
             continue;
 
-        // Waypoints with a scale limit disappear when zoomed out too far.
-        if (wp.useScamin && vp.chart_scale > wp.scamin)
+        // Waypoints with a scale limit disappear when zoomed out too far;
+        // with the setting on they get a row of their own.
+        const bool hiddenByScale = wp.useScamin && vp.chart_scale > wp.scamin;
+        if (hiddenByScale && !m_show_hidden_at_scale)
             continue;
 
         if (wp.lat < vp.lat_min || wp.lat > vp.lat_max)
@@ -3154,19 +3220,30 @@ void legend_pi::CollectDynamicLegend()
         if (!lonInView(wp.lon))
             continue;
 
-        wxString key = wp.icon;
-        if (key.IsEmpty())
-            key = "unknown";
+        wxString icon = wp.icon;
+        if (icon.IsEmpty())
+            icon = "unknown";
 
+        const wxString key = hiddenByScale ? icon + "|hidden" : icon;
         DynamicGroup &group = groups[key];
 
         if (group.key.IsEmpty()) {
             group.key = key;
-            ResolveLabel(key, wp.description, group);
+            group.iconName = icon;
+            group.hiddenAtScale = hiddenByScale;
+            ResolveLabel(icon, wp.description, group);
         }
 
         group.positions.emplace_back(wp.lat, wp.lon);
-        ++m_dynamic_total;
+
+        if (hiddenByScale) {
+            group.visibleFrom =
+                std::max(group.visibleFrom, static_cast<int>(wp.scamin));
+            ++m_dynamic_hidden;
+        }
+        else {
+            ++m_dynamic_total;
+        }
     }
 
     if (m_show_chart_objects)
@@ -3343,7 +3420,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             // First choice: the icon's own PNG file. Fall back to asking
             // OpenCPN for the bitmap. In dusk and night the icon is dimmed,
             // the background it sits on is not.
-            const wxString key = group.key;
+            const wxString key =
+                group.iconName.IsEmpty() ? group.key : group.iconName;
             auto flatten = [&key](const wxColour &colour) {
                 wxImage drawn = LoadIconFromFile(key, colour);
 
@@ -3404,6 +3482,11 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         if (m_show_chart_objects && m_chart_object_total > 0)
             html << " &middot; " << m_chart_object_total << " kaartobjecten";
         html << " in beeld";
+        if (m_show_hidden_at_scale &&
+            m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
+            html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
+                 << " op deze schaal verborgen";
+        }
     }
 
     html << "</font></td></tr>";
@@ -3442,6 +3525,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     ? "<a href=\"legend-chart-toggle:\">Kaartsymbolen uit</a>"
                     : "<a href=\"legend-chart-toggle:\">Kaartsymbolen aan</a>");
         }
+
+        // Symbols hidden at this scale: listed in grey, or left out.
+        links.push_back(
+            m_show_hidden_at_scale
+                ? "<a href=\"legend-hidden-toggle:\">Alleen zichtbare tonen</a>"
+                : "<a href=\"legend-hidden-toggle:\">Ook verborgen tonen</a>");
 
         if (!links.empty()) {
             html << "<tr><td colspan=\"2\"><font size=\"-1\">";
@@ -3681,6 +3770,16 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 label = "<font color=\"" + hex(muted) + "\">" + label +
                         "</font>";
             }
+            if (group.hiddenAtScale) {
+                // Not drawn on the chart at this scale; a click zooms in.
+                label = "<font color=\"" + hex(muted) + "\">" + label +
+                        "</font>";
+                if (group.visibleFrom > 0) {
+                    label << " <font size=\"-1\" color=\"" << hex(muted)
+                          << "\">zichtbaar vanaf "
+                          << FormatScale(group.visibleFrom) << "</font>";
+                }
+            }
             if (isActive)
                 label = "<b>" + label + "</b>";
 
@@ -3717,6 +3816,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             html << " Klik op een kopje om de groep in of uit te klappen.";
         if (m_show_chart_objects && m_chart_object_total > 0)
             html << " Kaartsymbolen komen uit de kaarten in beeld.";
+        if (m_show_hidden_at_scale)
+            html << " Grijze rijen zijn op deze schaal verborgen; een klik "
+                    "zoomt in tot ze zichtbaar zijn.";
         html << "</font></p>";
     }
 
@@ -3772,16 +3874,25 @@ void legend_pi::GoToDynamicGroup(size_t index)
     const std::pair<double, double> &position =
         group.positions[static_cast<size_t>(group.current)];
 
-    // Keep the current zoom level.
+    // Keep the current zoom level, unless the object is hidden at this
+    // scale: then zoom in to just past the scale at which it appears.
     double scale = m_viewport_valid ? m_viewport.view_scale_ppm : 0.0;
     if (scale <= 0.0)
         scale = 0.1;
+
+    const bool zoomIn =
+        group.hiddenAtScale && group.visibleFrom > 0 && m_viewport_valid &&
+        m_viewport.chart_scale > 0.0f;
+    if (zoomIn) {
+        const double target = group.visibleFrom * 0.8;
+        scale = m_viewport.view_scale_ppm * m_viewport.chart_scale / target;
+    }
 
     // Only move the chart when the object is not comfortably in view.
     // Otherwise the chart stays where it is and the marker shows the spot.
     bool comfortablyVisible = false;
 
-    if (m_viewport_valid) {
+    if (m_viewport_valid && !zoomIn) {
         wxPoint pixel;
         GetCanvasPixLL(&m_viewport, &pixel, position.first, position.second);
 

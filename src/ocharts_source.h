@@ -39,7 +39,10 @@ public:
     // The point objects of the cells that cover the viewport, within its
     // bounds, with duplicates between overlapping cells removed. Cells far
     // more detailed than the view are left out, like OpenCPN's quilt does.
-    std::vector<ChartObject> PointObjectsInView(const PlugIn_ViewPort &vp);
+    // With ignoreScaleLimits the cells are asked as if the view were at a
+    // very large scale, so objects hidden by their scale limit come too.
+    std::vector<ChartObject> PointObjectsInView(
+        const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false);
 
     // Forget the cell inventory; the next query scans the chart folders
     // again (new or removed cells).
