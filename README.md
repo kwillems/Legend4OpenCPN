@@ -28,7 +28,10 @@ Op dit moment ondersteunt Legend4OpenCPN:
 - onthouden van het laatst getoonde item;
 - onthouden van vensterpositie en -grootte;
 - automatisch passend schalen van grote PNG-afbeeldingen;
-- automatisch aanmaken van de benodigde gebruikersmappen.
+- automatisch aanmaken van de benodigde gebruikersmappen;
+- een dynamische legenda van de waypoint-symbolen die in beeld zijn, met
+  betekenissen, kopjes en een markering op de kaart (zie hieronder);
+- een lichte en een donkere weergave die macOS volgt.
 
 Bij nul of één item wordt overbodige navigatie niet getoond of uitgeschakeld. Bij meerdere items verschijnt compact een keuzelijst met daarnaast de positie, bijvoorbeeld `2 van 5`.
 
@@ -41,22 +44,100 @@ de waypoint-symbolen (waaronder die uit GPX-bestanden en GPX-lagen) die op dat
 moment in het kaartbeeld zichtbaar zijn, gegroepeerd per symbool met het
 aantal (`×7`). Elk symbool wordt getoond met zijn eigen icoon.
 
-- Klik op een symbool om het dichtstbijzijnde exemplaar aan te wijzen. Nog een
-  klik gaat naar het volgende (`2/7`).
+### Bediening
+
+- Klik of tik ergens op een rij om het dichtstbijzijnde exemplaar aan te
+  wijzen. Nog een klik gaat naar het volgende (`2/7`). De rij die het laatst
+  is gekozen, licht op.
 - Het gekozen exemplaar wordt ongeveer zes seconden gemarkeerd met een ring
-  en een kruisje op de kaart. Staat het buiten beeld, dan verschuift de kaart
-  naar dat punt; de zoomstand blijft gelijk.
-- Na het verschuiven van de kaart: klik op **Ververs**.
+  en een kruisje op de kaart. Staat het niet ruim in beeld, dan verschuift de
+  kaart naar dat punt; de zoomstand blijft gelijk.
+- De lijst past zich vanzelf aan zodra de kaart ongeveer 0,4 seconde
+  stilstaat na verschuiven, zoomen, draaien of het wijzigen van de
+  venstergrootte. Blijven dezelfde waypoints in beeld, dan blijven volgorde
+  en teller staan.
+- Het verbergen of tonen van een GPX-laag wordt vanzelf opgemerkt; de lijst
+  past zich binnen enkele seconden aan.
+- **Ververs** laadt alle waypoints opnieuw. Gebruik dit na het verplaatsen van
+  een waypoint of het wijzigen van een icoon zonder dat de kaart beweegt.
 
-Beperkingen:
+### Kopjes, in- en uitklappen en volgorde
 
-- Kaartsymbolen van ENC- en o-charts-kaarten worden niet getoond, omdat de
-  OpenCPN-plugin-API die niet beschikbaar maakt.
+Met kopjes in `symbolen.txt` (zie hieronder) wordt de lijst in groepen
+verdeeld.
+
+- Klik op een kopje (▼/▶) om de groep in of uit te klappen. Een ingeklapte
+  groep toont het aantal symbolen en waypoints in beeld en een strook met de
+  eerste iconen.
+- **Alles inklappen** en **Alles uitklappen** staan bovenaan de lijst.
+- Welke kopjes ingeklapt zijn, wordt per kopjesnaam onthouden, ook na het
+  herstarten van OpenCPN.
+- **Volgorde wijzigen** toont alleen de kopjes, met grote knoppen ▲ en ▼ die
+  ook op een aanraakscherm goed werken. Een verplaatsing wordt direct in
+  `symbolen.txt` bewaard. **Klaar** brengt je terug naar de lijst.
+- Symbolen die onder geen kopje vallen, staan onderaan onder **Overig**.
+
+### Weergave
+
+- De iconen volgen de schaalfactor voor kaartobjecten in de instellingen van
+  OpenCPN, zodat ze even groot zijn als op de kaart. Tekst en knoppen behouden
+  hun grootte.
+- Alle rijen zijn even hoog; het grootste icoon bepaalt de hoogte.
+- In de donkere weergave staan de iconen op een licht tegeltje, zodat
+  kaartsymbolen goed te onderscheiden blijven.
+- Het eerste laden van alle waypoints gebeurt op de achtergrond kort na het
+  starten van OpenCPN. Wordt de legenda eerder geopend, dan toont het venster
+  de voortgang.
+
+### Beperkingen
+
+- Kaartsymbolen van ENC- en o-charts-kaarten worden (nog) niet getoond. De
+  plugin-API geeft die objecten niet direct door; mogelijke routes worden
+  onderzocht.
 - De markering is getest met **OpenGL ingeschakeld**. Zonder OpenGL wordt de
   markering niet betrouwbaar getoond.
 - Iconen worden gelezen uit de PNG-bestanden van OpenCPN (`UserIcons` en de
   ingebouwde markicons). Ontbreekt het bestand, dan vraagt de plugin het icoon
   aan OpenCPN; dat kan op macOS een leeg icoon geven.
+
+## Betekenis en indeling: `symbolen.txt`
+
+De tekst bij een symbool wordt gekozen uit, in deze volgorde:
+
+1. `symbolen.txt` in de Legend-map;
+2. de eerste regel van de beschrijving, als alle waypoints met hetzelfde
+   icoon (minstens twee) die regel delen;
+3. de beschrijving die OpenCPN zelf van het icoon kent, als die anders is dan
+   de icoonnaam;
+4. de icoonnaam, in grijs. Zo zie je welke symbolen nog geen betekenis hebben.
+
+De plugin maakt `symbolen.txt` bij het eerste gebruik aan, met uitleg in
+commentaar. Een voorbeeld:
+
+```text
+[Marifoon]
+vhf_b11b_*    = Meldplicht marifoon, kanaal *
+vhf_*         =
+
+[Bruggen en sluizen]
+Brug_dicht    =
+Sluis         = Sluis
+
+[Betonning]
+022           = Groene spitse ton
+```
+
+- Per regel: `icoonnaam = betekenis`. De icoonnaam is de bestandsnaam van het
+  icoon zonder `.png`.
+- Een `*` in de icoonnaam staat voor een willekeurig stuk tekst; een `*` in de
+  betekenis wordt vervangen door dat stuk. Exacte namen gaan voor, daarna telt
+  het eerste passende patroon.
+- `[Kopje]` begint een groep. Kopjes en regels verschijnen in de volgorde van
+  het bestand.
+- Een lege betekenis (`vhf_* =`) deelt een icoon alleen in; de tekst komt dan
+  uit stap 2 tot en met 4.
+- Regels die met `#` beginnen worden overgeslagen.
+- Wijzigingen zijn zichtbaar na **Ververs** of zodra de kaart verschuift.
 
 ## Gebruikersbestanden
 
@@ -73,6 +154,7 @@ Bijvoorbeeld:
 ├── VHF-Nederland.png
 ├── Route-IJsselmeer.md
 ├── Checklist.md
+├── symbolen.txt
 └── images/
     ├── brug.png
     └── sluis.png
@@ -82,13 +164,15 @@ De plugin maakt de hoofdmap automatisch aan wanneer dat nodig is.
 
 PNG-bestanden in de hoofdmap worden als afzonderlijke legenda-items getoond. Afbeeldingen die alleen in Markdown-documenten worden gebruikt, kunnen daarom het best in een submap zoals `images/` worden geplaatst.
 
+`symbolen.txt` bevat de betekenissen en kopjes van de dynamische legenda; het verschijnt niet als legenda-item.
+
 De interne configuratie van de plugin wordt apart opgeslagen onder:
 
 ```text
 ~/Library/Application Support/OpenCPN/Legend/
 ```
 
-Daar staat onder andere `legend.ini`. Daarin worden bijvoorbeeld het laatst gekozen item en de vensterpositie en -grootte bewaard.
+Daar staat onder andere `legend.ini`. Daarin worden het laatst gekozen item, de vensterpositie en -grootte en de ingeklapte kopjes van de dynamische legenda bewaard.
 
 De locatie van de gebruikersmap is op dit moment nog vast. Een instelbare locatie is voorzien voor een latere versie.
 
@@ -217,7 +301,9 @@ De huidige ontwikkelomgeving is:
 - CMake;
 - Apple Clang.
 
-Voor de huidige build wordt expliciet wxWidgets 3.2 gebruikt:
+De plugin moet gebouwd worden tegen dezelfde wxWidgets-versie als OpenCPN
+(3.2.9). Die staat hier in `/opt/wxwidgets-3.2.9`; geef de bijbehorende
+`wx-config` expliciet op:
 
 ```bash
 cd ~/Development/Legend4OpenCPN
@@ -226,10 +312,33 @@ rm -rf build
 mkdir build
 cd build
 
-export WX_CONFIG=/opt/homebrew/bin/wx-config-3.2
-
-cmake ..
+cmake -DwxWidgets_CONFIG_EXECUTABLE=/opt/wxwidgets-3.2.9/bin/wx-config ..
 cmake --build . --target tarball -j8
+```
+
+Na de eerste configuratie is `cmake ..` genoeg; de keuze voor `wx-config`
+blijft bewaard in `build/CMakeCache.txt`.
+
+CMake meldt bij de eerste configuratie dat `wxWidgets_CONFIG_EXECUTABLE` niet
+gebruikt is. Die melding klopt niet: de variabele wordt pas gelezen tijdens
+het bouwen van het pakket. Zonder deze optie mislukt de build met
+`Could NOT find wxWidgets`, omdat `wx-config` niet in het zoekpad staat.
+
+### Versienummer en pakketnaam
+
+De naam van het pakket komt uit de git-tag op de huidige commit:
+
+- met een tag, bijvoorbeeld `v0.2.0-alpha14`, heet het pakket
+  `Legend-v0.2.0-alpha14_darwin-wx32-10.13.6-arm64.tar.gz`;
+- zonder tag krijgt het pakket de versie uit `Plugin.cmake` met een datum en
+  commit-id, bijvoorbeeld `Legend-0.2.0+2610161810.b60bf8e_…`.
+
+Voer na het zetten van een tag opnieuw `cmake ..` uit, zodat de nieuwe naam
+wordt opgepikt:
+
+```bash
+git tag v0.2.0-alpha15
+cd build && cmake .. && cmake --build . --target tarball -j8
 ```
 
 Gebruik voor een installeerbaar OpenCPN-pakket expliciet de `tarball`-target. Alleen de normale build van `liblegend_pi.dylib` is niet voldoende om een actuele importeerbare `.tar.gz` te garanderen.
@@ -246,7 +355,13 @@ De gegenereerde `.tar.gz` kan in OpenCPN worden geïmporteerd via:
 Opties → Plugins → Import Plugin
 ```
 
-Voor testen van een nieuwe build is het verstandig de bestaande Legend-plugin eerst uit te schakelen, het nieuwe pakket te importeren en de plugin daarna weer in te schakelen.
+Een nieuwe build kan direct over de bestaande versie worden geïmporteerd. Uitschakelen vooraf mag ook; dat gaat sinds `v0.2.0-alpha11` zonder crash.
+
+Diagnosemeldingen van de plugin staan in het logboek van OpenCPN en beginnen met `Legend:`:
+
+```bash
+grep "Legend:" ~/Library/Logs/opencpn.log | tail -20
+```
 
 Na installatie verschijnt de Legend-knop in de OpenCPN-toolbar.
 
@@ -282,6 +397,15 @@ Voor volgende versies zijn onder andere interessant:
 - verder verfijnen van de Markdown-weergave;
 - toetsenbordbediening eventueel verder uitbreiden, bijvoorbeeld met `Page Up`, `Page Down`, `Home` en `End`;
 - betere integratie met OpenCPN-kaartlagen.
+
+Voor de dynamische legenda in het bijzonder:
+
+- de kleurenschema's dag, schemer en nacht van OpenCPN volgen;
+- betekenissen bewerken vanuit de legenda zelf;
+- gegevens van het gekozen object tonen, zoals lichtkarakter, doorvaarthoogte en marifoonkanaal;
+- instelbaar ook symbolen tonen die op de huidige schaal verborgen zijn;
+- symbolen uit ENC-kaarten (S-57) en o-charts;
+- een Engelse vertaling van het venster.
 
 Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
 
