@@ -1038,7 +1038,7 @@ void legend_pi::EnsureDirectories() const
 wxString legend_pi::MakeDisplayTitle(const wxString &path) const
 {
     if (path == kDynamicGpxId)
-        return wxString::FromUTF8("Kaartlegenda (waypoints in beeld)");
+        return wxString::FromUTF8("Kaartlegenda (in beeld)");
 
     wxFileName filename(path);
     wxString ext = filename.GetExt().Lower();
