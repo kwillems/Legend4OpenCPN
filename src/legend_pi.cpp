@@ -3184,7 +3184,9 @@ void legend_pi::CollectChartObjects(
         }
 
         const wxString key =
-            "s52:" + resolved.symbol + (hiddenByScale ? "|hidden" : "");
+            hiddenByScale
+                ? wxString::Format("s52:%s|hidden|%09d", resolved.symbol, object.scamin)
+                : "s52:" + resolved.symbol;
         DynamicGroup &group = (*groups)[key];
 
         if (group.key.IsEmpty()) {
@@ -3192,6 +3194,7 @@ void legend_pi::CollectChartObjects(
             group.chartSymbol = true;
             group.symbol = resolved.symbol;
             group.hiddenAtScale = hiddenByScale;
+            group.visibleFrom = hiddenByScale ? object.scamin : 0;
 
             // The S-52 description of the symbol; when there is none, the
             // object class with its colour and shape, e.g. "Topmark · red,
@@ -3234,13 +3237,10 @@ void legend_pi::CollectChartObjects(
 
         group.positions.emplace_back(object.lat, object.lon);
 
-        if (hiddenByScale) {
-            group.visibleFrom = std::max(group.visibleFrom, object.scamin);
+        if (hiddenByScale)
             ++m_chart_objects_scale_hidden;
-        }
-        else {
+        else
             ++m_chart_object_total;
-        }
     }
 
     // The list is rebuilt on every pause of the chart; log only what changed.
@@ -3305,26 +3305,27 @@ void legend_pi::CollectDynamicLegend()
         if (icon.IsEmpty())
             icon = "unknown";
 
-        const wxString key = hiddenByScale ? icon + "|hidden" : icon;
+        // Hidden ones get a row per scale limit, so each row states one
+        // scale and a click can zoom to exactly that.
+        const int limit = hiddenByScale ? static_cast<int>(wp.scamin) : 0;
+        const wxString key =
+            hiddenByScale ? wxString::Format("%s|hidden|%09d", icon, limit) : icon;
         DynamicGroup &group = groups[key];
 
         if (group.key.IsEmpty()) {
             group.key = key;
             group.iconName = icon;
             group.hiddenAtScale = hiddenByScale;
+            group.visibleFrom = limit;
             ResolveLabel(icon, wp.description, group);
         }
 
         group.positions.emplace_back(wp.lat, wp.lon);
 
-        if (hiddenByScale) {
-            group.visibleFrom =
-                std::max(group.visibleFrom, static_cast<int>(wp.scamin));
+        if (hiddenByScale)
             ++m_dynamic_hidden;
-        }
-        else {
+        else
             ++m_dynamic_total;
-        }
     }
 
     if (m_show_chart_objects)
@@ -3979,6 +3980,18 @@ void legend_pi::GoToDynamicGroup(size_t index)
     if (zoomIn) {
         const double target = group.visibleFrom * 0.8;
         scale = m_viewport.view_scale_ppm * m_viewport.chart_scale / target;
+
+        // OpenCPN knows a chart scale and a "true" scale corrected for the
+        // latitude; which one its status bar and its scale limits use is
+        // checked against this line.
+        const double kPi = 3.14159265358979323846;
+        const double cosLat = std::cos(m_viewport.clat * kPi / 180.0);
+        wxLogMessage(
+            "Legend: zoom for %s: chart scale 1:%.0f (x cos lat = 1:%.0f, "
+            "/ cos lat = 1:%.0f) -> target 1:%.0f for limit 1:%d, lat %.3f",
+            group.key, static_cast<double>(m_viewport.chart_scale),
+            m_viewport.chart_scale * cosLat, m_viewport.chart_scale / cosLat,
+            target, group.visibleFrom, m_viewport.clat);
     }
 
     // Only move the chart when the object is not comfortably in view.
