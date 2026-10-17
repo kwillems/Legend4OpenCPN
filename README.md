@@ -67,6 +67,13 @@ per symbool met het aantal (`×7`):
   exemplaren van dat symbool in beeld tegelijk aan.
 - Boven elk klikbaar onderdeel verschijnt een tooltip die zegt wat een klik
   doet.
+- **Ook verborgen tonen** (in het kopblok) voegt grijze rijen toe voor
+  symbolen die de kaart op deze schaal niet tekent vanwege hun schaalgrens,
+  met een gesloten oogje en de schaal waarop ze verschijnen (`1:200k`), per
+  schaalgrens een rij. Een klik op zo'n rij zoomt in tot net voorbij die
+  schaal en markeert het dichtstbijzijnde exemplaar; ◎ zoomt in rond alle
+  exemplaren en markeert ze. Wat je zelf hebt uitgezet bij *Gebruikers
+  standaard* blijft weg. De schaal is die van de statusbalk van OpenCPN.
 - **Ververs** laadt alle waypoints opnieuw en inventariseert de kaartcellen
   opnieuw. Gebruik dit na het verplaatsen van een waypoint of het wijzigen
   van een icoon zonder dat de kaart beweegt.
@@ -469,7 +476,6 @@ Voor de dynamische legenda in het bijzonder:
 
 - betekenissen bewerken vanuit de legenda zelf;
 - gegevens van het gekozen object tonen, zoals lichtkarakter, doorvaarthoogte en marifoonkanaal;
-- instelbaar ook symbolen tonen die op de huidige schaal verborgen zijn;
 - vanaf een klik op de kaart naar de rij in de legenda;
 - een Engelse vertaling van het venster.
 
