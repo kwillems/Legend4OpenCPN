@@ -51,6 +51,15 @@ extern "C" {
 #include "md4c-html.h"
 }
 
+#ifdef __WXOSX__
+#include <objc/message.h>
+#include <objc/runtime.h>
+
+// AppKit constant (macOS 10.14 and later); weakly linked so the plugin
+// still loads where it is missing.
+extern "C" void *const NSAppearanceNameDarkAqua __attribute__((weak_import));
+#endif
+
 namespace {
 
 // Pseudo-path of the dynamic legend entry in the list of legend items.
@@ -610,6 +619,38 @@ wxImage FlattenDimmed(
     }
 
     return result;
+}
+
+// Native controls on macOS (buttons, choice) ignore colours set by the
+// program; they follow the appearance of their window. In dusk and night
+// the legend window gets the dark appearance; by day it follows the system
+// again (nil appearance).
+void SetWindowDarkAppearance(wxTopLevelWindow *window, bool dark)
+{
+#ifdef __WXOSX__
+    if (!window)
+        return;
+
+    void *nsWindow = window->GetWXWindow();
+    if (!nsWindow)
+        return;
+
+    id appearance = nil;
+    if (dark && &NSAppearanceNameDarkAqua != nullptr) {
+        appearance = reinterpret_cast<id (*)(id, SEL, id)>(objc_msgSend)(
+            reinterpret_cast<id>(objc_getClass("NSAppearance")),
+            sel_registerName("appearanceNamed:"),
+            reinterpret_cast<id>(NSAppearanceNameDarkAqua));
+    }
+
+    reinterpret_cast<void (*)(id, SEL, id)>(objc_msgSend)(
+        reinterpret_cast<id>(nsWindow),
+        sel_registerName("setAppearance:"),
+        appearance);
+#else
+    (void)window;
+    (void)dark;
+#endif
 }
 
 // Marker on the chart: bright by day, subdued in dusk and night so it does
@@ -2039,6 +2080,35 @@ void legend_pi::ApplyViewColours()
         return;
 
     const LegendPalette palette = GetLegendPalette();
+    const bool dim = IsDimScheme();
+
+    // The window around the list: panels and labels take the colours of
+    // the list in dusk and night and get their normal colours back by day.
+    // Buttons and the choice follow the window appearance.
+    if (m_legend_window) {
+        SetWindowDarkAppearance(m_legend_window, dim);
+
+        std::function<void(wxWindow *)> paint = [&](wxWindow *window) {
+            if (window == m_markdown_view || window == m_image_page)
+                return;
+
+            const bool plain = window == m_legend_window ||
+                               wxDynamicCast(window, wxPanel) ||
+                               wxDynamicCast(window, wxSimplebook) ||
+                               wxDynamicCast(window, wxStaticText);
+            if (plain) {
+                window->SetBackgroundColour(
+                    dim ? palette.background : wxNullColour);
+                window->SetForegroundColour(dim ? palette.text : wxNullColour);
+            }
+
+            for (wxWindow *child : window->GetChildren())
+                paint(child);
+        };
+
+        paint(m_legend_window);
+        m_legend_window->Refresh();
+    }
     m_markdown_view->SetBackgroundColour(palette.background);
     m_markdown_view->SetForegroundColour(palette.text);
     m_markdown_view->Refresh();
