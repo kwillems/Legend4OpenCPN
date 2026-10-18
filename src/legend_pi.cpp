@@ -21,6 +21,7 @@
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
+#include <wx/html/winpars.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/gdicmn.h>
@@ -137,6 +138,7 @@ const wxString kLegendTipIdPrefix = "legend-tip-";
 // Id of the pad of "Licht herkennen", and of its lines with matching
 // lights, followed by their number.
 const wxString kLegendTapIdPrefix = "legend-tap-";
+const wxString kTapClockId = "legend-tapclock";
 const wxString kLegendMatchIdPrefix = "legend-match-";
 
 // Id of a line of the "Vooruit" block, followed by its number.
@@ -147,6 +149,61 @@ const wxString kLegendAheadIdPrefix = "legend-ahead-";
 // DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
 // long after the plugin library has been unloaded.
 wxMemoryFSHandler *g_memoryHandler = nullptr;
+
+// The line in the pad of "Licht herkennen" that counts the seconds of light
+// and dark. It is a cell of its own, drawn in the font and colour around
+// it, so it can change several times a second without building the page
+// again. The tag <legendclock id="..."> places it.
+wxString g_tap_clock_text;
+
+class TapClockCell : public wxHtmlCell
+{
+public:
+    explicit TapClockCell(int height) { m_Height = height; }
+
+    // As wide as the line it is on, so the text can be centred.
+    void Layout(int w) override
+    {
+        m_Width = w;
+        wxHtmlCell::Layout(w);
+    }
+
+    void Draw(wxDC &dc, int x, int y, int, int, wxHtmlRenderingInfo &) override
+    {
+        wxCoord width = 0;
+        wxCoord height = 0;
+        dc.GetTextExtent(g_tap_clock_text, &width, &height);
+        dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
+        dc.DrawText(g_tap_clock_text, x + m_PosX + (m_Width - width) / 2,
+                    y + m_PosY + (m_Height - height) / 2);
+    }
+};
+
+class TapClockTagHandler : public wxHtmlWinTagHandler
+{
+public:
+    wxString GetSupportedTags() override { return "LEGENDCLOCK"; }
+
+    bool HandleTag(const wxHtmlTag &tag) override
+    {
+        auto *cell = new TapClockCell(m_WParser->GetCharHeight() + 2);
+        cell->SetId(tag.GetParam("id"));
+        m_WParser->GetContainer()->InsertCell(cell);
+        return false;
+    }
+};
+
+// Only the legend view gets the tag: the module is registered while that
+// view is made and removed again right after, so no other HTML window of
+// OpenCPN holds a handler of this plugin.
+class TapClockModule : public wxHtmlTagsModule
+{
+public:
+    void FillHandlersTable(wxHtmlWinParser *parser) override
+    {
+        parser->AddTagHandler(new TapClockTagHandler);
+    }
+};
 
 class LegendHtmlWindow : public wxHtmlWindow
 {
@@ -215,9 +272,15 @@ public:
             return;
 
         cell->SetBackgroundColour(colour);
-        const wxPoint at = CalcScrolledPosition(cell->GetAbsPos());
-        RefreshRect(wxRect(at, wxSize(cell->GetWidth(), cell->GetHeight())));
-        Update();
+        RefreshCellNow(cell);
+    }
+
+    // Paints the cell with this id again, such as the clock of the pad.
+    void RefreshCell(const wxString &id)
+    {
+        if (const wxHtmlContainerCell *root = GetInternalRepresentation())
+            if (const wxHtmlCell *cell = FindCellWithId(root, id))
+                RefreshCellNow(cell);
     }
 
     void SetRowCursor(bool overRow)
@@ -322,6 +385,13 @@ private:
         }
 
         return -1;
+    }
+
+    void RefreshCellNow(const wxHtmlCell *cell)
+    {
+        const wxPoint at = CalcScrolledPosition(cell->GetAbsPos());
+        RefreshRect(wxRect(at, wxSize(cell->GetWidth(), cell->GetHeight())));
+        Update();
     }
 
     static const wxHtmlCell *FindCellWithId(const wxHtmlCell *container, const wxString &id)
@@ -1180,6 +1250,10 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnAllLightsTimer(); });
 
+    m_tap_clock_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { UpdateTapClock(); });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -1266,6 +1340,7 @@ bool legend_pi::DeInit()
     m_light_active = false;
     m_all_lights_timer.Stop();
     m_all_lights_on = false;
+    m_tap_clock_timer.Stop();
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.
@@ -2202,12 +2277,15 @@ void legend_pi::CreateLegendWindow()
 
     m_image_page->SetSizer(imageSizer);
 
+    TapClockModule clockModule;
+    wxHtmlWinParser::AddModule(&clockModule);
     m_markdown_view = new LegendHtmlWindow(
         m_content_book,
         wxID_ANY,
         wxDefaultPosition,
         wxDefaultSize,
         wxHW_SCROLLBAR_AUTO);
+    wxHtmlWinParser::RemoveModule(&clockModule);
 
     // Give Markdown some breathing room without using extra layout rows.
     m_markdown_view->SetBorders(12);
@@ -5273,13 +5351,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                      << hex(palette.active) << "\" align=\"center\" valign=\"middle\" height=\"64\">"
                      << "<font size=\"+1\"><b>"
                      << (nl ? "Indrukken = licht aan" : "Press = light on")
-                     << "</b></font><br><font size=\"-1\" color=\"" << hex(muted) << "\">";
-                if (m_taps.empty())
-                    html << (nl ? "nog niet getikt" : "no taps yet");
-                else
-                    html << wxString::Format(nl ? "%zu keer getikt, ga door" : "%zu taps, go on",
-                                             m_taps.size());
-                html << "</font></td></tr>";
+                     << "</b></font><br><font size=\"-1\" color=\"" << hex(muted) << "\">"
+                     << "<legendclock id=\"" << kTapClockId << "\"></font></td></tr>";
+                g_tap_clock_text = TapClockText();
 
                 // Colour of the light seen: a lamp to click for each colour,
                 // the chosen one on a highlighted tile.
@@ -6872,6 +6946,10 @@ void legend_pi::SetIdentify(bool on)
     m_identify_on = on;
     m_taps.clear();
     m_tap_down = false;
+    if (on)
+        m_tap_clock_timer.Start(100);
+    else
+        m_tap_clock_timer.Stop();
     if (on) {
         // Open the heading and keep the space bar for tapping.
         m_collapsed_sections.erase("@herkennen");
@@ -6903,6 +6981,51 @@ void legend_pi::TapDown()
         static_cast<LegendHtmlWindow *>(m_markdown_view)
             ->SetCellBackground(kLegendTapIdPrefix + "0", LightDisplayColour(code, SchemeDim()));
     }
+    UpdateTapClock();
+}
+
+// "4 tikken · licht 1,2 s", "4 tikken · donker 3,4 s": how long the light
+// has been held or let go, so a long dark spell shows the count still runs,
+// and when a new rhythm is about to begin.
+wxString legend_pi::TapClockText() const
+{
+    const bool nl = m_dutch_names;
+    if (m_taps.empty() && !m_tap_down)
+        return nl ? "nog niet getikt" : "no taps yet";
+
+    const wxLongLong now = wxGetUTCTimeMillis();
+    wxString text = wxString::Format(nl ? "%zu tikken" : "%zu taps", m_taps.size());
+    if (m_tap_down) {
+        const double lit = (now - m_tap_origin).ToDouble() / 1000.0 - m_tap_start;
+        text << wxString::Format(nl ? " | licht %.1f s" : " | light %.1f s", lit);
+    }
+    else {
+        const double dark = (now - m_tap_last).ToDouble() / 1000.0;
+        if (dark > 60.0)
+            text << (nl ? " | donker > 1 min: de volgende tik begint opnieuw"
+                        : " | dark > 1 min: the next tap starts again");
+        else if (dark > 40.0)
+            text << wxString::Format(nl ? " | donker %.0f s | over %.0f s begint het opnieuw"
+                                        : " | dark %.0f s | starts again in %.0f s",
+                                     std::floor(dark), std::ceil(60.0 - dark));
+        else
+            text << wxString::Format(nl ? " | donker %.1f s" : " | dark %.1f s", dark);
+    }
+    if (nl)
+        text.Replace(".", ",");
+    text.Replace(" | ", wxString::FromUTF8(" \u00b7 "));
+    return text;
+}
+
+void legend_pi::UpdateTapClock()
+{
+    if (!m_identify_on || !m_markdown_view)
+        return;
+    const wxString text = TapClockText();
+    if (text == g_tap_clock_text)
+        return;
+    g_tap_clock_text = text;
+    static_cast<LegendHtmlWindow *>(m_markdown_view)->RefreshCell(kTapClockId);
 }
 
 void legend_pi::TapUp()

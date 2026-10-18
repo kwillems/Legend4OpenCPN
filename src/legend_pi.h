@@ -499,9 +499,12 @@ private:
     double m_tap_start = 0.0;
     wxString m_identify_colour;   // "W", "R", "G", "Y" or empty: any
     std::vector<size_t> m_identify_matches; // rows shown as matches
+    wxTimer m_tap_clock_timer;    // the seconds of light and dark in the pad
     void SetIdentify(bool on);
     void TapDown();
     void TapUp();
+    wxString TapClockText() const;
+    void UpdateTapClock();
     // The areas at the position the banner uses; fromShip tells which.
     std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);
 
