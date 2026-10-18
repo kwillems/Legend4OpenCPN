@@ -31,6 +31,7 @@
 #include <wx/panel.h>
 #include <wx/image.h>
 #include <wx/simplebook.h>
+#include <wx/srchctrl.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/timer.h>
@@ -204,6 +205,13 @@ private:
     bool IsDynamicLegendVisible() const;
     void OnAutoRefreshTimer();
 
+    // Search field above the dynamic legend: only rows whose text holds
+    // every word typed stay in the list. The text of a row is its name,
+    // its heading and its icon or chart symbol name.
+    void UpdateSearchVisibility();
+    void SetFilter(const wxString &text);
+    bool GroupMatchesFilter(const DynamicGroup &group) const;
+
     // Temporary marker on the chart for the object chosen in the legend
     void ShowMarker(double lat, double lon);
     void ShowMarkers(const std::vector<std::pair<double, double>> &positions);
@@ -245,6 +253,11 @@ private:
     wxImage m_current_image;
 
     wxHtmlWindow *m_markdown_view;
+
+    wxSearchCtrl *m_search = nullptr;
+    wxString m_filter;                    // search text, trimmed
+    std::vector<wxString> m_filter_words; // its words, folded for matching
+    wxTimer m_filter_timer;               // waits for a pause in typing
 
     wxArrayString m_legend_files;
     size_t m_legend_index;

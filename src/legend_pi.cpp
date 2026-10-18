@@ -40,6 +40,7 @@
 #include <wx/stdpaths.h>
 #include <wx/stopwatch.h>
 #include <wx/textfile.h>
+#include <wx/tokenzr.h>
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -466,6 +467,57 @@ wxImage NormalizeIcon(
     square.Paste(icon, (size - width) / 2, (size - height) / 2);
 
     return square;
+}
+
+// Text prepared for searching: lower case and without accents, so that
+// "waterskien" finds "Waterskiën" and capitals do not matter.
+wxString FoldForSearch(const wxString &text)
+{
+    const wxString lower = text.Lower();
+    wxString folded;
+    folded.reserve(lower.length());
+
+    for (const wxUniChar ch : lower) {
+        switch (ch.GetValue()) {
+        case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4: case 0xE5:
+            folded << 'a';
+            break;
+        case 0xE6:
+            folded << "ae";
+            break;
+        case 0xE7:
+            folded << 'c';
+            break;
+        case 0xE8: case 0xE9: case 0xEA: case 0xEB:
+            folded << 'e';
+            break;
+        case 0xEC: case 0xED: case 0xEE: case 0xEF:
+            folded << 'i';
+            break;
+        case 0xF1:
+            folded << 'n';
+            break;
+        case 0xF2: case 0xF3: case 0xF4: case 0xF5: case 0xF6: case 0xF8:
+            folded << 'o';
+            break;
+        case 0x153:
+            folded << "oe";
+            break;
+        case 0xF9: case 0xFA: case 0xFB: case 0xFC:
+            folded << 'u';
+            break;
+        case 0xFD: case 0xFF:
+            folded << 'y';
+            break;
+        case 0xDF:
+            folded << "ss";
+            break;
+        default:
+            folded << ch;
+            break;
+        }
+    }
+    return folded;
 }
 
 // First non-empty line of a waypoint description, or empty when that line
@@ -951,6 +1003,13 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnFlashTimer(); });
 
+    m_filter_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) {
+            if (m_search)
+                SetFilter(m_search->GetValue());
+        });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -1032,6 +1091,7 @@ bool legend_pi::DeInit()
     m_prefetch_timer.Stop();
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
+    m_filter_timer.Stop();
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.
@@ -1054,6 +1114,7 @@ bool legend_pi::DeInit()
         m_image_page = nullptr;
         m_legend_bitmap = nullptr;
         m_markdown_view = nullptr;
+        m_search = nullptr;
     }
 
     if (g_memoryHandler) {
@@ -1608,6 +1669,8 @@ void legend_pi::ShowEmptyState()
 
     if (m_content_book && m_markdown_view)
         m_content_book->SetSelection(1);
+
+    UpdateSearchVisibility();
 }
 
 void legend_pi::UpdateImageScale()
@@ -1703,6 +1766,7 @@ void legend_pi::ShowLegend(size_t index)
     if (path == kDynamicGpxId) {
         m_current_image = wxImage();
         m_current_legend_path = path;
+        UpdateSearchVisibility();
         ShowDynamicLegend();
     }
     else if (ext == "png") {
@@ -1737,6 +1801,8 @@ void legend_pi::ShowLegend(size_t index)
 
         RestoreMarkdownScroll(path);
     }
+
+    UpdateSearchVisibility();
 
     if (m_legend_window)
         m_legend_window->Layout();
@@ -1885,6 +1951,48 @@ void legend_pi::CreateLegendWindow()
         wxEVT_CHOICE,
         &legend_pi::OnLegendSelected,
         this);
+
+    // Search field of the dynamic legend; hidden for other legend items.
+    // The list follows the text after a short pause in typing, Enter
+    // applies it at once.
+    m_search = new wxSearchCtrl(
+        panel,
+        wxID_ANY,
+        wxEmptyString,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxTE_PROCESS_ENTER);
+    m_search->ShowCancelButton(true);
+    m_search->SetDescriptiveText("Zoek in de legenda");
+    m_search->SetToolTip(
+        "Toont alleen de symbolen waarvan de naam, het kopje of de icoonnaam "
+        "alle getypte woorden bevat (Cmd+F)");
+    m_search->Hide();
+
+    mainSizer->Add(
+        m_search,
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    m_search->Bind(
+        wxEVT_TEXT,
+        [this](wxCommandEvent &event) {
+            event.Skip();
+            m_filter_timer.StartOnce(250);
+        });
+
+    m_search->Bind(
+        wxEVT_TEXT_ENTER,
+        [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
+
+    m_search->Bind(
+        wxEVT_SEARCHCTRL_SEARCH_BTN,
+        [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
+
+    m_search->Bind(
+        wxEVT_SEARCHCTRL_CANCEL_BTN,
+        [this](wxCommandEvent &) { SetFilter(wxEmptyString); });
 
     m_content_book = new wxSimplebook(
         panel,
@@ -2288,6 +2396,33 @@ void legend_pi::CreateLegendWindow()
                 !event.AltDown() &&
                 !event.MetaDown();
 
+            // Cmd+F (Ctrl+F elsewhere) goes to the search field.
+            if (event.GetKeyCode() == 'F' && event.GetModifiers() == wxMOD_CMD &&
+                m_search && m_search->IsShown()) {
+                m_search->SetFocus();
+                m_search->SelectAll();
+                return;
+            }
+
+            // In the search field the arrows move the cursor, and Escape
+            // first empties the field before it closes the window.
+            wxWindow *focus = wxWindow::FindFocus();
+            const bool inSearch =
+                m_search && focus &&
+                (focus == m_search || focus->GetParent() == m_search);
+
+            if (inSearch && plainKey &&
+                (event.GetKeyCode() == WXK_LEFT || event.GetKeyCode() == WXK_RIGHT)) {
+                event.Skip();
+                return;
+            }
+
+            if (inSearch && plainKey && event.GetKeyCode() == WXK_ESCAPE &&
+                !m_search->GetValue().IsEmpty()) {
+                SetFilter(wxEmptyString);
+                return;
+            }
+
             if (plainKey &&
                 event.GetKeyCode() == WXK_ESCAPE) {
                 SaveCurrentMarkdownScroll();
@@ -2549,6 +2684,16 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
 
     if (m_collapsed_sections.erase(SectionName(group.section)) > 0)
         SaveConfig();
+
+    // A search that leaves this row out is given up, or the row could not
+    // be shown.
+    if (!GroupMatchesFilter(group)) {
+        m_filter_timer.Stop();
+        m_filter.Clear();
+        m_filter_words.clear();
+        if (m_search)
+            m_search->ChangeValue(wxEmptyString);
+    }
 
     m_flash_key = group.key;
     m_flash_phase = 0;
@@ -3241,7 +3386,67 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
 void legend_pi::SetReorderMode(bool on)
 {
     m_reorder_mode = on;
+    UpdateSearchVisibility();
     RenderDynamicLegend(!on);
+}
+
+void legend_pi::UpdateSearchVisibility()
+{
+    if (!m_search)
+        return;
+
+    // Only the dynamic legend can be searched; the order edit mode shows
+    // every heading and has no use for it.
+    const bool show = m_current_legend_path == kDynamicGpxId && !m_reorder_mode;
+    if (m_search->IsShown() == show)
+        return;
+
+    m_search->Show(show);
+    m_search->GetParent()->Layout();
+}
+
+void legend_pi::SetFilter(const wxString &text)
+{
+    m_filter_timer.Stop();
+
+    if (m_search && m_search->GetValue() != text)
+        m_search->ChangeValue(text);
+
+    wxString trimmed = text;
+    trimmed.Trim(true).Trim(false);
+
+    std::vector<wxString> words;
+    wxStringTokenizer tokens(FoldForSearch(trimmed), " \t", wxTOKEN_STRTOK);
+    while (tokens.HasMoreTokens())
+        words.push_back(tokens.GetNextToken());
+
+    if (words == m_filter_words)
+        return;
+
+    m_filter = trimmed;
+    m_filter_words = words;
+
+    // A new search starts at the top of the list. While the list is still
+    // being filled it is drawn with the filter once loading has finished.
+    if (IsDynamicLegendVisible() && !m_loading && !m_showing_loading_page)
+        RenderDynamicLegend(false);
+}
+
+bool legend_pi::GroupMatchesFilter(const DynamicGroup &group) const
+{
+    if (m_filter_words.empty())
+        return true;
+
+    wxString text = group.label;
+    text << ' ' << (group.chartSymbol ? group.symbol : group.iconName) << ' '
+         << SectionTitle(group.section);
+    const wxString folded = FoldForSearch(text);
+
+    for (const wxString &word : m_filter_words) {
+        if (folded.Find(word) == wxNOT_FOUND)
+            return false;
+    }
+    return true;
 }
 
 // Moves the block of a heading in symbolen.txt: the [Heading] line and
@@ -3775,6 +3980,19 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     std::vector<wxColour> rowColours(m_dynamic_groups.size());
     int iconBox = 16;
 
+    // A search leaves out the rows that do not match; their headings go
+    // too when nothing under them matches. Matching rows are shown even
+    // under a collapsed heading.
+    const bool filtering = !m_filter_words.empty() && !m_reorder_mode;
+    std::vector<bool> shown(m_dynamic_groups.size(), true);
+    size_t matches = 0;
+    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        if (filtering)
+            shown[i] = GroupMatchesFilter(m_dynamic_groups[i]);
+        if (shown[i])
+            ++matches;
+    }
+
     // Headings only when symbolen.txt defines them; a collapsed heading
     // hides its rows.
     const bool showHeadings = !m_meaning_sections.empty();
@@ -3782,22 +4000,27 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
         // In the order edit mode only the headings are shown.
         collapsed[i] =
-            showHeadings &&
+            showHeadings && !filtering &&
             (m_reorder_mode ||
              m_collapsed_sections.count(
                  SectionName(m_dynamic_groups[i].section)) > 0);
     }
 
-    // Stripes start again under every heading.
+    // Stripes start again under every heading and skip rows left out.
     std::vector<size_t> stripeIndex(m_dynamic_groups.size());
     for (size_t i = 0, n = 0; i < m_dynamic_groups.size(); ++i) {
         if (i > 0 &&
             m_dynamic_groups[i].section != m_dynamic_groups[i - 1].section)
             n = 0;
-        stripeIndex[i] = n++;
+        stripeIndex[i] = n;
+        if (shown[i])
+            ++n;
     }
 
     for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        if (!shown[i])
+            continue;
+
         const DynamicGroup &group = m_dynamic_groups[i];
 
         const bool isActive =
@@ -3867,7 +4090,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             image = image.Scale(width, height, wxIMAGE_QUALITY_HIGH);
         }
 
-        if (image.IsOk() && !collapsed[i]) {
+        if (image.IsOk() && !collapsed[i] && shown[i]) {
             iconBox = std::max(
                 iconBox,
                 std::min(kMaxIconBox,
@@ -3898,6 +4121,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "De kaartpositie is nog niet bekend. Beweeg de kaart "
                 "een klein stukje en klik daarna op Ververs.";
     }
+    else if (filtering) {
+        html << static_cast<int>(matches) << " van de "
+             << static_cast<int>(m_dynamic_groups.size())
+             << " symbolen in beeld passen bij &lsquo;" << escape(m_filter)
+             << "&rsquo;";
+    }
     else {
         html << static_cast<int>(m_dynamic_groups.size()) << " symbolen"
              << " &middot; " << m_dynamic_total << " waypoints";
@@ -3920,7 +4149,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     else if (m_viewport_valid) {
         std::vector<wxString> links;
 
-        if (showHeadings && !m_dynamic_groups.empty()) {
+        // While searching nothing is folded, so folding links do nothing.
+        if (showHeadings && !m_dynamic_groups.empty() && !filtering) {
             // One link that does what makes sense now: fold everything in
             // while any group in view is open, otherwise fold out.
             bool anyOpen = false;
@@ -4065,16 +4295,43 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "<p><font color=\"" << hex(muted) << "\">"
              << "Geen zichtbare waypoints in dit kaartbeeld.</font></p>";
     }
+    else if (m_viewport_valid && matches == 0) {
+        html << "<p>Geen symbolen in beeld die passen bij &lsquo;"
+             << escape(m_filter) << "&rsquo;.</p>"
+             << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
+             << "Er wordt gezocht in de namen in de lijst, de kopjes en de "
+                "icoonnamen, alleen van wat nu in beeld is. Verschuif de "
+                "kaart, zoom uit, of maak het zoekveld leeg.";
+        if (!m_show_hidden_at_scale)
+            html << " Symbolen die op deze schaal verborgen zijn, tellen pas "
+                    "mee met &lsquo;Ook verborgen tonen&rsquo;.";
+        html << "</font></p>";
+    }
     else if (m_viewport_valid) {
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
 
         m_rendered_headings.clear();
 
+        // Section of the last row drawn; a row of another section starts a
+        // new heading. Rows left out by a search do not count.
+        bool firstRow = true;
+        int previousSection = 0;
+
         for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
             DynamicGroup &group = m_dynamic_groups[i];
 
-            if (showHeadings &&
-                (i == 0 || group.section != m_dynamic_groups[i - 1].section)) {
+            if (!shown[i]) {
+                group.imageName.Clear();
+                continue;
+            }
+
+            const bool newHeading =
+                firstRow || group.section != previousSection;
+            const bool atTop = firstRow;
+            firstRow = false;
+            previousSection = group.section;
+
+            if (showHeadings && newHeading) {
                 const wxString heading = SectionName(group.section);
                 const wxString headingTitle = SectionTitle(group.section);
                 const bool folded = collapsed[i];
@@ -4089,6 +4346,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 for (size_t j = i; j < m_dynamic_groups.size() &&
                                    m_dynamic_groups[j].section == group.section;
                      ++j) {
+                    if (!shown[j])
+                        continue;
+
                     ++symbols;
                     waypoints += m_dynamic_groups[j].positions.size();
 
@@ -4118,10 +4378,13 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 }
 
                 // Every cell of the heading carries its id, so a click
-                // anywhere on it folds the group in or out.
+                // anywhere on it folds the group in or out. While searching
+                // nothing folds, so the heading is not a button then.
                 const wxString sectionId = wxString::Format(
                     "%s%zu", kLegendSectionIdPrefix, m_rendered_headings.size());
                 m_rendered_headings.push_back(heading);
+                const wxString idAttribute =
+                    filtering ? wxString() : " id=\"" + sectionId + "\"";
 
                 // Every group gets its own table; between them the heading
                 // with a thin line under it. Inside the row table the
@@ -4129,17 +4392,17 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 html << "</table>"
                      << "<table width=\"100%\" cellspacing=\"0\" "
                         "cellpadding=\"0\">"
-                     << "<tr><td colspan=\"2\" height=\"" << (i == 0 ? 6 : 14)
+                     << "<tr><td colspan=\"2\" height=\"" << (atTop ? 6 : 14)
                      << "\"></td></tr>"
-                     << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
+                     << "<tr><td" << idAttribute << " valign=\"middle\">"
                      << "<font size=\"+3\">"
                      << (folded ? "&#9654;" : "&#9660;") << "</font>&nbsp;<b>"
                      << escape(headingTitle) << "</b> <font color=\"" << hex(muted)
                      << "\">&middot; " << symbols
                      << (symbols == 1 ? " symbool, " : " symbolen, ")
                      << waypoints << " in beeld</font></td>"
-                     << "<td id=\"" << sectionId
-                     << "\" align=\"right\" valign=\"middle\">"
+                     << "<td" << idAttribute
+                     << " align=\"right\" valign=\"middle\">"
                      << strip << "</td></tr>"
                      << "<tr><td colspan=\"2\" height=\"4\"></td></tr>"
                      << "<tr><td colspan=\"2\" bgcolor=\"" << hex(rule)
