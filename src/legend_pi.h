@@ -300,8 +300,8 @@ private:
     bool m_mouse_down_valid = false;
     int m_scroll_to_row = -1;          // row to scroll to after rendering
 
-    // A row found from the chart flashes a few times before it settles in
-    // the normal highlight colour.
+    // A row found from the chart lights up in the marker's colour and fades
+    // to the normal highlight colour.
     wxString m_flash_key;
     int m_flash_phase = 0;
     wxTimer m_flash_timer;

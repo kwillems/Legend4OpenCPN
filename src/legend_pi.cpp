@@ -67,6 +67,9 @@ namespace {
 // Pseudo-path of the dynamic legend entry in the list of legend items.
 const wxString kDynamicGpxId = "@gpx-legend";
 
+// Steps of the fade of a row found from the chart (150 ms each).
+const int kFadeSteps = 8;
+
 // Id of the table cells of one row in the dynamic legend, followed by the
 // row number.
 const wxString kLegendRowIdPrefix = "legend-row-";
@@ -2531,7 +2534,7 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
     m_flash_key = group.key;
     m_flash_phase = 0;
     m_flash_timer.Stop();
-    m_flash_timer.Start(300);
+    m_flash_timer.Start(150);
 
     m_scroll_to_row = static_cast<int>(groupIndex);
     RenderDynamicLegend(false);
@@ -2540,11 +2543,11 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
     ShowMarker(position.first, position.second);
 }
 
-// Three flashes of the found row, then the normal highlight.
+// One step of the fade of the found row.
 void legend_pi::OnFlashTimer()
 {
     ++m_flash_phase;
-    if (m_flash_phase >= 6 || m_flash_key.IsEmpty() ||
+    if (m_flash_phase >= kFadeSteps || m_flash_key.IsEmpty() ||
         m_current_legend_path != kDynamicGpxId) {
         m_flash_timer.Stop();
         m_flash_key.Clear();
@@ -3736,14 +3739,16 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             isActive ? active
                      : (stripeIndex[i] % 2 == 1 ? stripe : background);
 
-        // The row just found from the chart: the marker's colour, on and
-        // off, so the eye finds it.
-        if (!m_flash_key.IsEmpty() && group.key == m_flash_key &&
-            m_flash_phase % 2 == 0) {
+        // The row just found from the chart: lit in the marker's colour,
+        // fading to the highlight colour over the next second.
+        if (!m_flash_key.IsEmpty() && group.key == m_flash_key) {
             wxColour outline;
             wxColour highlight;
             MarkerColours(outline, highlight);
-            rowColours[i] = BlendColour(background, highlight, 0.45);
+            const wxColour lit = BlendColour(background, highlight, 0.5);
+            const double remaining =
+                std::max(0.0, 1.0 - m_flash_phase / static_cast<double>(kFadeSteps));
+            rowColours[i] = BlendColour(active, lit, remaining * remaining);
         }
 
         // Transparency is resolved against what ends up behind the icon:
