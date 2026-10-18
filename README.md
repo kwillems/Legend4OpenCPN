@@ -29,9 +29,15 @@ Op dit moment ondersteunt Legend4OpenCPN:
 - onthouden van vensterpositie en -grootte;
 - automatisch passend schalen van grote PNG-afbeeldingen;
 - automatisch aanmaken van de benodigde gebruikersmappen;
-- een dynamische legenda van de waypoint-symbolen die in beeld zijn, met
-  betekenissen, kopjes en een markering op de kaart (zie hieronder);
-- een lichte en een donkere weergave die macOS volgt.
+- een dynamische legenda van de symbolen die in beeld zijn, uit waypoint-lagen
+  en uit de vectorkaart, met betekenissen in het Nederlands of Engels, kopjes,
+  een zoekveld en een markering op de kaart (zie hieronder);
+- lichtkarakters in woorden, met hun ritme, en lichten die op de kaart gaan
+  branden;
+- het marifoonkanaal van het gebied waar de boot is, en wat er het komende
+  half uur op koers ligt;
+- een lichte en een donkere weergave die macOS volgt, scherp op een
+  Retina-scherm.
 
 Bij nul of één item wordt overbodige navigatie niet getoond of uitgeschakeld. Bij meerdere items verschijnt compact een keuzelijst met daarnaast de positie, bijvoorbeeld `2 van 5`.
 
@@ -45,9 +51,14 @@ per symbool met het aantal (`×7`):
 
 - de waypoint-symbolen, waaronder die uit GPX-bestanden en GPX-lagen, met
   hun eigen icoon;
-- de kaartsymbolen van o-charts-kaarten (boeien, bakens, lichten, toptekens,
-  meerpalen enzovoort), met het plaatje zoals OpenCPN het op de kaart tekent.
-  Zie *Kaartsymbolen* hieronder.
+- de kaartsymbolen van o-charts- en ENC-kaarten (boeien, bakens, lichten,
+  toptekens, meerpalen enzovoort), met het plaatje zoals OpenCPN het op de
+  kaart tekent. Zie *Kaartsymbolen* hieronder;
+- de lichtkarakters van de lichten in beeld, onder de boei of het baken waar
+  ze op staan. Zie *Lichten* hieronder.
+
+Bovenaan staan, als ze van toepassing zijn, de kopjes **Marifoon** en
+**Vooruit**. Zie *Marifoon en Vooruit* hieronder.
 
 ### Bediening
 
@@ -67,7 +78,17 @@ per symbool met het aantal (`×7`):
   exemplaren van dat symbool in beeld tegelijk aan.
 - Boven elk klikbaar onderdeel verschijnt een tooltip die zegt wat een klik
   doet.
-- **Ook verborgen tonen** (in het kopblok) voegt grijze rijen toe voor
+- Andersom kan ook: met de legenda open wijst een klik op een symbool op de
+  kaart de rij in de legenda aan, en **Toon in legenda** in het
+  rechtsklikmenu van de kaart doet hetzelfde. Het kopje gaat open, de rij
+  licht op en wordt in beeld gescrold.
+- Het kopblok is één regel: de titel met rechts een tandwiel voor
+  **Instellingen** en een pijl voor **Ververs**. Instellingen opent een klein
+  menu met vinkjes: Lichten, Ook op deze schaal verborgen tonen, Engelse
+  namen, Alle lichten laten branden, Alles in- of uitklappen en Volgorde
+  wijzigen. Hoeveel symbolen, waypoints, kaartobjecten en lichtkarakters er
+  in beeld zijn, staat onderaan de lijst.
+- **Ook op deze schaal verborgen tonen** voegt grijze rijen toe voor
   symbolen die de kaart op deze schaal niet tekent vanwege hun schaalgrens,
   met een gesloten oogje en de schaal waarop ze verschijnen (`1:200k`), per
   schaalgrens een rij. Een klik op zo'n rij zoomt in tot net voorbij die
@@ -75,8 +96,17 @@ per symbool met het aantal (`×7`):
   exemplaren en markeert ze. Wat je zelf hebt uitgezet bij *Gebruikers
   standaard* blijft weg. De schaal is die van de statusbalk van OpenCPN.
 - **Ververs** laadt alle waypoints opnieuw en inventariseert de kaartcellen
-  opnieuw. Gebruik dit na het verplaatsen van een waypoint of het wijzigen
-  van een icoon zonder dat de kaart beweegt.
+  en de marifoongebieden opnieuw. Gebruik dit na het verplaatsen van een
+  waypoint of het wijzigen van een icoon zonder dat de kaart beweegt.
+
+### Zoeken
+
+Boven de dynamische legenda staat een zoekveld (`Cmd+F`). Alleen de rijen
+waarvan de naam, het kopje of de icoon- of symboolnaam alle getypte woorden
+bevat, blijven over. Hoofdletters en accenten tellen niet mee: `waterskien`
+vindt *Waterskiën*. Passende rijen worden ook onder een ingeklapt kopje
+getoond. Een boei en haar lichten worden samen gevonden. `Esc` maakt het
+zoekveld eerst leeg en sluit pas daarna het venster.
 
 ### Kopjes, in- en uitklappen en volgorde
 
@@ -86,14 +116,20 @@ verdeeld.
 - Klik op een kopje (▼/▶) om de groep in of uit te klappen. Een ingeklapte
   groep toont het aantal symbolen en waypoints in beeld en een strook met de
   eerste iconen.
-- Bovenaan staat één link die wisselt tussen **Alles inklappen** en **Alles
+- In het menu Instellingen staat **Alles inklappen** of **Alles
   uitklappen**, afhankelijk van wat er nog openstaat.
 - Welke kopjes ingeklapt zijn, wordt per kopjesnaam onthouden, ook na het
   herstarten van OpenCPN.
-- **Volgorde wijzigen** toont alleen de kopjes, met grote knoppen ▲ en ▼ die
-  ook op een aanraakscherm goed werken. Een verplaatsing wordt direct in
-  `symbolen.txt` bewaard. **Klaar** brengt je terug naar de lijst.
+- **Volgorde wijzigen** (in het menu) toont alleen de kopjes, met grote
+  knoppen ▲ en ▼ die ook op een aanraakscherm goed werken. Een verplaatsing
+  wordt direct in `symbolen.txt` bewaard. **Klaar** brengt je terug naar de
+  lijst.
+- **Kaartsymbolen** en **Lichtkarakters** zijn kopjes van de plugin. Bij
+  Volgorde wijzigen zet de plugin `[Kaartsymbolen | Chart symbols]` en
+  `[Lichtkarakters | Light characters]` in `symbolen.txt` als ze daar nog
+  ontbreken; daarna kun je ze verplaatsen zoals de andere.
 - Symbolen die onder geen kopje vallen, staan onderaan onder **Overig**.
+  **Marifoon** en **Vooruit** staan altijd bovenaan.
 
 ### Kaartsymbolen (o-charts en ENC)
 
@@ -127,12 +163,14 @@ en `s57-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
   overgeslagen, zoals ook de quilt van OpenCPN ze niet toont. Er blijven
   hooguit zestien cellen tegelijk geopend.
 - Symbolen zonder regel in `symbolen.txt` staan onder het kopje
-  **Kaartsymbolen**, vóór **Overig**. De tekst is dan de Engelse
-  S-52-omschrijving, bijvoorbeeld "Pillar buoy, lateral-r". In `symbolen.txt`
-  gebruik je de symboolnaam, bijvoorbeeld `BOYPIL60 = Rode pilaarton` of
-  `LIGHTS* = Licht`; de tooltip van een rij toont die naam.
-- De link **Kaartsymbolen uit** / **aan** in het kopblok schakelt dit deel
-  van de legenda uit of in; de keuze wordt bewaard.
+  **Kaartsymbolen**. De naam wordt opgebouwd uit de objectklasse en een paar
+  kenmerken, in het Nederlands of Engels, bijvoorbeeld "Laterale boei:
+  bakboord, rood, stompe ton". De Nederlandse namen komen uit
+  `data/s57-nl.txt`, met de termen van Kaart 1 en BPR bijlage 7 en 8; namen
+  zonder officiële term zijn daar als vrij vertaald gemarkeerd. Een eigen
+  `s57-nl.txt` in de Legend-map vult die aan of verbetert ze. In
+  `symbolen.txt` kun je ook de symboolnaam gebruiken, bijvoorbeeld
+  `BOYPIL60 = Rode pilaarton`; de tooltip van een rij toont die naam.
 
 De o-charts-bron werkt alleen als de o-charts-plugin geladen is. Versleutelde
 S-63-cellen worden niet gelezen.
@@ -140,6 +178,52 @@ S-63-cellen worden niet gelezen.
 De o-charts-plugin tekent met een eigen tekenbibliotheek. De plugin zet het
 kleurenschema op elke cel die hij zelf opent, zodat de kaart in de schemer-
 en nachtstand haar kleuren houdt.
+
+### Lichten
+
+De plugin leest het lichtkarakter van de lichten in beeld: uit de kaart
+(S-57-kenmerken van het object LIGHTS) en uit waypoints, waar het na
+`Lichtkarakter:` in de beschrijving staat of op een eigen regel van de naam,
+zoals in de Nautin-laag.
+
+- Elk lichtkarakter krijgt een rij met een lampje in de kleur van het licht,
+  de afkorting zoals op de kaart en de betekenis in woorden, met de termen
+  van Kaart 1 (P 10), bijvoorbeeld *Fl(2+1)G.10s — groen groepschitterlicht
+  met samengestelde groep: 2+1 schitteringen, elke 10 seconden*. Daaronder
+  staat het ritme als schematische tekening.
+- Een licht staat als ingesprongen subrij onder de boei of het baken waar
+  het op staat. Bij een kaart koppelt de plugin het licht aan het object op
+  dezelfde plek. Lichten die op niets uit de lijst staan, hebben het kopje
+  **Lichtkarakters**.
+- Een klik op een lichtrij laat het licht op de kaart branden in zijn ritme,
+  een kwartier tot een minuut lang, met een gloed en stralen. Periode en
+  groepen komen uit de kaart; de duur van een schittering of verduistering
+  is een gangbare waarde. Een klik op een verlichte boei op de kaart wijst
+  de rij van de boei en die van haar licht samen aan.
+- **Alle lichten laten branden** (in het menu) laat alle lichten in beeld
+  tegelijk branden, elk in zijn eigen ritme en niet gelijk op, tot je het
+  weer uitzet. Ze volgen de kaart.
+- Een sectorlicht wordt één licht met zijn sectoren in woorden, bijvoorbeeld
+  *rood 090°–115°, wit 115°–120°*, als peilingen naar het licht. Brandt het
+  op de kaart, dan staan de sectoren als gekleurde taartpunten om het licht.
+- Met **Lichten** in het menu gaan de lichtrijen uit of aan.
+
+### Marifoon en Vooruit
+
+**Marifoon** toont het marifoonkanaal van het gebied waar de boot is, uit de
+laag *VHFinfo Nederland* van
+[VHF2OpenCPN](https://github.com/kwillems/VHF2OpenCPN): kanaal, oproepnaam,
+soort post, wat je moet doen (uitluisteren, melden of aanmelden) en het
+telefoonnummer. Zonder recente GPS-positie geldt het midden van de kaart; dat
+staat er dan bij. Ingeklapt noemt het kopje nog steeds het kanaal. Staat de
+laag uit in OpenCPN, dan verdwijnt het kopje.
+
+**Vooruit** verschijnt tijdens het varen (een recente positie en minstens een
+halve knoop). Het toont tot acht objecten uit de legenda die je de komende
+dertig minuten op koers tegenkomt, op volgorde van aankomst, met de kant
+waar ze liggen en hun lichtkarakter. De plugin kijkt in een waaier vóór de
+boot die verder weg breder wordt. Een klik wijst het object aan op de kaart.
+Testen zonder te varen kan met de plugin ShipDriver.
 
 ### Weergave
 
@@ -153,6 +237,9 @@ en nachtstand haar kleuren houdt.
 - Alle rijen zijn even hoog; het grootste icoon bepaalt de hoogte.
 - In de donkere weergave staan de iconen op een licht tegeltje, zodat
   kaartsymbolen goed te onderscheiden blijven.
+- Elk plaatje in de lijst bestaat ook op dubbele grootte (`naam@2x.png`), die
+  de HTML-weergave van wxWidgets op een Retina-scherm gebruikt. Zo blijven
+  iconen, lampjes en ritmes scherp.
 - Het eerste laden van alle waypoints gebeurt op de achtergrond kort na het
   starten van OpenCPN. Wordt de legenda eerder geopend, dan toont het venster
   de voortgang.
@@ -169,6 +256,10 @@ en nachtstand haar kleuren houdt.
 - Iconen worden gelezen uit de PNG-bestanden van OpenCPN (`UserIcons` en de
   ingebouwde markicons). Ontbreekt het bestand, dan vraagt de plugin het icoon
   aan OpenCPN; dat kan op macOS een leeg icoon geven.
+- Dezelfde boei staat soms twee keer in de lijst: als waypoint uit een laag
+  en als kaartsymbool. De plugin voegt die nog niet samen.
+- Vooruit kijkt alleen naar wat in beeld is.
+- Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 
 ## Betekenis en indeling: `symbolen.txt`
 
@@ -193,8 +284,8 @@ vhf_*         =
 Brug_dicht    =
 Sluis         = Sluis
 
-[Betonning]
-022           = Groene spitse ton
+[Betonning | Buoyage]
+011           = Groene spitse ton | Green conical buoy
 ```
 
 - Per regel: `icoonnaam = betekenis`. De icoonnaam is de bestandsnaam van het
@@ -204,6 +295,8 @@ Sluis         = Sluis
   het eerste passende patroon.
 - `[Kopje]` begint een groep. Kopjes en regels verschijnen in de volgorde van
   het bestand.
+- Twee talen: `betekenis | meaning` en `[Kopje | Heading]`. De legenda toont
+  het deel van de gekozen taal; ontbreekt dat, dan het andere.
 - Een lege betekenis (`vhf_* =`) deelt een icoon alleen in; de tekst komt dan
   uit stap 2 tot en met 4.
 - Regels die met `#` beginnen worden overgeslagen.
@@ -225,6 +318,7 @@ Bijvoorbeeld:
 ├── Route-IJsselmeer.md
 ├── Checklist.md
 ├── symbolen.txt
+├── s57-nl.txt        (optioneel: eigen namen voor kaartsymbolen)
 └── images/
     ├── brug.png
     └── sluis.png
@@ -242,7 +336,10 @@ De interne configuratie van de plugin wordt apart opgeslagen onder:
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-Dat is de map `Legend` in de privémap van OpenCPN. Daar staan `legend.ini`, met het laatst gekozen item, de vensterpositie en -grootte, de ingeklapte kopjes en de schakelaar voor kaartsymbolen, en de caches `ocharts-cells.txt` en `s57-cells.txt` met de dekking van de kaartcellen.
+Dat is de map `Legend` in de privémap van OpenCPN. Daar staan `legend.ini`, met het laatst gekozen item, de vensterpositie en -grootte, de ingeklapte kopjes en de keuzes uit het menu Instellingen (taal, lichten, verborgen tonen), en de caches `ocharts-cells.txt` en `s57-cells.txt` met de dekking van de kaartcellen.
+
+De marifoongebieden leest de plugin uit de GPX-lagen in de map `layers` van
+OpenCPN (`~/Library/Preferences/opencpn/layers/`).
 
 De locatie van de gebruikersmap is op dit moment nog vast. Een instelbare locatie is voorzien voor een latere versie.
 
@@ -442,7 +539,8 @@ Belangrijke onderdelen:
 ```text
 Legend4OpenCPN/
 ├── data/
-│   └── legend_toolbar.png
+│   ├── legend_toolbar.png
+│   └── s57-nl.txt         # Nederlandse namen van kaartobjecten
 ├── src/
 │   ├── legend_pi.cpp        # plugin, venster en dynamische legenda
 │   ├── legend_pi.h
@@ -453,7 +551,13 @@ Legend4OpenCPN/
 │   ├── s57_source.cpp       # kaartobjecten uit ENC-cellen (S-57)
 │   ├── s57_source.h
 │   ├── display_settings.cpp # wat de kaart tekent: navraag bij OpenCPN
-│   └── display_settings.h
+│   ├── display_settings.h
+│   ├── chart_names.cpp      # namen van kaartobjecten (NL/EN)
+│   ├── chart_names.h
+│   ├── light_character.cpp # lichtkarakters: lezen, woorden, ritme
+│   ├── light_character.h
+│   ├── vhf_areas.cpp        # marifoongebieden uit de lagen
+│   └── vhf_areas.h
 ├── third_party/
 │   └── md4c/              # Git-submodule
 ├── opencpn-libs/          # Git-submodule
@@ -479,9 +583,11 @@ Voor volgende versies zijn onder andere interessant:
 Voor de dynamische legenda in het bijzonder:
 
 - betekenissen bewerken vanuit de legenda zelf;
-- gegevens van het gekozen object tonen, zoals lichtkarakter, doorvaarthoogte en marifoonkanaal;
-- vanaf een klik op de kaart naar de rij in de legenda;
-- een Engelse vertaling van het venster.
+- gegevens van het gekozen object tonen, zoals doorvaarthoogte en telefoon;
+- bruggen en kabels markeren waar de boot niet onder past;
+- een licht herkennen aan het ritme dat je ziet;
+- dezelfde boei uit een laag en uit de kaart als één rij;
+- een Engelse vertaling van de bediening.
 
 Een belangrijk ontwerpdoel is dat kaartmakers of andere aanbieders later standaard een bijbehorende legenda of informatiesnippet kunnen meeleveren, terwijl gebruikers op dezelfde manier hun eigen notities en routebeschrijvingen kunnen toevoegen.
 
