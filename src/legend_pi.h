@@ -15,6 +15,7 @@
 #include "ocharts_source.h"
 #include "s57_source.h"
 #include "display_settings.h"
+#include "chart_names.h"
 
 #include <map>
 #include <set>
@@ -180,7 +181,15 @@ private:
 
     // Headings of the dynamic legend can be collapsed; the state is kept by
     // heading name in legend.ini.
+    // Key of a heading (its text in symbolen.txt, both languages); also the
+    // key under which its folded state is kept.
     wxString SectionName(int section) const;
+    // The heading as shown, in the chosen language.
+    wxString SectionTitle(int section) const;
+    // "Nederlands | English" texts of symbolen.txt: the part for the chosen
+    // language, or the other part when that one is empty.
+    wxString PickLanguage(const wxString &text) const;
+    void LoadChartNames();
     void ToggleSection(size_t renderedIndex);
     void SetAllSectionsCollapsed(bool collapsed);
 
@@ -285,6 +294,8 @@ private:
     wxTimer m_visibility_timer;
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
+    ChartNames m_chart_names;     // names of chart objects (s57-nl.txt)
+    bool m_dutch_names = true;    // setting: names in Dutch or English
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
     S57Source m_s57;

@@ -508,6 +508,9 @@ const char *kMeaningsTemplate =
     "# komt onder 'Overig'. Een lege betekenis ('vhf_* =') deelt een icoon\n"
     "# alleen in; de tekst komt dan uit de beschrijving van de waypoints.\n"
     "#\n"
+    "# Twee talen: 'betekenis | meaning' en '[Kopje | Heading]'. De legenda\n"
+    "# toont het deel van de gekozen taal; ontbreekt dat, dan het andere.\n"
+    "#\n"
     "# Regels die met # beginnen worden overgeslagen. Wijzigingen zijn\n"
     "# zichtbaar na Ververs of zodra de kaart verschuift.\n"
     "#\n"
@@ -1225,6 +1228,9 @@ void legend_pi::LoadConfig()
 
     config.Read("ShowChartObjects", &m_show_chart_objects, true);
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
+    wxString language;
+    config.Read("Language", &language, "nl");
+    m_dutch_names = language != "en";
 
     wxString collapsed;
     config.Read("CollapsedSections", &collapsed, "");
@@ -1262,6 +1268,7 @@ void legend_pi::SaveConfig() const
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
     config.Write("ShowChartObjects", m_show_chart_objects);
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
+    config.Write("Language", m_dutch_names ? "nl" : "en");
 
     config.Flush();
 }
@@ -1975,6 +1982,17 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            if (href.StartsWith("legend-language-toggle:")) {
+                m_markdown_view->CallAfter([this]() {
+                    m_dutch_names = !m_dutch_names;
+                    SaveConfig();
+                    // Labels are made when the list is collected.
+                    CollectDynamicLegend();
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
             if (href.StartsWith("legend-hidden-toggle:")) {
                 m_markdown_view->CallAfter([this]() {
                     m_show_hidden_at_scale = !m_show_hidden_at_scale;
@@ -1999,6 +2017,7 @@ void legend_pi::CreateLegendWindow()
                 m_markdown_view->CallAfter([this]() {
                     m_ocharts.Rescan();
                     m_s57.Rescan();
+                    LoadChartNames();
                     ShowDynamicLegend(true);
                 });
                 return;
@@ -2949,7 +2968,7 @@ void legend_pi::ResolveLabel(
     auto exact = m_meanings_exact.find(key);
     if (exact != m_meanings_exact.end()) {
         entry = &m_meanings[exact->second];
-        meaning = entry->meaning;
+        meaning = PickLanguage(entry->meaning);
     }
     else {
         for (size_t index : m_meanings_patterns) {
@@ -2967,7 +2986,7 @@ void legend_pi::ResolveLabel(
                 key.length() - prefix.length() - suffix.length());
 
             entry = &pattern;
-            meaning = pattern.meaning;
+            meaning = PickLanguage(pattern.meaning);
             meaning.Replace("*", part);
             break;
         }
@@ -3152,6 +3171,31 @@ void legend_pi::RenderLoadingPage()
     m_showing_loading_page = true;
 }
 
+wxString legend_pi::PickLanguage(const wxString &text) const
+{
+    const int bar = text.Find(" | ");
+    if (bar == wxNOT_FOUND)
+        return text;
+
+    wxString dutch = text.Left(bar);
+    wxString english = text.Mid(bar + 3);
+    dutch.Trim(true).Trim(false);
+    english.Trim(true).Trim(false);
+
+    if (m_dutch_names)
+        return dutch.IsEmpty() ? english : dutch;
+    return english.IsEmpty() ? dutch : english;
+}
+
+wxString legend_pi::SectionTitle(int section) const
+{
+    if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
+        return PickLanguage(m_meaning_sections[static_cast<size_t>(section)]);
+    if (section == -2)
+        return m_dutch_names ? "Kaartsymbolen" : "Chart symbols";
+    return m_dutch_names ? "Overig" : "Other";
+}
+
 wxString legend_pi::SectionName(int section) const
 {
     if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
@@ -3328,6 +3372,26 @@ void legend_pi::EnsureChartSymbols()
     const bool ok = m_chart_symbols.Load(dir.GetPath());
     wxLogMessage("Legend: S-52 tables %s from %s, %ld ms",
                  ok ? "loaded" : "NOT found", dir.GetPath(), watch.Time());
+
+    LoadChartNames();
+}
+
+// Dutch names of chart objects: the table shipped with the plugin, then a
+// file of the same name in the legend folder, whose lines go first.
+void legend_pi::LoadChartNames()
+{
+    m_chart_names.Clear();
+
+    const wxString shipped = GetPluginDataDir("legend_pi") +
+                             wxFileName::GetPathSeparator() + "data" +
+                             wxFileName::GetPathSeparator() + "s57-nl.txt";
+    const wxString own = GetLegendDirectory() + wxFileName::GetPathSeparator() +
+                         "s57-nl.txt";
+
+    const bool shippedOk = m_chart_names.Load(shipped);
+    const bool ownOk = m_chart_names.Load(own);
+    wxLogMessage("Legend: chart names %s%s", shippedOk ? "loaded" : "NOT found",
+                 ownOk ? ", own s57-nl.txt applied" : "");
 }
 
 // Adds the chart objects of the o-charts cells in view to the groups, one
@@ -3453,11 +3517,15 @@ void legend_pi::CollectChartObjects(
             group.hiddenAtScale = hiddenByScale;
             group.visibleFrom = hiddenByScale ? object.scamin : 0;
 
-            // The S-52 description of the symbol; when there is none, the
-            // object class with its colour and shape, e.g. "Topmark · red,
-            // cylinder (can)".
+            // The name made of class and attributes, in the chosen
+            // language ("Laterale boei: bakboord, rood, stompe ton"). Else
+            // the S-52 description of the symbol, or the object class with
+            // its colour and shape.
             wxString description =
-                m_chart_symbols.SymbolDescription(resolved.symbol);
+                m_chart_names.Compose(object, m_chart_symbols, m_dutch_names);
+
+            if (description.IsEmpty())
+                description = m_chart_symbols.SymbolDescription(resolved.symbol);
 
             if (description.IsEmpty()) {
                 description = m_chart_symbols.ClassDescription(object.className);
@@ -3880,6 +3948,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     : "<a href=\"legend-chart-toggle:\">Kaartsymbolen aan</a>");
         }
 
+        // Names of chart symbols in Dutch or English.
+        if (m_chart_sources_available) {
+            links.push_back(
+                m_dutch_names
+                    ? "<a href=\"legend-language-toggle:\">English names</a>"
+                    : "<a href=\"legend-language-toggle:\">Nederlandse namen</a>");
+        }
+
         // Symbols hidden at this scale: listed in grey, or left out.
         links.push_back(
             m_show_hidden_at_scale
@@ -3961,7 +4037,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
                  << "<td valign=\"middle\"><b>"
-                 << escape(m_meaning_sections[static_cast<size_t>(section)])
+                 << escape(SectionTitle(section))
                  << "</b><br><font size=\"-1\" color=\"" << hex(muted)
                  << "\">";
 
@@ -4000,6 +4076,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             if (showHeadings &&
                 (i == 0 || group.section != m_dynamic_groups[i - 1].section)) {
                 const wxString heading = SectionName(group.section);
+                const wxString headingTitle = SectionTitle(group.section);
                 const bool folded = collapsed[i];
 
                 // Symbols and waypoints of this group, and the icons shown
@@ -4057,7 +4134,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                      << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
                      << "<font size=\"+3\">"
                      << (folded ? "&#9654;" : "&#9660;") << "</font>&nbsp;<b>"
-                     << escape(heading) << "</b> <font color=\"" << hex(muted)
+                     << escape(headingTitle) << "</b> <font color=\"" << hex(muted)
                      << "\">&middot; " << symbols
                      << (symbols == 1 ? " symbool, " : " symbolen, ")
                      << waypoints << " in beeld</font></td>"
