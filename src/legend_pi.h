@@ -299,6 +299,13 @@ private:
     wxPoint m_mouse_down;
     bool m_mouse_down_valid = false;
     int m_scroll_to_row = -1;          // row to scroll to after rendering
+
+    // A row found from the chart flashes a few times before it settles in
+    // the normal highlight colour.
+    wxString m_flash_key;
+    int m_flash_phase = 0;
+    wxTimer m_flash_timer;
+    void OnFlashTimer();
     bool m_pending_reveal = false;      // reveal once loading has finished
     double m_pending_reveal_lat = 0.0;
     double m_pending_reveal_lon = 0.0;

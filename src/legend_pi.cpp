@@ -941,6 +941,10 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { CheckVisibilityChanges(); });
 
+    m_flash_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnFlashTimer(); });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -1021,6 +1025,7 @@ bool legend_pi::DeInit()
     m_loading_timer.Stop();
     m_prefetch_timer.Stop();
     m_visibility_timer.Stop();
+    m_flash_timer.Stop();
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.
@@ -2523,11 +2528,28 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
     if (m_collapsed_sections.erase(SectionName(group.section)) > 0)
         SaveConfig();
 
+    m_flash_key = group.key;
+    m_flash_phase = 0;
+    m_flash_timer.Stop();
+    m_flash_timer.Start(300);
+
     m_scroll_to_row = static_cast<int>(groupIndex);
     RenderDynamicLegend(false);
 
     const auto &position = group.positions[positionIndex];
     ShowMarker(position.first, position.second);
+}
+
+// Three flashes of the found row, then the normal highlight.
+void legend_pi::OnFlashTimer()
+{
+    ++m_flash_phase;
+    if (m_flash_phase >= 6 || m_flash_key.IsEmpty() ||
+        m_current_legend_path != kDynamicGpxId) {
+        m_flash_timer.Stop();
+        m_flash_key.Clear();
+    }
+    RenderDynamicLegend(true);
 }
 
 void legend_pi::OnToolbarToolCallback(int id)
@@ -3713,6 +3735,16 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         rowColours[i] =
             isActive ? active
                      : (stripeIndex[i] % 2 == 1 ? stripe : background);
+
+        // The row just found from the chart: the marker's colour, on and
+        // off, so the eye finds it.
+        if (!m_flash_key.IsEmpty() && group.key == m_flash_key &&
+            m_flash_phase % 2 == 0) {
+            wxColour outline;
+            wxColour highlight;
+            MarkerColours(outline, highlight);
+            rowColours[i] = BlendColour(background, highlight, 0.45);
+        }
 
         // Transparency is resolved against what ends up behind the icon:
         // the tile in dark mode, otherwise the row itself. Icons of a
