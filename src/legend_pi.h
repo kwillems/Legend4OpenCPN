@@ -451,6 +451,26 @@ private:
     double m_ship_lon = 0.0;
     wxLongLong m_ship_time = 0;   // UTC milliseconds of the last fix, 0 = none
     wxString m_vhf_shown_key;     // areas in the banner last drawn
+    double m_ship_cog = NAN;      // course over ground, degrees true
+    double m_ship_sog = NAN;      // speed over ground, knots
+
+    // "Vooruit": what the boat meets in the coming half hour along its
+    // course, among the objects of the list, in order of arrival.
+    struct AheadItem
+    {
+        size_t group = 0;        // index in m_dynamic_groups
+        size_t position = 0;     // index in its positions
+        double minutes = 0.0;
+        double cross = 0.0;      // sea miles to the right of the course
+        wxString light;          // its light character, if any
+    };
+    std::vector<AheadItem> m_ahead;
+    wxString m_ahead_key;         // what ComputeAhead() found last
+    wxString m_ahead_drawn_key;   // what the list shows
+    wxLongLong m_ahead_rendered = 0;
+    bool m_ahead_sailing = false; // a recent fix and some speed
+    void ComputeAhead();
+    void ShowAheadItem(size_t index);
     // The areas at the position the banner uses; fromShip tells which.
     std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);
 

@@ -129,6 +129,9 @@ const wxString kLegendAllIdPrefix = "legend-all-";
 const wxString kLegendMoveUpIdPrefix = "legend-move-up-";
 const wxString kLegendMoveDownIdPrefix = "legend-move-down-";
 
+// Id of a line of the "Vooruit" block, followed by its number.
+const wxString kLegendAheadIdPrefix = "legend-ahead-";
+
 // The "memory:" file system handler for the icons of the dynamic legend.
 // Its code is compiled into this plugin, so it must be removed again in
 // DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
@@ -2226,7 +2229,7 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -2248,6 +2251,7 @@ void legend_pi::CreateLegendWindow()
             {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
             {HitKind::MoveDown,
              legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+            {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
             {HitKind::Row, legendView->RowAt(pos)},
             {HitKind::Section, legendView->SectionAt(pos)}};
@@ -2298,6 +2302,9 @@ void legend_pi::CreateLegendWindow()
                     break;
                 case HitKind::MoveDown:
                     MoveSection(hit.index, +1);
+                    break;
+                case HitKind::Ahead:
+                    ShowAheadItem(static_cast<size_t>(hit.index));
                     break;
                 case HitKind::None:
                     break;
@@ -2364,6 +2371,9 @@ void legend_pi::CreateLegendWindow()
                 break;
             case HitKind::MoveDown:
                 tip = "Kopje omlaag";
+                break;
+            case HitKind::Ahead:
+                tip = "Op de kaart aanwijzen";
                 break;
             case HitKind::None:
                 break;
@@ -4862,6 +4872,70 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         }
     }
 
+    // "Vooruit": while sailing, what the boat meets in the coming half
+    // hour, in order of arrival.
+    if (m_viewport_valid && !m_reorder_mode) {
+        ComputeAhead();
+        m_ahead_drawn_key = m_ahead_key;
+        m_ahead_rendered = wxGetUTCTimeMillis();
+
+        if (m_ahead_sailing) {
+            const bool nl = m_dutch_names;
+            html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"4\" "
+                 << "bgcolor=\"" << hex(palette.header) << "\">"
+                 << "<tr><td colspan=\"2\"><b>" << (nl ? "Vooruit" : "Ahead") << "</b> "
+                 << "<font size=\"-1\" color=\"" << hex(muted) << "\">"
+                 << (nl ? "komende 30 minuten op koers" : "next 30 minutes on course")
+                 << "</font></td></tr>";
+
+            if (m_ahead.empty()) {
+                html << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">"
+                     << (nl ? "Niets uit de legenda v&oacute;&oacute;r de boot."
+                            : "Nothing from the legend ahead of the boat.")
+                     << "</font></td></tr>";
+            }
+
+            for (size_t k = 0; k < m_ahead.size(); ++k) {
+                const AheadItem &item = m_ahead[k];
+                const DynamicGroup &group = m_dynamic_groups[item.group];
+                const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
+
+                wxString when;
+                if (item.minutes < 1.0)
+                    when = nl ? "nu" : "now";
+                else
+                    when = wxString::Format(nl ? "over %d min" : "in %d min",
+                                            static_cast<int>(std::lround(item.minutes)));
+
+                wxString side;
+                if (std::fabs(item.cross) < 0.02)
+                    side = nl ? "recht vooruit" : "dead ahead";
+                else if (item.cross > 0.0)
+                    side = nl ? "stuurboord" : "starboard";
+                else
+                    side = nl ? "bakboord" : "port";
+
+                html << "<tr><td id=\"" << id << "\" width=\"30\" valign=\"middle\">";
+                if (icons[item.group].IsOk()) {
+                    const wxString name = wxString::Format(
+                        "legend_dyn_%d_ahead_%zu.png", m_dynamic_generation, k);
+                    wxMemoryFSHandler::AddFile(
+                        name, NormalizeIcon(icons[item.group], palette.header, 24, nullptr, 0),
+                        wxBITMAP_TYPE_PNG);
+                    m_dynamic_image_names.push_back(name);
+                    html << "<img src=\"memory:" << name << "\">";
+                }
+                html << "</td><td id=\"" << id << "\" valign=\"middle\">"
+                     << "<b>" << when << "</b> &middot; " << side << " &middot; "
+                     << escape(group.lightCharacter ? group.lightText : group.label);
+                if (!item.light.IsEmpty() && !group.lightCharacter)
+                    html << " &middot; <b>" << escape(item.light) << "</b>";
+                html << "</td></tr>";
+            }
+            html << "</table>";
+        }
+    }
+
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
          << "<tr><td bgcolor=\"" << hex(palette.headerRule)
          << "\" height=\"2\"></td></tr>"
@@ -6189,6 +6263,8 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
 
     m_ship_lat = pfix.Lat;
     m_ship_lon = pfix.Lon;
+    m_ship_cog = pfix.Cog;
+    m_ship_sog = pfix.Sog;
     m_ship_time = wxGetUTCTimeMillis();
 
     if (!IsDynamicLegendVisible() || m_loading || m_showing_loading_page ||
@@ -6200,8 +6276,158 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
     bool fromShip = false;
     bool layerShown = false;
     VhfAreasHere(&fromShip, &layerShown);
-    if (m_vhf_shown_key != previous)
+
+    // What lies ahead changes with every fix while sailing; the list is
+    // redrawn at most every five seconds for it.
+    ComputeAhead();
+    const bool aheadChanged =
+        m_ahead_key != m_ahead_drawn_key &&
+        (wxGetUTCTimeMillis() - m_ahead_rendered) >= 5000;
+
+    if (m_vhf_shown_key != previous || aheadChanged)
         RenderDynamicLegend(true);
+}
+
+// The objects of the list in a fan ahead of the boat: a strip that widens
+// with the distance (at least 0.12 sea mile on either side, widening at
+// 15 degrees), as far as the boat goes in half an hour.
+void legend_pi::ComputeAhead()
+{
+    m_ahead.clear();
+
+    const bool recent = m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000;
+    m_ahead_sailing = recent && !std::isnan(m_ship_cog) && !std::isnan(m_ship_sog) &&
+                      m_ship_sog >= 0.5;
+    if (!m_ahead_sailing) {
+        m_ahead_key = "still";
+        return;
+    }
+
+    const double kPi = 3.14159265358979323846;
+    const double course = m_ship_cog * kPi / 180.0;
+    const double range = std::min(8.0, std::max(0.3, m_ship_sog * 0.5));
+    const double cosLat = std::cos(m_ship_lat * kPi / 180.0);
+    const double widen = std::tan(15.0 * kPi / 180.0);
+
+    struct Found
+    {
+        AheadItem item;
+        double along;
+        double lat;
+        double lon;
+    };
+    std::vector<Found> found;
+
+    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        const DynamicGroup &group = m_dynamic_groups[i];
+        // Lights under a row come with their row; flares double a buoy.
+        if (!group.parentKey.IsEmpty() || group.lightSymbol)
+            continue;
+
+        for (size_t j = 0; j < group.positions.size(); ++j) {
+            const double lat = group.positions[j].first;
+            const double lon = group.positions[j].second;
+            const double dy = (lat - m_ship_lat) * 60.0;
+            double dlon = lon - m_ship_lon;
+            while (dlon > 180.0)
+                dlon -= 360.0;
+            while (dlon < -180.0)
+                dlon += 360.0;
+            const double dx = dlon * 60.0 * cosLat;
+
+            const double along = dx * std::sin(course) + dy * std::cos(course);
+            const double cross = dx * std::cos(course) - dy * std::sin(course);
+            if (along < 0.01 || along > range ||
+                std::fabs(cross) > std::max(0.12, along * widen))
+                continue;
+
+            Found f;
+            f.item.group = i;
+            f.item.position = j;
+            f.item.minutes = along / m_ship_sog * 60.0;
+            f.item.cross = cross;
+            f.along = along;
+            f.lat = lat;
+            f.lon = lon;
+
+            if (group.lightCharacter) {
+                f.item.light = group.lightText;
+            }
+            else {
+                for (size_t k = i + 1; k < m_dynamic_groups.size() &&
+                                       m_dynamic_groups[k].parentKey == group.key;
+                     ++k) {
+                    for (const auto &p : m_dynamic_groups[k].positions) {
+                        if (std::fabs(p.first - lat) < 0.0003 &&
+                            std::fabs(p.second - lon) < 0.0005) {
+                            f.item.light = m_dynamic_groups[k].lightText;
+                            break;
+                        }
+                    }
+                    if (!f.item.light.IsEmpty())
+                        break;
+                }
+            }
+            found.push_back(f);
+        }
+    }
+
+    std::sort(found.begin(), found.end(),
+              [](const Found &a, const Found &b) { return a.along < b.along; });
+
+    // The same buoy from two sources (a waypoint and a chart symbol) once;
+    // the first, or the one that knows its light.
+    const size_t kMaxItems = 8;
+    wxString key;
+    for (const Found &f : found) {
+        bool duplicate = false;
+        for (AheadItem &kept : m_ahead) {
+            const auto &p = m_dynamic_groups[kept.group].positions[kept.position];
+            if (std::fabs(p.first - f.lat) < 0.0002 && std::fabs(p.second - f.lon) < 0.0003) {
+                if (kept.light.IsEmpty() && !f.item.light.IsEmpty())
+                    kept = f.item;
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate)
+            continue;
+        if (m_ahead.size() >= kMaxItems)
+            break;
+        m_ahead.push_back(f.item);
+    }
+
+    for (const AheadItem &item : m_ahead) {
+        key << m_dynamic_groups[item.group].key << '@' << item.position << '/'
+            << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
+    }
+    m_ahead_key = key.IsEmpty() ? wxString("nothing") : key;
+}
+
+// A click on a line of the "Vooruit" block: that object on the chart.
+void legend_pi::ShowAheadItem(size_t index)
+{
+    if (index >= m_ahead.size())
+        return;
+    const AheadItem item = m_ahead[index];
+    if (item.group >= m_dynamic_groups.size())
+        return;
+    DynamicGroup &group = m_dynamic_groups[item.group];
+    if (item.position >= group.positions.size())
+        return;
+
+    group.current = static_cast<int>(item.position);
+    m_active_group_key = group.key;
+    m_active_light_key.Clear();
+
+    const auto position = group.positions[item.position];
+    LightCharacter light;
+    if (!item.light.IsEmpty() && light.Parse(item.light))
+        ShowLightMarkers(light, {position});
+    else
+        ShowMarker(position.first, position.second);
+
+    RenderDynamicLegend(true);
 }
 
 std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
