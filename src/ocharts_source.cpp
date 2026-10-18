@@ -106,18 +106,6 @@ ChartObject ToChartObject(const PI_S57Obj *obj)
     return object;
 }
 
-// Diagnostics: the colour scheme of OpenCPN's presentation library before
-// and after a call into the o-charts plugin. Something in this path has
-// been seen to reset the chart to day colours.
-void CheckPlibScheme(const wxString &before, const char *step)
-{
-    const wxString after = PI_GetPLIBColorScheme();
-    if (after != before) {
-        wxLogMessage("Legend: PLIB colour scheme changed from %s to %s during %s",
-                     before, after, step);
-    }
-}
-
 // Chart folders of OpenCPN, without the "^hash" suffix of the database.
 wxArrayString ChartDirectories()
 {
@@ -175,6 +163,13 @@ bool OChartsSource::Available()
 void OChartsSource::Rescan()
 {
     m_inventoried = false;
+}
+
+void OChartsSource::SetColorScheme(PI_ColorScheme scheme)
+{
+    m_scheme = scheme;
+    for (auto &entry : m_open)
+        entry.second.chart->SetColorScheme(static_cast<int>(scheme), true);
 }
 
 void OChartsSource::Close()
@@ -341,15 +336,16 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
         return nullptr;
 
     wxStopWatch watch;
-    const wxString schemeBefore = PI_GetPLIBColorScheme();
-    const int initResult = chart->Init(path, PI_FULL_INIT);
-    CheckPlibScheme(schemeBefore, "o-charts Init");
-    if (initResult != 0) {
+    if (chart->Init(path, PI_FULL_INIT) != 0) {
         wxLogMessage("Legend: o-charts cell %s could not be opened",
                      wxFileName(path).GetFullName());
         delete chart;
         return nullptr;
     }
+
+    // Init leaves the o-charts presentation library in its day scheme;
+    // put the current scheme back before the chart draws again.
+    chart->SetColorScheme(static_cast<int>(m_scheme), true);
 
     wxLogMessage("Legend: o-charts cell %s opened in %ld ms",
                  wxFileName(path).GetFullName(), watch.Time());
@@ -412,10 +408,8 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
         PlugIn_ViewPort query = vp;
         if (ignoreScaleLimits)
             query.chart_scale = 1.0f;
-        const wxString schemeBefore = PI_GetPLIBColorScheme();
         ListOfPI_S57Obj *list = chart->GetObjRuleListAtLatLon(
             static_cast<float>(vp.clat), static_cast<float>(vp.clon), radius, &query);
-        CheckPlibScheme(schemeBefore, "o-charts GetObjRuleListAtLatLon");
         if (!list)
             continue;
 

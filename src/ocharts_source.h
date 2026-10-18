@@ -51,6 +51,13 @@ public:
     // Frees every opened chart. Must run before the plugin is unloaded.
     void Close();
 
+    // OpenCPN's colour scheme (day, dusk, night). The o-charts plugin has
+    // its own presentation library whose scheme is set through its chart
+    // objects; a freshly initialised chart resets it to day, so every chart
+    // opened here gets the current scheme at once, and all open charts get
+    // a change.
+    void SetColorScheme(PI_ColorScheme scheme);
+
     size_t CellCount() const { return m_cells.size(); }
     wxString LastDiagnostics() const { return m_diagnostics; }
 
@@ -81,6 +88,7 @@ private:
     std::map<wxString, OpenChart> m_open; // path -> chart
     unsigned m_use_counter = 0;
     wxString m_diagnostics;
+    PI_ColorScheme m_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
 };
 
 #endif
