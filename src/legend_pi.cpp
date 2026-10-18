@@ -3174,6 +3174,10 @@ void legend_pi::CollectChartObjects(
     const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
     m_display_settings.Refresh();
 
+    // Diagnostics for a colour scheme reset seen after using the legend in
+    // the night scheme with chart symbols on.
+    const wxString plibSchemeBefore = PI_GetPLIBColorScheme();
+
     // Whether the chart draws objects of a class with a scale limit: asked
     // of OpenCPN once per class and limit, with its configuration file as
     // fallback.
@@ -3296,6 +3300,14 @@ void legend_pi::CollectChartObjects(
             ++m_chart_objects_scale_hidden;
         else
             ++m_chart_object_total;
+    }
+
+    const wxString plibSchemeAfter = PI_GetPLIBColorScheme();
+    if (plibSchemeAfter != plibSchemeBefore) {
+        wxLogMessage(
+            "Legend: PLIB colour scheme changed from %s to %s during the class "
+            "probes (own scheme %s)",
+            plibSchemeBefore, plibSchemeAfter, SchemeName(g_color_scheme));
     }
 
     // The list is rebuilt on every pause of the chart; log only what changed.
