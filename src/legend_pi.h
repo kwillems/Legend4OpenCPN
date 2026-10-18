@@ -16,6 +16,7 @@
 #include "s57_source.h"
 #include "display_settings.h"
 #include "chart_names.h"
+#include "light_character.h"
 
 #include <map>
 #include <set>
@@ -58,6 +59,17 @@ struct DynamicGroup
     // visibleFrom is the chart scale at which the first one appears.
     bool hiddenAtScale = false;
     int visibleFrom = 0;
+
+    // A light character ("Fl(2)R.6s") of waypoints and chart lights in
+    // view; label holds it in words. With a parentKey it is a sub-row of
+    // the buoy or beacon row it stands on; lights that stand on nothing
+    // listed have the heading "Lichtkarakters".
+    bool lightCharacter = false;
+    wxString lightText;
+    wxString parentKey;
+
+    // Row of the light flares of the chart (S-57 class LIGHTS).
+    bool lightSymbol = false;
 };
 
 // One line of symbolen.txt: icon name (may hold one '*'), meaning (may be
@@ -83,6 +95,7 @@ struct CachedWaypoint
     bool visible = false;
     bool useScamin = false;
     double scamin = 0.0;
+    wxString light;     // light character found in its name or description
 };
 
 class legend_pi : public opencpn_plugin_118
@@ -173,6 +186,18 @@ private:
     void EnsureChartSymbols();
     void CollectChartObjects(
         const PlugIn_ViewPort &vp, std::map<wxString, DynamicGroup> *groups);
+    // Adds one light to the row of its light character under the row
+    // parentKey (empty: under "Lichtkarakters"). A light under a row is
+    // hidden at this scale when its row is; hiddenFrom is the scale limit
+    // of a light on its own that the chart does not draw at this scale. A light within about
+    // 30 metres of one already in the row counts once.
+    void AddLight(
+        std::map<wxString, DynamicGroup> &groups,
+        const LightCharacter &light,
+        double lat,
+        double lon,
+        const wxString &parentKey,
+        int hiddenFrom = 0) const;
     void ClearDynamicImages();
 
     // Meaning of a symbol shown in the legend, see ResolveLabel().
@@ -215,10 +240,33 @@ private:
     // Temporary marker on the chart for the object chosen in the legend
     void ShowMarker(double lat, double lon);
     void ShowMarkers(const std::vector<std::pair<double, double>> &positions);
-    std::vector<wxPoint> MarkerCentres(PlugIn_ViewPort *vp) const;
+    std::vector<wxPoint> MarkerCentres(
+        PlugIn_ViewPort *vp,
+        const std::vector<std::pair<double, double>> &positions) const;
     void StopMarker();
     void OnMarkerTimer();
     void RefreshAllCanvases();
+
+    // A light character chosen in the legend shines on the chart in its
+    // own rhythm for a few periods, at one light or at all in view.
+    void ShowLightMarkers(
+        const LightCharacter &light,
+        const std::vector<std::pair<double, double>> &positions);
+    void StopLightMarker();
+    void OnLightTimer();
+
+    // All lights in view shining on the chart at once, each in its own
+    // rhythm, until switched off. Follows the chart as the list does.
+    void SetAllLightsShining(bool on);
+    void UpdateAllLights();
+    void OnAllLightsTimer();
+    bool DrawAllLights(wxDC &dc, PlugIn_ViewPort *vp);
+    bool DrawAllLightsGL(PlugIn_ViewPort *vp);
+    bool DrawLightMarkers(wxDC &dc, PlugIn_ViewPort *vp);
+    bool DrawLightMarkersGL(PlugIn_ViewPort *vp);
+    // The light's colour (index) at this moment, -1 while dark; plus
+    // kDimLight for the steady part of a fixed and flashing light.
+    int LightStateAt(double seconds) const;
 
     void OnPreviousLegend(wxCommandEvent &event);
     void OnNextLegend(wxCommandEvent &event);
@@ -327,6 +375,8 @@ private:
     // A row found from the chart lights up in the marker's colour and fades
     // to the normal highlight colour.
     wxString m_flash_key;
+    wxString m_flash_light_key; // its light sub-row, lit along with it
+    wxString m_active_light_key; // light sub-row highlighted with its row
     int m_flash_phase = 0;
     wxTimer m_flash_timer;
     void OnFlashTimer();
@@ -366,6 +416,47 @@ private:
     std::vector<std::pair<double, double>> m_marker_positions; // lat, lon
     int m_marker_phase;
     wxTimer m_marker_timer;
+
+    struct ShiningCharacter
+    {
+        std::vector<LightPhase> phases;
+        std::vector<wxString> colours;
+        double cycle = 0.0;
+        wxString rhythm; // the abbreviation without colours, for its sectors
+    };
+    struct ShiningLight
+    {
+        double lat = 0.0;
+        double lon = 0.0;
+        size_t character = 0;  // index in m_shining_characters
+        double offset = 0.0;   // seconds; lights do not flash in step
+        int state = -2;        // as LightStateAt(), last drawn
+    };
+    // Sectors of the sector lights in view, by position (grid of about
+    // two metres), from the chart objects last collected.
+    // Each sector with the rhythm of its light ("Iso.4s"): two lights at
+    // one spot keep their own sectors.
+    std::map<std::pair<long, long>, std::vector<std::pair<wxString, LightSector>>>
+        m_light_sectors;
+    std::vector<LightSector> SectorsAt(double lat, double lon, const wxString &rhythm) const;
+    wxString m_light_rhythm; // rhythm of the light shining for a click
+
+    bool m_show_lights = true;     // setting: light characters in the list
+    bool m_all_lights_on = false;
+    std::vector<ShiningCharacter> m_shining_characters;
+    std::vector<ShiningLight> m_shining_lights;
+    wxLongLong m_all_lights_started;
+    wxTimer m_all_lights_timer;
+
+    bool m_light_active = false;
+    std::vector<std::pair<double, double>> m_light_positions; // lat, lon
+    std::vector<LightPhase> m_light_phases;
+    std::vector<wxString> m_light_colours;
+    double m_light_cycle = 0.0;     // seconds of the phases together
+    double m_light_duration = 0.0;  // seconds the light shines on the chart
+    wxLongLong m_light_started;     // UTC milliseconds
+    int m_light_state = -1;         // as LightStateAt(), last drawn
+    wxTimer m_light_timer;
 
     int m_window_x;
     int m_window_y;
