@@ -56,6 +56,10 @@ set(SRC
     src/s57_source.cpp
     src/display_settings.h
     src/display_settings.cpp
+    src/chart_names.h
+    src/chart_names.cpp
+    src/light_character.h
+    src/light_character.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

@@ -40,6 +40,7 @@
 #include <wx/stdpaths.h>
 #include <wx/stopwatch.h>
 #include <wx/textfile.h>
+#include <wx/tokenzr.h>
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -69,6 +70,49 @@ const wxString kDynamicGpxId = "@gpx-legend";
 
 // Steps of the fade of a row found from the chart (150 ms each).
 const int kFadeSteps = 8;
+
+// Added to the colour index of a light that shines dimmed: the steady
+// part of a fixed and flashing light.
+const int kDimLight = 1000;
+
+// Chart lights are paired with the buoy or beacon at the same spot through
+// a grid of cells of this size in degrees, a few metres.
+const double kCarrierCell = 6e-5;
+
+struct PendingLight
+{
+    LightCharacter light;
+    double lat;
+    double lon;
+    int hiddenFrom; // scale limit when not drawn at this scale, else 0
+    bool sector;    // one sector of a sector light
+    LightSector part;
+};
+
+// Grid of the sectors of sector lights, about two metres.
+const double kSectorCell = 2e-5;
+
+std::pair<long, long> SectorCell(double lat, double lon)
+{
+    return std::make_pair(static_cast<long>(std::floor(lat / kSectorCell)),
+                          static_cast<long>(std::floor(lon / kSectorCell)));
+}
+
+// An object a light can stand on, and the row it is listed in. Rank 0 for
+// buoys and beacons, 1 for other structures.
+struct Carrier
+{
+    double lat;
+    double lon;
+    wxString groupKey;
+    int rank;
+};
+
+std::pair<long, long> CarrierCell(double lat, double lon)
+{
+    return std::make_pair(static_cast<long>(std::floor(lat / kCarrierCell)),
+                          static_cast<long>(std::floor(lon / kCarrierCell)));
+}
 
 // Id of the table cells of one row in the dynamic legend, followed by the
 // row number.
@@ -468,6 +512,57 @@ wxImage NormalizeIcon(
     return square;
 }
 
+// Text prepared for searching: lower case and without accents, so that
+// "waterskien" finds "Waterskiën" and capitals do not matter.
+wxString FoldForSearch(const wxString &text)
+{
+    const wxString lower = text.Lower();
+    wxString folded;
+    folded.reserve(lower.length());
+
+    for (const wxUniChar ch : lower) {
+        switch (ch.GetValue()) {
+        case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4: case 0xE5:
+            folded << 'a';
+            break;
+        case 0xE6:
+            folded << "ae";
+            break;
+        case 0xE7:
+            folded << 'c';
+            break;
+        case 0xE8: case 0xE9: case 0xEA: case 0xEB:
+            folded << 'e';
+            break;
+        case 0xEC: case 0xED: case 0xEE: case 0xEF:
+            folded << 'i';
+            break;
+        case 0xF1:
+            folded << 'n';
+            break;
+        case 0xF2: case 0xF3: case 0xF4: case 0xF5: case 0xF6: case 0xF8:
+            folded << 'o';
+            break;
+        case 0x153:
+            folded << "oe";
+            break;
+        case 0xF9: case 0xFA: case 0xFB: case 0xFC:
+            folded << 'u';
+            break;
+        case 0xFD: case 0xFF:
+            folded << 'y';
+            break;
+        case 0xDF:
+            folded << "ss";
+            break;
+        default:
+            folded << ch;
+            break;
+        }
+    }
+    return folded;
+}
+
 // First non-empty line of a waypoint description, or empty when that line
 // cannot be a meaning (too long, or only a link).
 wxString FirstDescriptionLine(const wxString &description)
@@ -508,6 +603,9 @@ const char *kMeaningsTemplate =
     "# komt onder 'Overig'. Een lege betekenis ('vhf_* =') deelt een icoon\n"
     "# alleen in; de tekst komt dan uit de beschrijving van de waypoints.\n"
     "#\n"
+    "# Twee talen: 'betekenis | meaning' en '[Kopje | Heading]'. De legenda\n"
+    "# toont het deel van de gekozen taal; ontbreekt dat, dan het andere.\n"
+    "#\n"
     "# Regels die met # beginnen worden overgeslagen. Wijzigingen zijn\n"
     "# zichtbaar na Ververs of zodra de kaart verschuift.\n"
     "#\n"
@@ -516,8 +614,8 @@ const char *kMeaningsTemplate =
     "# vhf_b11b_*    = Meldplicht marifoon, kanaal *\n"
     "# vhf_*         =\n"
     "#\n"
-    "# [Betonning]\n"
-    "# 011           = Groene spitse ton\n"
+    "# [Betonning | Buoyage]\n"
+    "# 011           = Groene spitse ton | Green conical buoy\n"
     "\n";
 
 // OpenCPN's colour scheme (day, dusk, night), set through SetColorScheme().
@@ -948,6 +1046,21 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnFlashTimer(); });
 
+    m_filter_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) {
+            if (m_search)
+                SetFilter(m_search->GetValue());
+        });
+
+    m_light_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnLightTimer(); });
+
+    m_all_lights_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnAllLightsTimer(); });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -1029,6 +1142,11 @@ bool legend_pi::DeInit()
     m_prefetch_timer.Stop();
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
+    m_filter_timer.Stop();
+    m_light_timer.Stop();
+    m_light_active = false;
+    m_all_lights_timer.Stop();
+    m_all_lights_on = false;
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.
@@ -1051,6 +1169,7 @@ bool legend_pi::DeInit()
         m_image_page = nullptr;
         m_legend_bitmap = nullptr;
         m_markdown_view = nullptr;
+        m_search = nullptr;
     }
 
     if (g_memoryHandler) {
@@ -1225,6 +1344,10 @@ void legend_pi::LoadConfig()
 
     config.Read("ShowChartObjects", &m_show_chart_objects, true);
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
+    config.Read("ShowLights", &m_show_lights, true);
+    wxString language;
+    config.Read("Language", &language, "nl");
+    m_dutch_names = language != "en";
 
     wxString collapsed;
     config.Read("CollapsedSections", &collapsed, "");
@@ -1262,6 +1385,8 @@ void legend_pi::SaveConfig() const
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
     config.Write("ShowChartObjects", m_show_chart_objects);
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
+    config.Write("ShowLights", m_show_lights);
+    config.Write("Language", m_dutch_names ? "nl" : "en");
 
     config.Flush();
 }
@@ -1601,6 +1726,8 @@ void legend_pi::ShowEmptyState()
 
     if (m_content_book && m_markdown_view)
         m_content_book->SetSelection(1);
+
+    UpdateSearchVisibility();
 }
 
 void legend_pi::UpdateImageScale()
@@ -1696,6 +1823,7 @@ void legend_pi::ShowLegend(size_t index)
     if (path == kDynamicGpxId) {
         m_current_image = wxImage();
         m_current_legend_path = path;
+        UpdateSearchVisibility();
         ShowDynamicLegend();
     }
     else if (ext == "png") {
@@ -1730,6 +1858,8 @@ void legend_pi::ShowLegend(size_t index)
 
         RestoreMarkdownScroll(path);
     }
+
+    UpdateSearchVisibility();
 
     if (m_legend_window)
         m_legend_window->Layout();
@@ -1879,6 +2009,48 @@ void legend_pi::CreateLegendWindow()
         &legend_pi::OnLegendSelected,
         this);
 
+    // Search field of the dynamic legend; hidden for other legend items.
+    // The list follows the text after a short pause in typing, Enter
+    // applies it at once.
+    m_search = new wxSearchCtrl(
+        panel,
+        wxID_ANY,
+        wxEmptyString,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxTE_PROCESS_ENTER);
+    m_search->ShowCancelButton(true);
+    m_search->SetDescriptiveText("Zoek in de legenda");
+    m_search->SetToolTip(
+        "Toont alleen de symbolen waarvan de naam, het kopje of de icoonnaam "
+        "alle getypte woorden bevat (Cmd+F)");
+    m_search->Hide();
+
+    mainSizer->Add(
+        m_search,
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    m_search->Bind(
+        wxEVT_TEXT,
+        [this](wxCommandEvent &event) {
+            event.Skip();
+            m_filter_timer.StartOnce(250);
+        });
+
+    m_search->Bind(
+        wxEVT_TEXT_ENTER,
+        [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
+
+    m_search->Bind(
+        wxEVT_SEARCHCTRL_SEARCH_BTN,
+        [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
+
+    m_search->Bind(
+        wxEVT_SEARCHCTRL_CANCEL_BTN,
+        [this](wxCommandEvent &) { SetFilter(wxEmptyString); });
+
     m_content_book = new wxSimplebook(
         panel,
         wxID_ANY,
@@ -1975,6 +2147,38 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            if (href.StartsWith("legend-language-toggle:")) {
+                m_markdown_view->CallAfter([this]() {
+                    m_dutch_names = !m_dutch_names;
+                    SaveConfig();
+                    // Labels are made when the list is collected.
+                    CollectDynamicLegend();
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
+            if (href.StartsWith("legend-lights-toggle:")) {
+                m_markdown_view->CallAfter([this]() {
+                    m_show_lights = !m_show_lights;
+                    if (!m_show_lights)
+                        SetAllLightsShining(false);
+                    SaveConfig();
+                    RefreshDynamicLegendKeepingState();
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
+            if (href.StartsWith("legend-all-lights:")) {
+                const bool on = !m_all_lights_on;
+                m_markdown_view->CallAfter([this, on]() {
+                    SetAllLightsShining(on);
+                    RenderDynamicLegend(true);
+                });
+                return;
+            }
+
             if (href.StartsWith("legend-hidden-toggle:")) {
                 m_markdown_view->CallAfter([this]() {
                     m_show_hidden_at_scale = !m_show_hidden_at_scale;
@@ -1999,6 +2203,7 @@ void legend_pi::CreateLegendWindow()
                 m_markdown_view->CallAfter([this]() {
                     m_ocharts.Rescan();
                     m_s57.Rescan();
+                    LoadChartNames();
                     ShowDynamicLegend(true);
                 });
                 return;
@@ -2113,6 +2318,11 @@ void legend_pi::CreateLegendWindow()
             switch (hit.kind) {
             case HitKind::All:
                 tip = "Alle exemplaren in beeld tegelijk aanwijzen";
+                if (hit.index >= 0 &&
+                    static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
+                    m_dynamic_groups[hit.index].lightCharacter)
+                    tip = "Alle lichten met dit karakter in beeld laten branden, "
+                          "in hun ritme";
                 break;
             case HitKind::Row:
                 tip = "Naar het dichtstbijzijnde exemplaar; nog een klik gaat "
@@ -2131,6 +2341,12 @@ void legend_pi::CreateLegendWindow()
                     }
                     if (group.chartSymbol)
                         tip = "Kaartsymbool " + group.symbol + ". " + tip;
+                    if (group.lightCharacter)
+                        tip = "Het dichtstbijzijnde licht met dit karakter gaat op "
+                              "de kaart branden in zijn ritme; nog een klik gaat "
+                              "naar het volgende. Periode en groepen komen uit de "
+                              "kaart, de duur van een schittering of verduistering "
+                              "is een gangbare waarde";
                 }
                 break;
             case HitKind::Section:
@@ -2268,6 +2484,33 @@ void legend_pi::CreateLegendWindow()
                 !event.ControlDown() &&
                 !event.AltDown() &&
                 !event.MetaDown();
+
+            // Cmd+F (Ctrl+F elsewhere) goes to the search field.
+            if (event.GetKeyCode() == 'F' && event.GetModifiers() == wxMOD_CMD &&
+                m_search && m_search->IsShown()) {
+                m_search->SetFocus();
+                m_search->SelectAll();
+                return;
+            }
+
+            // In the search field the arrows move the cursor, and Escape
+            // first empties the field before it closes the window.
+            wxWindow *focus = wxWindow::FindFocus();
+            const bool inSearch =
+                m_search && focus &&
+                (focus == m_search || focus->GetParent() == m_search);
+
+            if (inSearch && plainKey &&
+                (event.GetKeyCode() == WXK_LEFT || event.GetKeyCode() == WXK_RIGHT)) {
+                event.Skip();
+                return;
+            }
+
+            if (inSearch && plainKey && event.GetKeyCode() == WXK_ESCAPE &&
+                !m_search->GetValue().IsEmpty()) {
+                SetFilter(wxEmptyString);
+                return;
+            }
 
             if (plainKey &&
                 event.GetKeyCode() == WXK_ESCAPE) {
@@ -2489,20 +2732,54 @@ bool legend_pi::RevealObjectAt(
     size_t bestPosition = 0;
     bool found = false;
 
-    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
-        const DynamicGroup &group = m_dynamic_groups[i];
-        for (size_t j = 0; j < group.positions.size(); ++j) {
-            wxPoint pixel;
-            GetCanvasPixLL(&vp, &pixel, group.positions[j].first,
-                           group.positions[j].second);
-            const double dx = pixel.x - target.x;
-            const double dy = pixel.y - target.y;
-            const double distance = dx * dx + dy * dy;
-            if (distance <= best) {
-                best = distance;
-                bestGroup = i;
-                bestPosition = j;
-                found = true;
+    // A lit buoy has a row for its symbol, in a chart also one for the
+    // light's flare, and a light row: the symbol comes first (its light is
+    // shown along with it), the flare next, a light row only where there
+    // is nothing else.
+    auto pass = [](const DynamicGroup &group) {
+        return group.lightCharacter ? 2 : group.lightSymbol ? 1 : 0;
+    };
+    // The same buoy can be listed twice (a Nautin waypoint and a chart
+    // symbol); of rows about equally near, the one that carries a light
+    // there wins, so the light is shown along with it.
+    auto carriesLight = [this](size_t index, const std::pair<double, double> &at) {
+        const DynamicGroup &group = m_dynamic_groups[index];
+        for (size_t k = index + 1;
+             k < m_dynamic_groups.size() && m_dynamic_groups[k].parentKey == group.key;
+             ++k) {
+            for (const auto &p : m_dynamic_groups[k].positions) {
+                if (std::fabs(p.first - at.first) < 0.0003 &&
+                    std::fabs(p.second - at.second) < 0.0005)
+                    return true;
+            }
+        }
+        return false;
+    };
+    const double lightBonus = 12.0 * 12.0;
+
+    for (int round = 0; round < 3 && !found; ++round) {
+        for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+            const DynamicGroup &group = m_dynamic_groups[i];
+            if (pass(group) != round)
+                continue;
+            for (size_t j = 0; j < group.positions.size(); ++j) {
+                wxPoint pixel;
+                GetCanvasPixLL(&vp, &pixel, group.positions[j].first,
+                               group.positions[j].second);
+                const double dx = pixel.x - target.x;
+                const double dy = pixel.y - target.y;
+                const double raw = dx * dx + dy * dy;
+                if (raw > tolerancePx * tolerancePx)
+                    continue;
+                double distance = raw;
+                if (round == 0 && carriesLight(i, group.positions[j]))
+                    distance = std::max(0.0, raw - lightBonus);
+                if (!found || distance <= best) {
+                    best = distance;
+                    bestGroup = i;
+                    bestPosition = j;
+                    found = true;
+                }
             }
         }
     }
@@ -2527,9 +2804,92 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
 
     group.current = static_cast<int>(positionIndex);
     m_active_group_key = group.key;
+    m_active_light_key.Clear();
+    m_flash_light_key.Clear();
 
     if (m_collapsed_sections.erase(SectionName(group.section)) > 0)
         SaveConfig();
+
+    const std::pair<double, double> position = group.positions[positionIndex];
+
+    // The light this object carries: the nearest position in the light
+    // rows under it, within the distance at which lights count as one.
+    int lightRow = -1;
+    size_t lightPosition = 0;
+    if (!group.lightCharacter) {
+        double best = 0.0;
+        for (size_t k = groupIndex + 1;
+             k < m_dynamic_groups.size() && m_dynamic_groups[k].parentKey == group.key;
+             ++k) {
+            const DynamicGroup &row = m_dynamic_groups[k];
+            for (size_t p = 0; p < row.positions.size(); ++p) {
+                const double dlat = std::fabs(row.positions[p].first - position.first);
+                const double dlon = std::fabs(row.positions[p].second - position.second);
+                if (dlat >= 0.0003 || dlon >= 0.0005)
+                    continue;
+                const double distance = dlat * dlat + dlon * dlon;
+                if (lightRow < 0 || distance < best) {
+                    lightRow = static_cast<int>(k);
+                    lightPosition = p;
+                    best = distance;
+                }
+            }
+        }
+    }
+
+    // No light under this row: the nearest light row anywhere in the list,
+    // for a light that ended up under another row of the same buoy.
+    if (lightRow < 0 && !group.lightCharacter) {
+        double best = 0.0;
+        for (size_t k = 0; k < m_dynamic_groups.size(); ++k) {
+            const DynamicGroup &row = m_dynamic_groups[k];
+            if (!row.lightCharacter)
+                continue;
+            for (size_t p = 0; p < row.positions.size(); ++p) {
+                const double dlat = std::fabs(row.positions[p].first - position.first);
+                const double dlon = std::fabs(row.positions[p].second - position.second);
+                if (dlat >= 0.0003 || dlon >= 0.0005)
+                    continue;
+                const double distance = dlat * dlat + dlon * dlon;
+                if (lightRow < 0 || distance < best) {
+                    lightRow = static_cast<int>(k);
+                    lightPosition = p;
+                    best = distance;
+                }
+            }
+        }
+    }
+
+    wxLogMessage("Legend: reveal %s (%zu objects), light: %s",
+                 group.key, group.positions.size(),
+                 lightRow >= 0 ? m_dynamic_groups[lightRow].key : wxString("none"));
+
+    if (lightRow >= 0) {
+        m_dynamic_groups[lightRow].current = static_cast<int>(lightPosition);
+        m_active_light_key = m_dynamic_groups[lightRow].key;
+        m_flash_light_key = m_active_light_key;
+    }
+
+    // A search that leaves this row out is given up, or the row could not
+    // be shown. A light row is shown with its row, and the other way round.
+    bool matches = GroupMatchesFilter(group);
+    if (!matches && !group.parentKey.IsEmpty()) {
+        for (const DynamicGroup &other : m_dynamic_groups) {
+            if (other.key == group.parentKey) {
+                matches = GroupMatchesFilter(other);
+                break;
+            }
+        }
+    }
+    if (!matches && lightRow >= 0)
+        matches = GroupMatchesFilter(m_dynamic_groups[lightRow]);
+    if (!matches) {
+        m_filter_timer.Stop();
+        m_filter.Clear();
+        m_filter_words.clear();
+        if (m_search)
+            m_search->ChangeValue(wxEmptyString);
+    }
 
     m_flash_key = group.key;
     m_flash_phase = 0;
@@ -2539,8 +2899,14 @@ void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
     m_scroll_to_row = static_cast<int>(groupIndex);
     RenderDynamicLegend(false);
 
-    const auto &position = group.positions[positionIndex];
-    ShowMarker(position.first, position.second);
+    // On the chart the light shines, when there is one; else the marker.
+    const DynamicGroup &lightGroup =
+        lightRow >= 0 ? m_dynamic_groups[lightRow] : group;
+    LightCharacter light;
+    if (lightGroup.lightCharacter && light.Parse(lightGroup.lightText))
+        ShowLightMarkers(light, {position});
+    else
+        ShowMarker(position.first, position.second);
 }
 
 // One step of the fade of the found row.
@@ -2551,6 +2917,7 @@ void legend_pi::OnFlashTimer()
         m_current_legend_path != kDynamicGpxId) {
         m_flash_timer.Stop();
         m_flash_key.Clear();
+        m_flash_light_key.Clear();
     }
     RenderDynamicLegend(true);
 }
@@ -2949,7 +3316,7 @@ void legend_pi::ResolveLabel(
     auto exact = m_meanings_exact.find(key);
     if (exact != m_meanings_exact.end()) {
         entry = &m_meanings[exact->second];
-        meaning = entry->meaning;
+        meaning = PickLanguage(entry->meaning);
     }
     else {
         for (size_t index : m_meanings_patterns) {
@@ -2967,7 +3334,7 @@ void legend_pi::ResolveLabel(
                 key.length() - prefix.length() - suffix.length());
 
             entry = &pattern;
-            meaning = pattern.meaning;
+            meaning = PickLanguage(pattern.meaning);
             meaning.Replace("*", part);
             break;
         }
@@ -3077,6 +3444,10 @@ void legend_pi::OnLoadingTimer()
             entry.visible = wp->IsVisible;
             entry.useScamin = wp->b_useScamin;
             entry.scamin = wp->scamin;
+
+            LightCharacter light;
+            if (light.FindInWaypoint(wp->m_MarkName, wp->m_MarkDescription))
+                entry.light = light.Abbreviation();
         }
 
         m_loading_cache.push_back(entry);
@@ -3152,6 +3523,33 @@ void legend_pi::RenderLoadingPage()
     m_showing_loading_page = true;
 }
 
+wxString legend_pi::PickLanguage(const wxString &text) const
+{
+    const int bar = text.Find(" | ");
+    if (bar == wxNOT_FOUND)
+        return text;
+
+    wxString dutch = text.Left(bar);
+    wxString english = text.Mid(bar + 3);
+    dutch.Trim(true).Trim(false);
+    english.Trim(true).Trim(false);
+
+    if (m_dutch_names)
+        return dutch.IsEmpty() ? english : dutch;
+    return english.IsEmpty() ? dutch : english;
+}
+
+wxString legend_pi::SectionTitle(int section) const
+{
+    if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
+        return PickLanguage(m_meaning_sections[static_cast<size_t>(section)]);
+    if (section == -2)
+        return m_dutch_names ? "Kaartsymbolen" : "Chart symbols";
+    if (section == -3)
+        return m_dutch_names ? "Lichtkarakters" : "Light characters";
+    return m_dutch_names ? "Overig" : "Other";
+}
+
 wxString legend_pi::SectionName(int section) const
 {
     if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
@@ -3161,6 +3559,10 @@ wxString legend_pi::SectionName(int section) const
     // own, before the waypoints without heading.
     if (section == -2)
         return "Kaartsymbolen";
+
+    // Light characters of waypoints and chart lights in view.
+    if (section == -3)
+        return "Lichtkarakters";
 
     return "Overig";
 }
@@ -3187,6 +3589,7 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
         for (const wxString &name : m_meaning_sections)
             m_collapsed_sections.insert(name);
         m_collapsed_sections.insert(SectionName(-2));
+        m_collapsed_sections.insert(SectionName(-3));
         m_collapsed_sections.insert(SectionName(-1));
     }
 
@@ -3197,7 +3600,70 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
 void legend_pi::SetReorderMode(bool on)
 {
     m_reorder_mode = on;
+    UpdateSearchVisibility();
     RenderDynamicLegend(!on);
+}
+
+void legend_pi::UpdateSearchVisibility()
+{
+    if (!m_search)
+        return;
+
+    // Only the dynamic legend can be searched; the order edit mode shows
+    // every heading and has no use for it.
+    const bool show = m_current_legend_path == kDynamicGpxId && !m_reorder_mode;
+    if (m_search->IsShown() == show)
+        return;
+
+    m_search->Show(show);
+    m_search->GetParent()->Layout();
+}
+
+void legend_pi::SetFilter(const wxString &text)
+{
+    m_filter_timer.Stop();
+
+    if (m_search && m_search->GetValue() != text)
+        m_search->ChangeValue(text);
+
+    wxString trimmed = text;
+    trimmed.Trim(true).Trim(false);
+
+    std::vector<wxString> words;
+    wxStringTokenizer tokens(FoldForSearch(trimmed), " \t", wxTOKEN_STRTOK);
+    while (tokens.HasMoreTokens())
+        words.push_back(tokens.GetNextToken());
+
+    if (words == m_filter_words)
+        return;
+
+    m_filter = trimmed;
+    m_filter_words = words;
+
+    // A new search starts at the top of the list. While the list is still
+    // being filled it is drawn with the filter once loading has finished.
+    if (IsDynamicLegendVisible() && !m_loading && !m_showing_loading_page)
+        RenderDynamicLegend(false);
+}
+
+bool legend_pi::GroupMatchesFilter(const DynamicGroup &group) const
+{
+    if (m_filter_words.empty())
+        return true;
+
+    wxString text = group.label;
+    text << ' '
+         << (group.chartSymbol      ? group.symbol
+             : group.lightCharacter ? group.lightText
+                                    : group.iconName)
+         << ' ' << SectionTitle(group.section);
+    const wxString folded = FoldForSearch(text);
+
+    for (const wxString &word : m_filter_words) {
+        if (folded.Find(word) == wxNOT_FOUND)
+            return false;
+    }
+    return true;
 }
 
 // Moves the block of a heading in symbolen.txt: the [Heading] line and
@@ -3328,6 +3794,26 @@ void legend_pi::EnsureChartSymbols()
     const bool ok = m_chart_symbols.Load(dir.GetPath());
     wxLogMessage("Legend: S-52 tables %s from %s, %ld ms",
                  ok ? "loaded" : "NOT found", dir.GetPath(), watch.Time());
+
+    LoadChartNames();
+}
+
+// Dutch names of chart objects: the table shipped with the plugin, then a
+// file of the same name in the legend folder, whose lines go first.
+void legend_pi::LoadChartNames()
+{
+    m_chart_names.Clear();
+
+    const wxString shipped = GetPluginDataDir("legend_pi") +
+                             wxFileName::GetPathSeparator() + "data" +
+                             wxFileName::GetPathSeparator() + "s57-nl.txt";
+    const wxString own = GetLegendDirectory() + wxFileName::GetPathSeparator() +
+                         "s57-nl.txt";
+
+    const bool shippedOk = m_chart_names.Load(shipped);
+    const bool ownOk = m_chart_names.Load(own);
+    wxLogMessage("Legend: chart names %s%s", shippedOk ? "loaded" : "NOT found",
+                 ownOk ? ", own s57-nl.txt applied" : "");
 }
 
 // Adds the chart objects of the o-charts cells in view to the groups, one
@@ -3356,17 +3842,34 @@ void legend_pi::CollectChartObjects(
     if (m_ocharts_available)
         objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale);
 
-    std::set<wxString> seen;
-    for (const ChartObject &object : objects) {
-        seen.insert(wxString::Format(
-            "%s|%.5f|%.5f", object.className, object.lat, object.lon));
-    }
+    auto positionKey = [](const ChartObject &object) {
+        return wxString::Format(
+            "%s|%.5f|%.5f", object.className, object.lat, object.lon);
+    };
 
+    std::set<wxString> fromOcharts;
+    for (const ChartObject &object : objects)
+        fromOcharts.insert(positionKey(object));
+
+    // Overlapping cells hold the same objects. A sector light is several
+    // lights at one position, which differ in colour and character, so
+    // for lights those count as well.
+    std::set<wxString> seenEnc;
     const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp);
     for (const ChartObject &object : enc) {
-        const wxString key = wxString::Format(
-            "%s|%.5f|%.5f", object.className, object.lat, object.lon);
-        if (seen.insert(key).second)
+        const wxString position = positionKey(object);
+        if (fromOcharts.count(position) > 0)
+            continue;
+
+        wxString key = position;
+        if (object.className == "LIGHTS") {
+            for (const char *acronym :
+                 {"LITCHR", "SIGGRP", "SIGPER", "COLOUR", "SECTR1", "SECTR2"}) {
+                const wxString *value = object.Attribute(acronym);
+                key << '|' << (value ? *value : wxString());
+            }
+        }
+        if (seenEnc.insert(key).second)
             objects.push_back(object);
     }
 
@@ -3381,6 +3884,9 @@ void legend_pi::CollectChartObjects(
     // fallback.
     std::map<wxString, bool> shownCache;
     int unanswered = 0;
+
+    std::vector<PendingLight> lights;
+    std::map<std::pair<long, long>, std::vector<Carrier>> carriers;
 
     for (const ChartObject &object : objects) {
         ChartSymbols::Resolved resolved;
@@ -3449,15 +3955,20 @@ void legend_pi::CollectChartObjects(
         if (group.key.IsEmpty()) {
             group.key = key;
             group.chartSymbol = true;
+            group.lightSymbol = object.className == "LIGHTS";
             group.symbol = resolved.symbol;
             group.hiddenAtScale = hiddenByScale;
             group.visibleFrom = hiddenByScale ? object.scamin : 0;
 
-            // The S-52 description of the symbol; when there is none, the
-            // object class with its colour and shape, e.g. "Topmark · red,
-            // cylinder (can)".
+            // The name made of class and attributes, in the chosen
+            // language ("Laterale boei: bakboord, rood, stompe ton"). Else
+            // the S-52 description of the symbol, or the object class with
+            // its colour and shape.
             wxString description =
-                m_chart_symbols.SymbolDescription(resolved.symbol);
+                m_chart_names.Compose(object, m_chart_symbols, m_dutch_names);
+
+            if (description.IsEmpty())
+                description = m_chart_symbols.SymbolDescription(resolved.symbol);
 
             if (description.IsEmpty()) {
                 description = m_chart_symbols.ClassDescription(object.className);
@@ -3498,6 +4009,126 @@ void legend_pi::CollectChartObjects(
             ++m_chart_objects_scale_hidden;
         else
             ++m_chart_object_total;
+
+        // Lights are placed under the buoy or beacon they stand on, once all
+        // objects are known; hidden ones at this scale too, in grey.
+        if (object.className == "LIGHTS") {
+            if (!m_show_lights)
+                continue;
+            auto value = [&object](const char *acronym) {
+                const wxString *v = object.Attribute(acronym);
+                return v ? *v : wxString();
+            };
+            LightCharacter light;
+            if (light.FromS57(value("LITCHR"), value("SIGGRP"), value("SIGPER"),
+                              value("COLOUR")))
+            {
+                PendingLight pending{light, object.lat, object.lon,
+                                     hiddenByScale ? object.scamin : 0, false,
+                                     LightSector()};
+                double from = 0.0;
+                double to = 0.0;
+                if (value("SECTR1").ToCDouble(&from) && value("SECTR2").ToCDouble(&to) &&
+                    !value("SECTR1").IsEmpty() && !value("SECTR2").IsEmpty()) {
+                    pending.sector = true;
+                    pending.part.colour = light.Colours().front();
+                    pending.part.from = from;
+                    pending.part.to = to;
+                }
+                lights.push_back(pending);
+            }
+            continue;
+        }
+
+        // What a light can stand on: buoys and beacons first, then other
+        // structures. Topmarks, fog signals and radio aids share the spot
+        // but carry nothing.
+        static const std::set<wxString> notCarriers = {
+            "TOPMAR", "topmar", "FOGSIG", "RTPBCN", "RADSTA", "RDOSTA",
+            "RETRFL", "SOUNDG"};
+        if (notCarriers.count(object.className) == 0) {
+            const wxString prefix = object.className.Left(3).Upper();
+            const int rank =
+                (prefix == "BOY" || prefix == "BCN" || prefix == "LIT") ? 0 : 1;
+            carriers[CarrierCell(object.lat, object.lon)].push_back(
+                {object.lat, object.lon, key, rank});
+        }
+    }
+
+    // A light belongs to the object at the same spot (within a few metres);
+    // in a chart the light and its buoy are separate objects.
+    // The parts of a sector light share a position and a rhythm and differ
+    // in colour: joined into one light, as charts write it ("Iso.WRG.4s"),
+    // with its sectors kept by position.
+    m_light_sectors.clear();
+    {
+        std::vector<PendingLight> joined;
+        std::map<wxString, size_t> sectorLights;
+        for (const PendingLight &pending : lights) {
+            if (!pending.sector) {
+                joined.push_back(pending);
+                continue;
+            }
+            const std::pair<long, long> cell = SectorCell(pending.lat, pending.lon);
+            m_light_sectors[cell].push_back(
+                std::make_pair(pending.light.RhythmAbbreviation(), pending.part));
+
+            const wxString key = wxString::Format(
+                "%ld|%ld|%d|", cell.first, cell.second, pending.hiddenFrom) +
+                pending.light.RhythmAbbreviation();
+            auto known = sectorLights.find(key);
+            if (known == sectorLights.end()) {
+                sectorLights[key] = joined.size();
+                PendingLight first = pending;
+                first.light.SetColours({pending.part.colour});
+                joined.push_back(first);
+                continue;
+            }
+            LightCharacter &light = joined[known->second].light;
+            std::vector<wxString> colours = light.Colours();
+            if (std::find(colours.begin(), colours.end(), pending.part.colour) ==
+                colours.end()) {
+                colours.push_back(pending.part.colour);
+                light.SetColours(colours);
+            }
+        }
+        lights.swap(joined);
+    }
+
+    for (const PendingLight &pending : lights) {
+        const Carrier *best = nullptr;
+        double bestDistance = 0.0;
+        const long cellLat = static_cast<long>(std::floor(pending.lat / kCarrierCell));
+        const long cellLon = static_cast<long>(std::floor(pending.lon / kCarrierCell));
+
+        for (long dLat = -1; dLat <= 1; ++dLat) {
+            for (long dLon = -1; dLon <= 1; ++dLon) {
+                auto cell = carriers.find(std::make_pair(cellLat + dLat, cellLon + dLon));
+                if (cell == carriers.end())
+                    continue;
+                for (const Carrier &carrier : cell->second) {
+                    const double dlat = carrier.lat - pending.lat;
+                    const double dlon = carrier.lon - pending.lon;
+                    const double distance = dlat * dlat + dlon * dlon;
+                    if (distance > kCarrierCell * kCarrierCell)
+                        continue;
+                    // A light shown at this scale belongs to a shown object
+                    // rather than to a hidden one, and the other way round.
+                    auto rankOf = [&pending](const Carrier &c) {
+                        const bool hidden = c.groupKey.Contains("|hidden|");
+                        return c.rank + (hidden != (pending.hiddenFrom > 0) ? 2 : 0);
+                    };
+                    if (!best || rankOf(carrier) < rankOf(*best) ||
+                        (rankOf(carrier) == rankOf(*best) && distance < bestDistance)) {
+                        best = &carrier;
+                        bestDistance = distance;
+                    }
+                }
+            }
+        }
+
+        AddLight(*groups, pending.light, pending.lat, pending.lon,
+                 best ? best->groupKey : wxString(), pending.hiddenFrom);
     }
 
     // The list is rebuilt on every pause of the chart; log only what changed.
@@ -3512,6 +4143,86 @@ void legend_pi::CollectChartObjects(
         m_chart_objects_logged = summary;
         wxLogMessage("%s, %ld ms", summary, watch.Time());
     }
+}
+
+std::vector<LightSector> legend_pi::SectorsAt(
+    double lat, double lon, const wxString &rhythm) const
+{
+    std::vector<LightSector> sectors;
+    if (rhythm.IsEmpty())
+        return sectors;
+
+    const std::pair<long, long> cell = SectorCell(lat, lon);
+    for (long dLat = -1; dLat <= 1; ++dLat) {
+        for (long dLon = -1; dLon <= 1; ++dLon) {
+            auto found = m_light_sectors.find(
+                std::make_pair(cell.first + dLat, cell.second + dLon));
+            if (found == m_light_sectors.end())
+                continue;
+            for (const auto &entry : found->second) {
+                if (entry.first == rhythm)
+                    sectors.push_back(entry.second);
+            }
+        }
+    }
+    return sectors;
+}
+
+namespace {
+
+// The abbreviation of a light character without its colours.
+wxString RhythmOf(const wxString &abbreviation)
+{
+    LightCharacter light;
+    return light.Parse(abbreviation) ? light.RhythmAbbreviation() : wxString();
+}
+
+} // namespace
+
+void legend_pi::AddLight(
+    std::map<wxString, DynamicGroup> &groups,
+    const LightCharacter &light,
+    double lat,
+    double lon,
+    const wxString &parentKey,
+    int hiddenFrom) const
+{
+    const wxString abbreviation = light.Abbreviation();
+    wxString key = parentKey.IsEmpty()
+                       ? "light:" + abbreviation
+                       : "light:" + parentKey + "|" + abbreviation;
+    if (parentKey.IsEmpty() && hiddenFrom > 0)
+        key << wxString::Format("|hidden|%09d", hiddenFrom);
+    DynamicGroup &group = groups[key];
+
+    if (group.key.IsEmpty()) {
+        group.key = key;
+        group.lightCharacter = true;
+        group.lightText = abbreviation;
+        group.label = light.Words(m_dutch_names);
+        group.parentKey = parentKey;
+        group.section = -3;
+        group.hiddenAtScale = hiddenFrom > 0;
+        group.visibleFrom = hiddenFrom;
+
+        // A sub-row shares the heading of its row.
+        auto parent = groups.find(parentKey);
+        if (!parentKey.IsEmpty() && parent != groups.end()) {
+            group.section = parent->second.section;
+            group.order = parent->second.order;
+            group.hiddenAtScale = parent->second.hiddenAtScale;
+            group.visibleFrom = parent->second.visibleFrom;
+        }
+    }
+
+    // The same light twice, from overlapping sources or sectors of one
+    // light, counts once.
+    for (const auto &position : group.positions) {
+        if (std::fabs(position.first - lat) < 0.0003 &&
+            std::fabs(position.second - lon) < 0.0005)
+            return;
+    }
+    group.positions.emplace_back(lat, lon);
 }
 
 void legend_pi::CollectDynamicLegend()
@@ -3586,8 +4297,15 @@ void legend_pi::CollectDynamicLegend()
             ++m_dynamic_hidden;
         else
             ++m_dynamic_total;
+
+        if (m_show_lights && !wp.light.IsEmpty()) {
+            LightCharacter light;
+            if (light.Parse(wp.light))
+                AddLight(groups, light, wp.lat, wp.lon, key);
+        }
     }
 
+    m_light_sectors.clear();
     if (m_show_chart_objects)
         CollectChartObjects(vp, &groups);
     else
@@ -3611,6 +4329,9 @@ void legend_pi::CollectDynamicLegend()
         return dlat * dlat + dlon * dlon;
     };
 
+    // Light sub-rows are kept apart and put under their row afterwards.
+    std::map<wxString, std::vector<DynamicGroup>> subRows;
+
     for (auto &entry : groups) {
         DynamicGroup group = entry.second;
 
@@ -3622,6 +4343,15 @@ void legend_pi::CollectDynamicLegend()
                 return distance(a) < distance(b);
             });
 
+        if (!group.parentKey.IsEmpty()) {
+            if (groups.count(group.parentKey) > 0) {
+                subRows[group.parentKey].push_back(group);
+                continue;
+            }
+            group.parentKey.Clear();
+            group.section = -3;
+        }
+
         m_dynamic_groups.push_back(group);
     }
 
@@ -3629,11 +4359,13 @@ void legend_pi::CollectDynamicLegend()
         m_dynamic_groups.begin(),
         m_dynamic_groups.end(),
         [](const DynamicGroup &a, const DynamicGroup &b) {
-            // Headings in file order, then "Kaartsymbolen" (-2) and "Overig"
-            // (-1); within a heading the order of symbolen.txt, then the
-            // icon name.
+            // Headings in file order, then "Kaartsymbolen" (-2),
+            // "Lichtkarakters" (-3) and "Overig" (-1); within a heading the
+            // order of symbolen.txt, then the icon name.
             auto rank = [](int section) {
                 if (section == -2)
+                    return (1 << 30) - 2;
+                if (section == -3)
                     return (1 << 30) - 1;
                 return section < 0 ? 1 << 30 : section;
             };
@@ -3645,6 +4377,38 @@ void legend_pi::CollectDynamicLegend()
                 return a.order < b.order;
             return a.key.CmpNoCase(b.key) < 0;
         });
+
+    if (m_all_lights_on)
+        UpdateAllLights();
+
+    if (subRows.empty())
+        return;
+
+    // Each row followed by the lights it carries, the most frequent first.
+    std::vector<DynamicGroup> ordered;
+    ordered.reserve(m_dynamic_groups.size() + groups.size());
+    for (DynamicGroup &group : m_dynamic_groups) {
+        const wxString key = group.key;
+        const int section = group.section;
+        ordered.push_back(group);
+
+        auto found = subRows.find(key);
+        if (found == subRows.end())
+            continue;
+
+        std::vector<DynamicGroup> &rows = found->second;
+        std::sort(rows.begin(), rows.end(),
+                  [](const DynamicGroup &a, const DynamicGroup &b) {
+                      if (a.positions.size() != b.positions.size())
+                          return a.positions.size() > b.positions.size();
+                      return a.lightText.CmpNoCase(b.lightText) < 0;
+                  });
+        for (DynamicGroup &row : rows) {
+            row.section = section;
+            ordered.push_back(row);
+        }
+    }
+    m_dynamic_groups.swap(ordered);
 }
 
 void legend_pi::RenderDynamicLegend(bool keepScroll)
@@ -3682,6 +4446,46 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
     auto hex = [](const wxColour &colour) { return HtmlColour(colour); };
 
+    // "×12", or "3/12" once a click went to the third one.
+    auto countTextOf = [](const DynamicGroup &group) {
+        const size_t count = group.positions.size();
+        if (group.current >= 0 && count > 1)
+            return wxString::Format("%d/%zu", group.current + 1, count);
+        return wxString::Format("&times;%zu", count);
+    };
+
+    // A light character as on the chart, in words, with its rhythm below.
+    auto lightLabel = [&](const DynamicGroup &group, size_t index,
+                          const wxColour &rowColour) {
+        wxString label =
+            "<b>" + escape(group.lightText) + "</b>&nbsp; " + escape(group.label);
+
+        // A sector light: its sectors, of the light the counter is on (the
+        // nearest one until a click went to another).
+        if (!group.positions.empty()) {
+            const size_t at =
+                group.current >= 0 ? static_cast<size_t>(group.current) : 0;
+            const std::vector<LightSector> sectors =
+                SectorsAt(group.positions[at].first, group.positions[at].second,
+                          RhythmOf(group.lightText));
+            if (!sectors.empty())
+                label << "<br>" << escape(SectorWords(sectors, m_dutch_names));
+        }
+        LightCharacter light;
+        if (light.Parse(group.lightText)) {
+            const wxImage rhythm =
+                LightRhythmImage(light, 180, 14, palette.muted, rowColour, SchemeDim());
+            if (rhythm.IsOk()) {
+                const wxString name = wxString::Format(
+                    "legend_dyn_%d_rhythm_%zu.png", m_dynamic_generation, index);
+                wxMemoryFSHandler::AddFile(name, rhythm, wxBITMAP_TYPE_PNG);
+                m_dynamic_image_names.push_back(name);
+                label << "<br><img src=\"memory:" << name << "\">";
+            }
+        }
+        return label;
+    };
+
     // Load all icons first: the largest one sets the square every icon
     // gets, so all rows are equally high without shrinking any icon.
     // Very large icons are limited to kMaxIconBox.
@@ -3707,6 +4511,59 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     std::vector<wxColour> rowColours(m_dynamic_groups.size());
     int iconBox = 16;
 
+    // A search leaves out the rows that do not match; their headings go
+    // too when nothing under them matches. Matching rows are shown even
+    // under a collapsed heading.
+    const bool filtering = !m_filter_words.empty() && !m_reorder_mode;
+    const size_t groupCount = m_dynamic_groups.size();
+
+    // The row a light sub-row belongs to: the row it follows.
+    std::vector<int> parentOf(groupCount, -1);
+    for (size_t i = 0; i < groupCount; ++i) {
+        const wxString &parentKey = m_dynamic_groups[i].parentKey;
+        if (parentKey.IsEmpty())
+            continue;
+        int p = static_cast<int>(i) - 1;
+        while (p >= 0 && !m_dynamic_groups[p].parentKey.IsEmpty())
+            --p;
+        if (p >= 0 && m_dynamic_groups[p].key == parentKey)
+            parentOf[i] = p;
+    }
+
+    // A row and its lights are found together: a matching row shows all
+    // its lights, a matching light shows its row.
+    std::vector<bool> shown(groupCount, true);
+    if (filtering) {
+        for (size_t i = 0; i < groupCount; ++i)
+            shown[i] = GroupMatchesFilter(m_dynamic_groups[i]);
+        const std::vector<bool> direct = shown;
+        for (size_t i = 0; i < groupCount; ++i) {
+            if (parentOf[i] < 0)
+                continue;
+            if (direct[parentOf[i]])
+                shown[i] = true;
+            if (direct[i])
+                shown[parentOf[i]] = true;
+        }
+    }
+
+    size_t mainRows = 0;
+    size_t matches = 0;
+    size_t lightRows = 0;
+    bool lightsShown = false;
+    for (size_t i = 0; i < groupCount; ++i) {
+        if (parentOf[i] < 0) {
+            ++mainRows;
+            if (shown[i])
+                ++matches;
+        }
+        if (m_dynamic_groups[i].lightCharacter) {
+            ++lightRows;
+            if (shown[i])
+                lightsShown = true;
+        }
+    }
+
     // Headings only when symbolen.txt defines them; a collapsed heading
     // hides its rows.
     const bool showHeadings = !m_meaning_sections.empty();
@@ -3714,34 +4571,51 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
         // In the order edit mode only the headings are shown.
         collapsed[i] =
-            showHeadings &&
+            showHeadings && !filtering &&
             (m_reorder_mode ||
              m_collapsed_sections.count(
                  SectionName(m_dynamic_groups[i].section)) > 0);
     }
 
-    // Stripes start again under every heading.
-    std::vector<size_t> stripeIndex(m_dynamic_groups.size());
-    for (size_t i = 0, n = 0; i < m_dynamic_groups.size(); ++i) {
+    // Stripes start again under every heading and skip rows left out; the
+    // lights under a row share its stripe.
+    std::vector<size_t> stripeIndex(groupCount);
+    for (size_t i = 0, n = 0; i < groupCount; ++i) {
         if (i > 0 &&
             m_dynamic_groups[i].section != m_dynamic_groups[i - 1].section)
             n = 0;
-        stripeIndex[i] = n++;
+        if (parentOf[i] >= 0) {
+            stripeIndex[i] = stripeIndex[parentOf[i]];
+            continue;
+        }
+        stripeIndex[i] = n;
+        if (shown[i])
+            ++n;
     }
 
+    auto isActiveRow = [this](const DynamicGroup &group) {
+        return (!m_active_group_key.IsEmpty() && group.key == m_active_group_key) ||
+               (!m_active_light_key.IsEmpty() && group.key == m_active_light_key);
+    };
+
     for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        if (!shown[i])
+            continue;
+
         const DynamicGroup &group = m_dynamic_groups[i];
 
-        const bool isActive =
-            !m_active_group_key.IsEmpty() && group.key == m_active_group_key;
+        const bool isActive = isActiveRow(group);
 
         rowColours[i] =
             isActive ? active
                      : (stripeIndex[i] % 2 == 1 ? stripe : background);
 
         // The row just found from the chart: lit in the marker's colour,
-        // fading to the highlight colour over the next second.
-        if (!m_flash_key.IsEmpty() && group.key == m_flash_key) {
+        // fading to the highlight colour over the next second. Its light
+        // lights up along with it.
+        if (!m_flash_key.IsEmpty() &&
+            (group.key == m_flash_key ||
+             (!m_flash_light_key.IsEmpty() && group.key == m_flash_light_key))) {
             wxColour outline;
             wxColour highlight;
             MarkerColours(outline, highlight);
@@ -3757,12 +4631,19 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         if (collapsed[i])
             rowColours[i] = background;
 
+        // The lamp of a light under a row sits on the row itself, no tile.
         const wxColour iconBackground =
-            palette.iconTiles ? palette.tile : rowColours[i];
+            (palette.iconTiles && parentOf[i] < 0) ? palette.tile : rowColours[i];
 
         wxImage image;
 
-        if (group.chartSymbol) {
+        if (group.lightCharacter) {
+            // A lamp in the colours of the light.
+            LightCharacter light;
+            if (light.Parse(group.lightText))
+                image = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim());
+        }
+        else if (group.chartSymbol) {
             // Chart symbols come from OpenCPN's symbol sheet of the current
             // colour scheme, which already has dusk and night versions.
             const wxImage picture =
@@ -3799,7 +4680,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             image = image.Scale(width, height, wxIMAGE_QUALITY_HIGH);
         }
 
-        if (image.IsOk() && !collapsed[i]) {
+        if (image.IsOk() && !collapsed[i] && shown[i]) {
             iconBox = std::max(
                 iconBox,
                 std::min(kMaxIconBox,
@@ -3830,9 +4711,17 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "De kaartpositie is nog niet bekend. Beweeg de kaart "
                 "een klein stukje en klik daarna op Ververs.";
     }
+    else if (filtering) {
+        html << static_cast<int>(matches) << " van de "
+             << static_cast<int>(mainRows)
+             << " symbolen in beeld passen bij &lsquo;" << escape(m_filter)
+             << "&rsquo;";
+    }
     else {
-        html << static_cast<int>(m_dynamic_groups.size()) << " symbolen"
+        html << static_cast<int>(m_dynamic_groups.size() - lightRows) << " symbolen"
              << " &middot; " << m_dynamic_total << " waypoints";
+        if (lightRows > 0)
+            html << " &middot; " << static_cast<int>(lightRows) << " lichtkarakters";
         if (m_show_chart_objects && m_chart_object_total > 0)
             html << " &middot; " << m_chart_object_total << " kaartobjecten";
         html << " in beeld";
@@ -3852,7 +4741,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     else if (m_viewport_valid) {
         std::vector<wxString> links;
 
-        if (showHeadings && !m_dynamic_groups.empty()) {
+        // While searching nothing is folded, so folding links do nothing.
+        if (showHeadings && !m_dynamic_groups.empty() && !filtering) {
             // One link that does what makes sense now: fold everything in
             // while any group in view is open, otherwise fold out.
             bool anyOpen = false;
@@ -3878,6 +4768,29 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 m_show_chart_objects
                     ? "<a href=\"legend-chart-toggle:\">Kaartsymbolen uit</a>"
                     : "<a href=\"legend-chart-toggle:\">Kaartsymbolen aan</a>");
+        }
+
+        // Names of chart symbols and light characters in Dutch or English.
+        if (m_chart_sources_available || lightRows > 0) {
+            links.push_back(
+                m_dutch_names
+                    ? "<a href=\"legend-language-toggle:\">English names</a>"
+                    : "<a href=\"legend-language-toggle:\">Nederlandse namen</a>");
+        }
+
+        // Light characters in the list, and all lights in view shining on
+        // the chart, for finding one's way at a glance.
+        if (lightRows > 0 || !m_show_lights) {
+            links.push_back(
+                m_show_lights
+                    ? "<a href=\"legend-lights-toggle:\">Lichten uit</a>"
+                    : "<a href=\"legend-lights-toggle:\">Lichten aan</a>");
+        }
+        if (m_show_lights && (lightRows > 0 || m_all_lights_on)) {
+            links.push_back(
+                m_all_lights_on
+                    ? "<a href=\"legend-all-lights:\">Lichten op de kaart doven</a>"
+                    : "<a href=\"legend-all-lights:\">Alle lichten laten branden</a>");
         }
 
         // Symbols hidden at this scale: listed in grey, or left out.
@@ -3961,7 +4874,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
                  << "<td valign=\"middle\"><b>"
-                 << escape(m_meaning_sections[static_cast<size_t>(section)])
+                 << escape(SectionTitle(section))
                  << "</b><br><font size=\"-1\" color=\"" << hex(muted)
                  << "\">";
 
@@ -3989,17 +4902,45 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         html << "<p><font color=\"" << hex(muted) << "\">"
              << "Geen zichtbare waypoints in dit kaartbeeld.</font></p>";
     }
+    else if (m_viewport_valid && matches == 0) {
+        html << "<p>Geen symbolen in beeld die passen bij &lsquo;"
+             << escape(m_filter) << "&rsquo;.</p>"
+             << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
+             << "Er wordt gezocht in de namen in de lijst, de kopjes en de "
+                "icoonnamen, alleen van wat nu in beeld is. Verschuif de "
+                "kaart, zoom uit, of maak het zoekveld leeg.";
+        if (!m_show_hidden_at_scale)
+            html << " Symbolen die op deze schaal verborgen zijn, tellen pas "
+                    "mee met &lsquo;Ook verborgen tonen&rsquo;.";
+        html << "</font></p>";
+    }
     else if (m_viewport_valid) {
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
 
         m_rendered_headings.clear();
 
+        // Section of the last row drawn; a row of another section starts a
+        // new heading. Rows left out by a search do not count.
+        bool firstRow = true;
+        int previousSection = 0;
+
         for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
             DynamicGroup &group = m_dynamic_groups[i];
 
-            if (showHeadings &&
-                (i == 0 || group.section != m_dynamic_groups[i - 1].section)) {
+            if (!shown[i]) {
+                group.imageName.Clear();
+                continue;
+            }
+
+            const bool newHeading =
+                firstRow || group.section != previousSection;
+            const bool atTop = firstRow;
+            firstRow = false;
+            previousSection = group.section;
+
+            if (showHeadings && newHeading) {
                 const wxString heading = SectionName(group.section);
+                const wxString headingTitle = SectionTitle(group.section);
                 const bool folded = collapsed[i];
 
                 // Symbols and waypoints of this group, and the icons shown
@@ -4012,6 +4953,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 for (size_t j = i; j < m_dynamic_groups.size() &&
                                    m_dynamic_groups[j].section == group.section;
                      ++j) {
+                    // Lights under a row are part of that row's symbol.
+                    if (!shown[j] || parentOf[j] >= 0)
+                        continue;
+
                     ++symbols;
                     waypoints += m_dynamic_groups[j].positions.size();
 
@@ -4041,10 +4986,13 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 }
 
                 // Every cell of the heading carries its id, so a click
-                // anywhere on it folds the group in or out.
+                // anywhere on it folds the group in or out. While searching
+                // nothing folds, so the heading is not a button then.
                 const wxString sectionId = wxString::Format(
                     "%s%zu", kLegendSectionIdPrefix, m_rendered_headings.size());
                 m_rendered_headings.push_back(heading);
+                const wxString idAttribute =
+                    filtering ? wxString() : " id=\"" + sectionId + "\"";
 
                 // Every group gets its own table; between them the heading
                 // with a thin line under it. Inside the row table the
@@ -4052,17 +5000,17 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 html << "</table>"
                      << "<table width=\"100%\" cellspacing=\"0\" "
                         "cellpadding=\"0\">"
-                     << "<tr><td colspan=\"2\" height=\"" << (i == 0 ? 6 : 14)
+                     << "<tr><td colspan=\"2\" height=\"" << (atTop ? 6 : 14)
                      << "\"></td></tr>"
-                     << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
+                     << "<tr><td" << idAttribute << " valign=\"middle\">"
                      << "<font size=\"+3\">"
                      << (folded ? "&#9654;" : "&#9660;") << "</font>&nbsp;<b>"
-                     << escape(heading) << "</b> <font color=\"" << hex(muted)
+                     << escape(headingTitle) << "</b> <font color=\"" << hex(muted)
                      << "\">&middot; " << symbols
                      << (symbols == 1 ? " symbool, " : " symbolen, ")
                      << waypoints << " in beeld</font></td>"
-                     << "<td id=\"" << sectionId
-                     << "\" align=\"right\" valign=\"middle\">"
+                     << "<td" << idAttribute
+                     << " align=\"right\" valign=\"middle\">"
                      << strip << "</td></tr>"
                      << "<tr><td colspan=\"2\" height=\"4\"></td></tr>"
                      << "<tr><td colspan=\"2\" bgcolor=\"" << hex(rule)
@@ -4076,11 +5024,13 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 continue;
             }
 
+            // Lights under a row are drawn with that row, below.
+            if (parentOf[i] >= 0)
+                continue;
+
             group.imageName.Clear();
 
-            const bool isActive =
-                !m_active_group_key.IsEmpty() &&
-                group.key == m_active_group_key;
+            const bool isActive = isActiveRow(group);
 
             const wxColour &rowColour = rowColours[i];
             wxImage image = icons[i];
@@ -4110,18 +5060,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 group.imageName = name;
             }
 
-            const size_t count = group.positions.size();
-
-            wxString countText;
-            if (group.current >= 0 && count > 1) {
-                countText = wxString::Format(
-                    "%d/%zu", group.current + 1, count);
-            }
-            else {
-                countText = wxString::Format("&times;%zu", count);
-            }
-
-            wxString label = escape(group.label);
+            wxString label = group.lightCharacter
+                                 ? lightLabel(group, i, rowColour)
+                                 : escape(group.label);
             if (group.labelIsName) {
                 // No meaning known yet: the icon name, in grey, as it must
                 // be written in symbolen.txt.
@@ -4169,8 +5110,93 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                  << "<td id=\"" << allId
                  << "\" align=\"right\" valign=\"middle\" nowrap>"
                  << "<font color=\"" << hex(isActive ? foreground : muted)
-                 << "\">" << countText << "&nbsp;<font size=\"+1\">&#9678;"
+                 << "\">" << countTextOf(group) << "&nbsp;<font size=\"+1\">&#9678;"
                  << "</font></font></td></tr>";
+
+            // The lights this row carries: a block under its text, smaller,
+            // joined to the row by a line on the left like a branch.
+            std::vector<size_t> children;
+            for (size_t j = i + 1; j < m_dynamic_groups.size() &&
+                                   parentOf[j] == static_cast<int>(i);
+                 ++j) {
+                if (shown[j])
+                    children.push_back(j);
+            }
+            if (children.empty())
+                continue;
+
+            const wxColour blockColour =
+                stripeIndex[i] % 2 == 1 ? stripe : background;
+            const wxString branch = hex(palette.headerRule);
+
+            // wxHTML ignores the height of an empty cell: a small piece of
+            // the line gives the room between two lights its height.
+            const wxString gapName = wxString::Format(
+                "legend_dyn_%d_gap_%zu.png", m_dynamic_generation, i);
+            {
+                wxImage gap(3, 7);
+                gap.SetRGB(wxRect(0, 0, 3, 7), palette.headerRule.Red(),
+                           palette.headerRule.Green(), palette.headerRule.Blue());
+                wxMemoryFSHandler::AddFile(gapName, gap, wxBITMAP_TYPE_PNG);
+                m_dynamic_image_names.push_back(gapName);
+            }
+
+            html << "<tr bgcolor=\"" << hex(blockColour) << "\">"
+                 << "<td width=\"" << iconCell + 10 << "\"></td>"
+                 << "<td colspan=\"2\">"
+                 << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">";
+
+            for (const size_t j : children) {
+                DynamicGroup &light = m_dynamic_groups[j];
+                light.imageName.Clear();
+
+                const wxColour &lightColour = rowColours[j];
+                const bool lightActive = isActiveRow(light);
+
+                if (icons[j].IsOk()) {
+                    const wxString name = wxString::Format(
+                        "legend_dyn_%d_%zu.png", m_dynamic_generation, j);
+                    // Not drawn at this scale: faded, like its row.
+                    const wxImage lamp = light.hiddenAtScale
+                                             ? FadeImage(icons[j], lightColour, 0.55)
+                                             : icons[j];
+                    wxMemoryFSHandler::AddFile(name, lamp, wxBITMAP_TYPE_PNG);
+                    m_dynamic_image_names.push_back(name);
+                    light.imageName = name;
+                }
+
+                wxString lightText = lightLabel(light, j, lightColour);
+                if (light.hiddenAtScale)
+                    lightText = "<font color=\"" + hex(muted) + "\">" + lightText + "</font>";
+                if (lightActive)
+                    lightText = "<b>" + lightText + "</b>";
+
+                const wxString lightRowId =
+                    wxString::Format("%s%zu", kLegendRowIdPrefix, j);
+                const wxString lightAllId =
+                    wxString::Format("%s%zu", kLegendAllIdPrefix, j);
+
+                html << "<tr bgcolor=\"" << hex(lightColour) << "\">"
+                     << "<td width=\"3\" bgcolor=\"" << branch << "\"></td>"
+                     << "<td id=\"" << lightRowId << "\" width=\"10\">"
+                     << "<a name=\"legend-row-" << j << "\"></a></td>"
+                     << "<td id=\"" << lightRowId << "\" width=\"30\" valign=\"middle\">";
+                if (!light.imageName.IsEmpty())
+                    html << "<img src=\"memory:" << light.imageName << "\">";
+                html << "</td><td id=\"" << lightRowId << "\" valign=\"middle\">"
+                     << "<font size=\"-1\">" << lightText << "</font></td>"
+                     << "<td id=\"" << lightAllId
+                     << "\" align=\"right\" valign=\"middle\" nowrap>"
+                     << "<font size=\"-1\" color=\""
+                     << hex(lightActive ? foreground : muted) << "\">"
+                     << countTextOf(light) << "&nbsp;&#9678;</font></td></tr>"
+                     // Room between the lights; the line runs on.
+                     << "<tr bgcolor=\"" << hex(blockColour) << "\">"
+                     << "<td bgcolor=\"" << branch << "\"><img src=\"memory:" << gapName
+                     << "\"></td><td colspan=\"4\"></td></tr>";
+            }
+
+            html << "</table></td></tr>";
         }
 
         html << "</table>";
@@ -4183,6 +5209,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             html << " Klik op een kopje om de groep in of uit te klappen.";
         if (m_show_chart_objects && m_chart_object_total > 0)
             html << " Kaartsymbolen komen uit de kaarten in beeld.";
+        if (lightsShown)
+            html << " Lichtkarakters staan voluit in woorden; het ritme eronder "
+                    "is schematisch getekend. Een klik laat het licht op de kaart "
+                    "branden in dat ritme.";
         if (m_show_hidden_at_scale)
             html << " Grijze rijen zijn op deze schaal verborgen; een klik "
                     "zoomt in tot ze zichtbaar zijn.";
@@ -4245,6 +5275,7 @@ void legend_pi::GoToDynamicGroup(size_t index)
     group.current =
         (group.current + 1) % static_cast<int>(group.positions.size());
     m_active_group_key = group.key;
+    m_active_light_key.Clear();
 
     const std::pair<double, double> &position =
         group.positions[static_cast<size_t>(group.current)];
@@ -4282,7 +5313,13 @@ void legend_pi::GoToDynamicGroup(size_t index)
     if (!comfortablyVisible)
         JumpTo(position.first, position.second, scale);
 
-    ShowMarker(position.first, position.second);
+    // A light character shines on the chart in its rhythm; other symbols
+    // get the marker.
+    LightCharacter light;
+    if (group.lightCharacter && light.Parse(group.lightText))
+        ShowLightMarkers(light, {position});
+    else
+        ShowMarker(position.first, position.second);
 
     RenderDynamicLegend(true);
 }
@@ -4354,7 +5391,14 @@ void legend_pi::MarkAllOfDynamicGroup(size_t index)
     }
 
     m_active_group_key = group.key;
-    ShowMarkers(group.positions);
+    m_active_light_key.Clear();
+
+    LightCharacter light;
+    if (group.lightCharacter && light.Parse(group.lightText))
+        ShowLightMarkers(light, group.positions);
+    else
+        ShowMarkers(group.positions);
+
     RenderDynamicLegend(true);
 }
 
@@ -4381,6 +5425,9 @@ void legend_pi::ShowMarkers(
 {
     if (positions.empty())
         return;
+
+    // One marker at a time: a shining light gives way.
+    StopLightMarker();
 
     m_marker_positions = positions;
     m_marker_phase = 0;
@@ -4417,13 +5464,107 @@ void legend_pi::OnMarkerTimer()
     RefreshAllCanvases();
 }
 
+// The light shines for a few periods, at least a quarter of a minute and
+// at most a minute. Only a change between light and dark repaints the
+// chart.
+void legend_pi::ShowLightMarkers(
+    const LightCharacter &light,
+    const std::vector<std::pair<double, double>> &positions)
+{
+    if (positions.empty())
+        return;
+
+    std::vector<LightPhase> phases = light.Phases();
+    double cycle = 0.0;
+    for (const LightPhase &phase : phases)
+        cycle += phase.seconds;
+    if (cycle <= 0.0) {
+        ShowMarkers(positions);
+        return;
+    }
+
+    StopMarker();
+
+    m_light_positions = positions;
+    m_light_rhythm = light.RhythmAbbreviation();
+    m_light_phases = phases;
+    m_light_colours = light.Colours();
+    m_light_cycle = cycle;
+    m_light_duration = std::min(60.0, std::max(15.0, 3.0 * cycle));
+    m_light_started = wxGetUTCTimeMillis();
+    m_light_state = -2; // nothing drawn yet
+    m_light_active = true;
+
+    m_light_timer.Stop();
+    m_light_timer.Start(40);
+    OnLightTimer();
+}
+
+void legend_pi::StopLightMarker()
+{
+    m_light_timer.Stop();
+
+    if (m_light_active) {
+        m_light_active = false;
+        RefreshAllCanvases();
+    }
+}
+
+namespace {
+
+// The colour index of a light at a moment in its period, -1 while dark,
+// plus kDimLight for the steady part of a fixed and flashing light.
+int PhaseStateAt(const std::vector<LightPhase> &phases, double seconds)
+{
+    double end = 0.0;
+    for (const LightPhase &phase : phases) {
+        end += phase.seconds;
+        if (seconds < end) {
+            if (phase.colour < 0)
+                return -1;
+            return phase.colour + (phase.dim ? kDimLight : 0);
+        }
+    }
+    return -1;
+}
+
+} // namespace
+
+int legend_pi::LightStateAt(double seconds) const
+{
+    return PhaseStateAt(m_light_phases, seconds);
+}
+
+void legend_pi::OnLightTimer()
+{
+    if (!m_light_active) {
+        m_light_timer.Stop();
+        return;
+    }
+
+    const double elapsed =
+        (wxGetUTCTimeMillis() - m_light_started).ToDouble() / 1000.0;
+    if (elapsed > m_light_duration) {
+        StopLightMarker();
+        return;
+    }
+
+    const int state = LightStateAt(std::fmod(elapsed, m_light_cycle));
+    if (state != m_light_state) {
+        m_light_state = state;
+        RefreshAllCanvases();
+    }
+}
+
 // Screen positions of the marked objects on a canvas, leaving out those
 // far outside it.
-std::vector<wxPoint> legend_pi::MarkerCentres(PlugIn_ViewPort *vp) const
+std::vector<wxPoint> legend_pi::MarkerCentres(
+    PlugIn_ViewPort *vp,
+    const std::vector<std::pair<double, double>> &positions) const
 {
     std::vector<wxPoint> centres;
 
-    for (const auto &position : m_marker_positions) {
+    for (const auto &position : positions) {
         wxPoint centre;
         GetCanvasPixLL(vp, &centre, position.first, position.second);
 
@@ -4445,16 +5586,21 @@ bool legend_pi::RenderOverlayMultiCanvas(
 {
     (void)canvasIndex;
 
-    if (!m_marker_active || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on) || !vp)
         return false;
 
     // Draw once per frame.
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    const std::vector<wxPoint> centres = MarkerCentres(vp);
+    const bool drewAll = m_all_lights_on && DrawAllLights(dc, vp);
+    const bool drewLight = (m_light_active && DrawLightMarkers(dc, vp)) || drewAll;
+    if (!m_marker_active)
+        return drewLight;
+
+    const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return false;
+        return drewLight;
 
     const int radius = 16;
     const int pulse = m_marker_phase % 10;
@@ -4506,16 +5652,21 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)pcontext;
     (void)canvasIndex;
 
-    if (!m_marker_active || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on) || !vp)
         return false;
 
     // Draw once per frame.
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    const std::vector<wxPoint> centres = MarkerCentres(vp);
+    const bool drewAll = m_all_lights_on && DrawAllLightsGL(vp);
+    const bool drewLight = (m_light_active && DrawLightMarkersGL(vp)) || drewAll;
+    if (!m_marker_active)
+        return drewLight;
+
+    const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return false;
+        return drewLight;
 
     const double radius = 16.0;
     const int pulse = m_marker_phase % 10;
@@ -4587,4 +5738,689 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     glPopAttrib();
 
     return true;
+}
+
+// The chosen light on the chart. A ring with ticks, like the marker, stays
+// where the light is, also while it is dark. While it shines, a large glow
+// with rays in the colour of the light fills the ring; the steady part of a
+// fixed and flashing light is a smaller, paler glow without rays. Sizes
+// follow the pixel density of the screen.
+namespace {
+
+struct LightMarkerLook
+{
+    double scale = 1.0;
+    double ring = 0.0;     // radius of the ring
+    double glow = 0.0;     // radius of the glow
+    double core = 0.0;     // radius of the bright centre
+    double rayFrom = 0.0;  // rays run from here...
+    double rayTo = 0.0;    // ...to here
+    int rays = 8;
+};
+
+// Screen angle (radians, y down) of a bearing at a position: the chart can
+// be turned, so north is found by projecting a point a little to the north.
+double ScreenAngle(PlugIn_ViewPort *vp, double lat, double lon, double bearing)
+{
+    wxPoint centre;
+    wxPoint north;
+    GetCanvasPixLL(vp, &centre, lat, lon);
+    GetCanvasPixLL(vp, &north, lat + 0.01, lon);
+    const double kPi = 3.14159265358979323846;
+    const double up = std::atan2(static_cast<double>(north.y - centre.y),
+                                 static_cast<double>(north.x - centre.x));
+    return up + bearing * kPi / 180.0;
+}
+
+// The sectors of a sector light as coloured wedges around it. Sector limits
+// are bearings from seaward towards the light; the wedge lies on the other
+// side, where the ship sees that colour. Bright while the light shines,
+// faint while it is dark.
+void DrawSectorsGC(
+    wxGraphicsContext *gc,
+    PlugIn_ViewPort *vp,
+    double lat,
+    double lon,
+    double cx,
+    double cy,
+    const std::vector<LightSector> &sectors,
+    double radius,
+    bool lit,
+    const wxColour &outline)
+{
+    const double kPi = 3.14159265358979323846;
+    for (const LightSector &sector : sectors) {
+        double sweep = std::fmod(sector.to - sector.from + 360.0, 360.0);
+        if (sweep <= 0.0)
+            sweep = 360.0;
+        const double start = ScreenAngle(vp, lat, lon, sector.from + 180.0);
+        const wxColour colour =
+            LightDisplayColour(sector.colour, std::max(0.6, SchemeDim()));
+
+        wxGraphicsPath wedge = gc->CreatePath();
+        wedge.MoveToPoint(cx, cy);
+        wedge.AddArc(cx, cy, radius, start, start + sweep * kPi / 180.0, true);
+        wedge.CloseSubpath();
+        gc->SetBrush(wxBrush(
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45)));
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(
+            wxColour(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90))
+                                     .Width(1.2)));
+        gc->DrawPath(wedge);
+    }
+}
+
+void DrawSectorsGL(
+    PlugIn_ViewPort *vp,
+    double lat,
+    double lon,
+    double cx,
+    double cy,
+    const std::vector<LightSector> &sectors,
+    double radius,
+    bool lit,
+    const wxColour &outline)
+{
+    const double kPi = 3.14159265358979323846;
+    for (const LightSector &sector : sectors) {
+        double sweep = std::fmod(sector.to - sector.from + 360.0, 360.0);
+        if (sweep <= 0.0)
+            sweep = 360.0;
+        const double start = ScreenAngle(vp, lat, lon, sector.from + 180.0);
+        const double end = start + sweep * kPi / 180.0;
+        const int steps = std::max(4, static_cast<int>(sweep / 4.0));
+        const wxColour colour =
+            LightDisplayColour(sector.colour, std::max(0.6, SchemeDim()));
+
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2d(cx, cy);
+        for (int i = 0; i <= steps; ++i) {
+            const double angle = start + (end - start) * i / steps;
+            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
+        }
+        glEnd();
+
+        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90);
+        glLineWidth(1.2f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2d(cx, cy);
+        for (int i = 0; i <= steps; ++i) {
+            const double angle = start + (end - start) * i / steps;
+            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
+        }
+        glEnd();
+    }
+}
+
+LightMarkerLook MakeLightMarkerLook(double pixelsPerPoint, bool dimPart)
+{
+    LightMarkerLook look;
+    look.scale = std::max(1.0, pixelsPerPoint);
+    look.ring = 26.0 * look.scale;
+    look.glow = (dimPart ? 16.0 : 34.0) * look.scale;
+    look.core = (dimPart ? 7.0 : 11.0) * look.scale;
+    look.rayFrom = 15.0 * look.scale;
+    look.rayTo = 31.0 * look.scale;
+    return look;
+}
+
+} // namespace
+
+bool legend_pi::DrawLightMarkers(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    const std::vector<wxPoint> centres = MarkerCentres(vp, m_light_positions);
+    if (centres.empty() || m_light_colours.empty())
+        return false;
+
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
+
+    const bool lit = m_light_state >= 0;
+    const bool dimPart = m_light_state >= kDimLight;
+    const wxColour colour =
+        lit ? LightDisplayColour(
+                  m_light_colours[static_cast<size_t>(m_light_state % kDimLight) %
+                                  m_light_colours.size()],
+                  std::max(0.6, SchemeDim()))
+            : wxColour();
+    const LightMarkerLook look =
+        MakeLightMarkerLook(ViewportPixelsPerWindowPixel(), dimPart);
+    const double s = look.scale;
+    const double kPi = 3.14159265358979323846;
+
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+
+    // Sectors first, under the light.
+    if (gc) {
+        gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+        for (const auto &position : m_light_positions) {
+            const std::vector<LightSector> sectors =
+                SectorsAt(position.first, position.second, m_light_rhythm);
+            if (sectors.empty())
+                continue;
+            wxPoint centre;
+            GetCanvasPixLL(vp, &centre, position.first, position.second);
+            DrawSectorsGC(gc.get(), vp, position.first, position.second, centre.x,
+                          centre.y, sectors, 90.0 * look.scale, lit, outline);
+        }
+    }
+
+    for (const wxPoint &centre : centres) {
+        const double cx = centre.x;
+        const double cy = centre.y;
+
+        if (!gc) {
+            dc.SetBrush(*wxTRANSPARENT_BRUSH);
+            dc.SetPen(wxPen(outline, static_cast<int>(6 * s)));
+            dc.DrawCircle(centre, static_cast<int>(look.ring));
+            dc.SetPen(wxPen(highlight, static_cast<int>(3 * s)));
+            dc.DrawCircle(centre, static_cast<int>(look.ring));
+            if (lit) {
+                dc.SetPen(wxPen(outline, static_cast<int>(2 * s)));
+                dc.SetBrush(wxBrush(colour));
+                dc.DrawCircle(centre, static_cast<int>(look.core * 1.6));
+            }
+            continue;
+        }
+
+        gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+
+        // The glow under everything else.
+        if (lit) {
+            gc->SetPen(*wxTRANSPARENT_PEN);
+            gc->SetBrush(gc->CreateRadialGradientBrush(
+                cx, cy, cx, cy, look.glow,
+                wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210),
+                wxColour(colour.Red(), colour.Green(), colour.Blue(), 0)));
+            gc->DrawEllipse(cx - look.glow, cy - look.glow, 2 * look.glow, 2 * look.glow);
+        }
+
+        // The ring with ticks, as the marker.
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        const double tick = 12.0 * s;
+        for (int pass = 0; pass < 2; ++pass) {
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(pass == 0 ? outline : highlight).Width((pass == 0 ? 6.0 : 3.0) * s)));
+            gc->DrawEllipse(cx - look.ring, cy - look.ring, 2 * look.ring, 2 * look.ring);
+            gc->StrokeLine(cx - look.ring - tick, cy, cx - look.ring + 2 * s, cy);
+            gc->StrokeLine(cx + look.ring - 2 * s, cy, cx + look.ring + tick, cy);
+            gc->StrokeLine(cx, cy - look.ring - tick, cx, cy - look.ring + 2 * s);
+            gc->StrokeLine(cx, cy + look.ring - 2 * s, cx, cy + look.ring + tick);
+        }
+
+        if (!lit)
+            continue;
+
+        // Rays, outlined so that white and yellow show on a light chart.
+        if (!dimPart) {
+            for (int pass = 0; pass < 2; ++pass) {
+                gc->SetPen(gc->CreatePen(
+                    wxGraphicsPenInfo(pass == 0 ? outline : colour)
+                        .Width((pass == 0 ? 5.0 : 3.0) * s)
+                        .Cap(wxCAP_ROUND)));
+                for (int r = 0; r < look.rays; ++r) {
+                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
+                    gc->StrokeLine(cx + look.rayFrom * std::cos(angle),
+                                   cy + look.rayFrom * std::sin(angle),
+                                   cx + look.rayTo * std::cos(angle),
+                                   cy + look.rayTo * std::sin(angle));
+                }
+            }
+        }
+
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(2.0 * s)));
+        gc->SetBrush(wxBrush(
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255)));
+        gc->DrawEllipse(cx - look.core, cy - look.core, 2 * look.core, 2 * look.core);
+    }
+
+    return true;
+}
+
+bool legend_pi::DrawLightMarkersGL(PlugIn_ViewPort *vp)
+{
+    const std::vector<wxPoint> centres = MarkerCentres(vp, m_light_positions);
+    if (centres.empty() || m_light_colours.empty())
+        return false;
+
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
+
+    const bool lit = m_light_state >= 0;
+    const bool dimPart = m_light_state >= kDimLight;
+    const wxColour colour =
+        lit ? LightDisplayColour(
+                  m_light_colours[static_cast<size_t>(m_light_state % kDimLight) %
+                                  m_light_colours.size()],
+                  std::max(0.6, SchemeDim()))
+            : wxColour();
+    const LightMarkerLook look =
+        MakeLightMarkerLook(ViewportPixelsPerWindowPixel(), dimPart);
+    const double s = look.scale;
+
+    // GL_CURRENT_BIT included: see RenderGLOverlayMultiCanvas.
+    // GL_LIGHTING_BIT keeps the shade model, set to smooth for the glow.
+    glPushAttrib(
+        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+        GL_HINT_BIT | GL_LIGHTING_BIT);
+
+    glShadeModel(GL_SMOOTH);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    const int segments = 64;
+    const double kPi = 3.14159265358979323846;
+
+    auto circle = [&](double x, double y, double r) {
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
+        }
+        glEnd();
+    };
+
+    // A disc that fades from the centre colour to transparent at its edge.
+    auto glowDisc = [&](double x, double y, double r, unsigned char alpha) {
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), alpha);
+        glVertex2d(x, y);
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
+        for (int i = 0; i <= segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
+        }
+        glEnd();
+    };
+
+    auto disc = [&](double x, double y, double r) {
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2d(x, y);
+        for (int i = 0; i <= segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
+        }
+        glEnd();
+    };
+
+    auto ticks = [&](double x, double y, double r, double length) {
+        glBegin(GL_LINES);
+        glVertex2d(x - r - length, y);
+        glVertex2d(x - r + 2 * s, y);
+        glVertex2d(x + r - 2 * s, y);
+        glVertex2d(x + r + length, y);
+        glVertex2d(x, y - r - length);
+        glVertex2d(x, y - r + 2 * s);
+        glVertex2d(x, y + r - 2 * s);
+        glVertex2d(x, y + r + length);
+        glEnd();
+    };
+
+    // Sectors first, under the light.
+    for (const auto &position : m_light_positions) {
+        const std::vector<LightSector> sectors =
+            SectorsAt(position.first, position.second, m_light_rhythm);
+        if (sectors.empty())
+            continue;
+        wxPoint centre;
+        GetCanvasPixLL(vp, &centre, position.first, position.second);
+        DrawSectorsGL(vp, position.first, position.second, centre.x, centre.y,
+                      sectors, 90.0 * s, lit, outline);
+    }
+
+    for (const wxPoint &centre : centres) {
+        const double cx = centre.x;
+        const double cy = centre.y;
+
+        if (lit)
+            glowDisc(cx, cy, look.glow, dimPart ? 120 : 210);
+
+        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+        glLineWidth(static_cast<float>(6.0 * s));
+        circle(cx, cy, look.ring);
+        ticks(cx, cy, look.ring, 12.0 * s);
+        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
+        glLineWidth(static_cast<float>(3.0 * s));
+        circle(cx, cy, look.ring);
+        ticks(cx, cy, look.ring, 10.0 * s);
+
+        if (!lit)
+            continue;
+
+        if (!dimPart) {
+            for (int pass = 0; pass < 2; ++pass) {
+                if (pass == 0)
+                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+                else
+                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
+                glLineWidth(static_cast<float>((pass == 0 ? 5.0 : 3.0) * s));
+                glBegin(GL_LINES);
+                for (int r = 0; r < look.rays; ++r) {
+                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
+                    glVertex2d(cx + look.rayFrom * std::cos(angle),
+                               cy + look.rayFrom * std::sin(angle));
+                    glVertex2d(cx + look.rayTo * std::cos(angle),
+                               cy + look.rayTo * std::sin(angle));
+                }
+                glEnd();
+            }
+        }
+
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
+        disc(cx, cy, look.core);
+        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+        glLineWidth(static_cast<float>(2.0 * s));
+        circle(cx, cy, look.core);
+    }
+
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
+    glPopAttrib();
+
+    return true;
+}
+
+void legend_pi::SetAllLightsShining(bool on)
+{
+    m_all_lights_on = on;
+
+    if (!on) {
+        m_all_lights_timer.Stop();
+        m_shining_lights.clear();
+        m_shining_characters.clear();
+        RefreshAllCanvases();
+        return;
+    }
+
+    m_all_lights_started = wxGetUTCTimeMillis();
+    UpdateAllLights();
+    m_all_lights_timer.Stop();
+    m_all_lights_timer.Start(50);
+    OnAllLightsTimer();
+}
+
+// The lights of the list, so the shining lights follow the chart. One light
+// that is listed twice (a waypoint and a chart light) shines once.
+void legend_pi::UpdateAllLights()
+{
+    m_shining_lights.clear();
+    m_shining_characters.clear();
+
+    std::map<wxString, size_t> characters;
+    std::set<std::pair<long, long>> taken;
+
+    for (const DynamicGroup &group : m_dynamic_groups) {
+        // Only what the chart draws at this scale.
+        if (!group.lightCharacter || group.hiddenAtScale)
+            continue;
+
+        auto known = characters.find(group.lightText);
+        size_t index = 0;
+        if (known != characters.end()) {
+            index = known->second;
+        }
+        else {
+            LightCharacter light;
+            if (!light.Parse(group.lightText))
+                continue;
+            ShiningCharacter character;
+            character.phases = light.Phases();
+            character.colours = light.Colours();
+            character.rhythm = light.RhythmAbbreviation();
+            for (const LightPhase &phase : character.phases)
+                character.cycle += phase.seconds;
+            if (character.cycle <= 0.0)
+                continue;
+            index = m_shining_characters.size();
+            m_shining_characters.push_back(character);
+            characters[group.lightText] = index;
+        }
+
+        for (const auto &position : group.positions) {
+            const auto cell = std::make_pair(
+                static_cast<long>(std::floor(position.first / 0.0003)),
+                static_cast<long>(std::floor(position.second / 0.0005)));
+            if (!taken.insert(cell).second)
+                continue;
+
+            ShiningLight shining;
+            shining.lat = position.first;
+            shining.lon = position.second;
+            shining.character = index;
+            // A fixed start within the period, taken from the position, so
+            // the lights do not flash in step and keep their start when the
+            // list is rebuilt.
+            shining.offset = std::fmod(
+                std::fabs(position.first * 7919.0 + position.second * 104729.0),
+                m_shining_characters[index].cycle);
+            m_shining_lights.push_back(shining);
+        }
+    }
+}
+
+void legend_pi::OnAllLightsTimer()
+{
+    if (!m_all_lights_on) {
+        m_all_lights_timer.Stop();
+        return;
+    }
+
+    const double elapsed =
+        (wxGetUTCTimeMillis() - m_all_lights_started).ToDouble() / 1000.0;
+
+    bool changed = false;
+    for (ShiningLight &light : m_shining_lights) {
+        const ShiningCharacter &character = m_shining_characters[light.character];
+        const int state = PhaseStateAt(
+            character.phases, std::fmod(elapsed + light.offset, character.cycle));
+        if (state != light.state) {
+            light.state = state;
+            changed = true;
+        }
+    }
+
+    if (changed)
+        RefreshAllCanvases();
+}
+
+namespace {
+
+// The colour a shining light has now, or false while it is dark.
+bool ShiningColour(
+    int state,
+    const std::vector<wxString> &colours,
+    wxColour *colour,
+    bool *dimPart)
+{
+    if (state < 0 || colours.empty())
+        return false;
+    *dimPart = state >= kDimLight;
+    *colour = LightDisplayColour(
+        colours[static_cast<size_t>(state % kDimLight) % colours.size()],
+        std::max(0.6, SchemeDim()));
+    return true;
+}
+
+} // namespace
+
+// All lights in view: glow, rays and centre as for a chosen light, smaller
+// and without the ring, so the chart stays readable.
+bool legend_pi::DrawAllLights(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    if (m_shining_lights.empty())
+        return false;
+
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
+    const double pixels = ViewportPixelsPerWindowPixel() * 0.65;
+    const double kPi = 3.14159265358979323846;
+
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (!gc)
+        return false;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+
+    bool drew = false;
+    for (const ShiningLight &light : m_shining_lights) {
+        wxColour colour;
+        bool dimPart = false;
+        if (!ShiningColour(light.state, m_shining_characters[light.character].colours,
+                           &colour, &dimPart))
+            continue;
+
+        wxPoint centre;
+        GetCanvasPixLL(vp, &centre, light.lat, light.lon);
+        if (centre.x < -40 || centre.y < -40 || centre.x > vp->pix_width + 40 ||
+            centre.y > vp->pix_height + 40)
+            continue;
+
+        const LightMarkerLook look = MakeLightMarkerLook(pixels, dimPart);
+        const double s = std::max(0.65, pixels);
+        const double cx = centre.x;
+        const double cy = centre.y;
+
+        const std::vector<LightSector> sectors = SectorsAt(
+            light.lat, light.lon, m_shining_characters[light.character].rhythm);
+        if (!sectors.empty())
+            DrawSectorsGC(gc.get(), vp, light.lat, light.lon, cx, cy, sectors,
+                          60.0 * s, true, outline);
+
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->SetBrush(gc->CreateRadialGradientBrush(
+            cx, cy, cx, cy, look.glow,
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210),
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), 0)));
+        gc->DrawEllipse(cx - look.glow, cy - look.glow, 2 * look.glow, 2 * look.glow);
+
+        if (!dimPart) {
+            for (int pass = 0; pass < 2; ++pass) {
+                gc->SetPen(gc->CreatePen(
+                    wxGraphicsPenInfo(pass == 0 ? outline : colour)
+                        .Width((pass == 0 ? 4.0 : 2.5) * s)
+                        .Cap(wxCAP_ROUND)));
+                for (int r = 0; r < look.rays; ++r) {
+                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
+                    gc->StrokeLine(cx + look.rayFrom * std::cos(angle),
+                                   cy + look.rayFrom * std::sin(angle),
+                                   cx + look.rayTo * std::cos(angle),
+                                   cy + look.rayTo * std::sin(angle));
+                }
+            }
+        }
+
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(1.5 * s)));
+        gc->SetBrush(wxBrush(
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255)));
+        gc->DrawEllipse(cx - look.core, cy - look.core, 2 * look.core, 2 * look.core);
+        drew = true;
+    }
+    return drew;
+}
+
+bool legend_pi::DrawAllLightsGL(PlugIn_ViewPort *vp)
+{
+    if (m_shining_lights.empty())
+        return false;
+
+    wxColour outline;
+    wxColour highlight;
+    MarkerColours(outline, highlight);
+    const double pixels = ViewportPixelsPerWindowPixel() * 0.65;
+    const double s = std::max(0.65, pixels);
+    const int segments = 40;
+    const double kPi = 3.14159265358979323846;
+
+    glPushAttrib(
+        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+        GL_HINT_BIT | GL_LIGHTING_BIT);
+    glShadeModel(GL_SMOOTH);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    bool drew = false;
+    for (const ShiningLight &light : m_shining_lights) {
+        wxColour colour;
+        bool dimPart = false;
+        if (!ShiningColour(light.state, m_shining_characters[light.character].colours,
+                           &colour, &dimPart))
+            continue;
+
+        wxPoint centre;
+        GetCanvasPixLL(vp, &centre, light.lat, light.lon);
+        if (centre.x < -40 || centre.y < -40 || centre.x > vp->pix_width + 40 ||
+            centre.y > vp->pix_height + 40)
+            continue;
+
+        const LightMarkerLook look = MakeLightMarkerLook(pixels, dimPart);
+        const double cx = centre.x;
+        const double cy = centre.y;
+
+        const std::vector<LightSector> sectors = SectorsAt(
+            light.lat, light.lon, m_shining_characters[light.character].rhythm);
+        if (!sectors.empty())
+            DrawSectorsGL(vp, light.lat, light.lon, cx, cy, sectors, 60.0 * s, true,
+                          outline);
+
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210);
+        glVertex2d(cx, cy);
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
+        for (int i = 0; i <= segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(cx + look.glow * std::cos(angle), cy + look.glow * std::sin(angle));
+        }
+        glEnd();
+
+        if (!dimPart) {
+            for (int pass = 0; pass < 2; ++pass) {
+                if (pass == 0)
+                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+                else
+                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
+                glLineWidth(static_cast<float>((pass == 0 ? 4.0 : 2.5) * s));
+                glBegin(GL_LINES);
+                for (int r = 0; r < look.rays; ++r) {
+                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
+                    glVertex2d(cx + look.rayFrom * std::cos(angle),
+                               cy + look.rayFrom * std::sin(angle));
+                    glVertex2d(cx + look.rayTo * std::cos(angle),
+                               cy + look.rayTo * std::sin(angle));
+                }
+                glEnd();
+            }
+        }
+
+        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2d(cx, cy);
+        for (int i = 0; i <= segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
+        }
+        glEnd();
+        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
+        glLineWidth(static_cast<float>(1.5 * s));
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < segments; ++i) {
+            const double angle = 2.0 * kPi * i / segments;
+            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
+        }
+        glEnd();
+        drew = true;
+    }
+
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
+    glPopAttrib();
+    return drew;
 }
