@@ -4297,8 +4297,12 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     const double radius = 16.0;
     const int pulse = m_marker_phase % 10;
 
+    // GL_CURRENT_BIT included: the drawing colour set here would otherwise
+    // stay in effect for whatever OpenCPN draws next, and chart symbols
+    // are modulated by it (black symbols in the night scheme).
     glPushAttrib(
-        GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT | GL_HINT_BIT);
+        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+        GL_HINT_BIT);
 
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
@@ -4355,6 +4359,8 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
         circle(cx, cy, radius + 8.0 + pulse * 3.0);
     }
 
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
     glPopAttrib();
 
     return true;
