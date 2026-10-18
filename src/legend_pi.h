@@ -224,6 +224,24 @@ private:
     // Order edit mode: headings only, with buttons to move a heading up or
     // down. The new order is written to symbolen.txt.
     void SetReorderMode(bool on);
+
+    // "Kaartsymbolen" (-2) and "Lichtkarakters" (-3) are headings of the
+    // plugin; a heading of that name in symbolen.txt takes their place, so
+    // they can be moved like the others. BuiltInSection() gives the heading
+    // in the file, or the built-in number when there is none.
+    int BuiltInSection(int builtIn) const;
+    // Adds those headings to symbolen.txt when missing (for the order
+    // edit mode).
+    void AddBuiltInHeadings();
+
+    // The settings of the dynamic legend, from the menu behind
+    // "Instellingen" or from a link: "lights", "hidden",
+    // "language", "all-lights", "collapse-all", "expand-all", "reorder".
+    void RunLegendCommand(const wxString &command);
+    void ShowSettingsMenu();
+    bool m_menu_has_headings = false; // what the menu offers, from the list
+    bool m_menu_any_open = false;
+    bool m_menu_has_lights = false;
     void MoveSection(int section, int delta);
     void ResolveLabel(
         const wxString &key,
@@ -396,7 +414,6 @@ private:
     double m_displayed_scale = 0.0; // for the viewport last collected
     bool m_ocharts_available = false;
     bool m_chart_sources_available = false; // any chart source has cells
-    bool m_show_chart_objects = true; // setting, kept in legend.ini
     bool m_show_hidden_at_scale = false; // setting: list scale-hidden symbols too
     int m_dynamic_hidden = 0;            // waypoints in view hidden by scale
     int m_chart_objects_scale_hidden = 0; // chart objects in view hidden by scale

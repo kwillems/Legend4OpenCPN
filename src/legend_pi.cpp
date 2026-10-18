@@ -31,6 +31,7 @@
 #include <wx/filename.h>
 #include <wx/image.h>
 #include <wx/log.h>
+#include <wx/menu.h>
 #include <wx/panel.h>
 #include <wx/settings.h>
 #include <wx/statline.h>
@@ -128,6 +129,10 @@ const wxString kLegendAllIdPrefix = "legend-all-";
 // number in symbolen.txt.
 const wxString kLegendMoveUpIdPrefix = "legend-move-up-";
 const wxString kLegendMoveDownIdPrefix = "legend-move-down-";
+
+// Id of the cells of the header icons, for their tooltips: 0 settings,
+// 1 Ververs.
+const wxString kLegendTipIdPrefix = "legend-tip-";
 
 // Id of a line of the "Vooruit" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
@@ -830,10 +835,11 @@ wxImage FadeImage(const wxImage &image, const wxColour &towards, double amount)
 
 // A small eye, closed (a stroke through it) for rows hidden at this
 // scale, drawn on the row colour.
-wxImage EyeIcon(bool open, const wxColour &colour, const wxColour &background)
+wxImage EyeIcon(
+    bool open, const wxColour &colour, const wxColour &background, int scale = 1)
 {
-    const int width = 20;
-    const int height = 13;
+    const int width = 20 * scale;
+    const int height = 13 * scale;
 
     wxBitmap bitmap(width, height, 24);
     {
@@ -844,15 +850,16 @@ wxImage EyeIcon(bool open, const wxColour &colour, const wxColour &background)
         wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
         if (gc) {
             gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.4)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.4 * scale)));
             gc->SetBrush(*wxTRANSPARENT_BRUSH);
 
             // The lid: two curves from corner to corner.
             const double y = height / 2.0;
+            const double edge = 1.5 * scale;
             wxGraphicsPath lens = gc->CreatePath();
-            lens.MoveToPoint(1.5, y);
-            lens.AddQuadCurveToPoint(width / 2.0, -height * 0.45, width - 1.5, y);
-            lens.AddQuadCurveToPoint(width / 2.0, height * 1.45, 1.5, y);
+            lens.MoveToPoint(edge, y);
+            lens.AddQuadCurveToPoint(width / 2.0, -height * 0.45, width - edge, y);
+            lens.AddQuadCurveToPoint(width / 2.0, height * 1.45, edge, y);
             gc->StrokePath(lens);
 
             // The pupil.
@@ -861,14 +868,88 @@ wxImage EyeIcon(bool open, const wxColour &colour, const wxColour &background)
             gc->DrawEllipse(width / 2.0 - radius, y - radius, 2 * radius, 2 * radius);
 
             if (!open) {
-                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.6)));
-                gc->StrokeLine(3.0, height - 1.5, width - 3.0, 1.5);
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(1.6 * scale)));
+                gc->StrokeLine(3.0 * scale, height - edge, width - 3.0 * scale, edge);
             }
             delete gc;
         }
         dc.SelectObject(wxNullBitmap);
     }
 
+    return bitmap.ConvertToImage();
+}
+
+// The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
+// drawn rather than taken from a font, so their size is certain.
+wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size)
+{
+    wxBitmap bitmap(size, size, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            const double kPi = 3.14159265358979323846;
+            const double c = size / 2.0;
+            if (gear) {
+                // Eight teeth around a ring with a hole.
+                const double outer = size * 0.46;
+                const double inner = size * 0.33;
+                wxGraphicsPath path = gc->CreatePath();
+                const int teeth = 8;
+                for (int i = 0; i < teeth * 4; ++i) {
+                    const double angle = 2.0 * kPi * (i - 0.5) / (teeth * 4);
+                    const double r = (i % 4 == 1 || i % 4 == 2) ? outer : inner;
+                    const double x = c + r * std::cos(angle);
+                    const double y = c + r * std::sin(angle);
+                    if (i == 0)
+                        path.MoveToPoint(x, y);
+                    else
+                        path.AddLineToPoint(x, y);
+                }
+                path.CloseSubpath();
+                gc->SetPen(*wxTRANSPARENT_PEN);
+                gc->SetBrush(wxBrush(colour));
+                gc->FillPath(path);
+
+                // The hole in the middle.
+                const double hole = size * 0.14;
+                gc->SetBrush(wxBrush(background));
+                gc->DrawEllipse(c - hole, c - hole, 2 * hole, 2 * hole);
+            }
+            else {
+                // Most of a circle with an arrowhead at its end.
+                const double r = size * 0.33;
+                const double width = std::max(1.5, size * 0.11);
+                const double start = -kPi * 0.35;
+                const double end = start + kPi * 1.6;
+                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(width)));
+                gc->SetBrush(*wxTRANSPARENT_BRUSH);
+                wxGraphicsPath arc = gc->CreatePath();
+                arc.AddArc(c, c, r, start, end, true);
+                gc->StrokePath(arc);
+
+                const double tipX = c + r * std::cos(end);
+                const double tipY = c + r * std::sin(end);
+                const double along = end + kPi / 2.0; // direction of travel
+                const double head = size * 0.2;
+                wxGraphicsPath arrow = gc->CreatePath();
+                arrow.MoveToPoint(tipX + head * std::cos(along), tipY + head * std::sin(along));
+                arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along + kPi * 0.6),
+                                     tipY + head * 0.8 * std::sin(along + kPi * 0.6));
+                arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along - kPi * 0.6),
+                                     tipY + head * 0.8 * std::sin(along - kPi * 0.6));
+                arrow.CloseSubpath();
+                gc->SetPen(*wxTRANSPARENT_PEN);
+                gc->SetBrush(wxBrush(colour));
+                gc->FillPath(arrow);
+            }
+            delete gc;
+        }
+        dc.SelectObject(wxNullBitmap);
+    }
     return bitmap.ConvertToImage();
 }
 
@@ -1345,7 +1426,6 @@ void legend_pi::LoadConfig()
     if (m_window_height < 300)
         m_window_height = 300;
 
-    config.Read("ShowChartObjects", &m_show_chart_objects, true);
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
     config.Read("ShowLights", &m_show_lights, true);
     wxString language;
@@ -1386,7 +1466,6 @@ void legend_pi::SaveConfig() const
     for (const wxString &name : m_collapsed_sections)
         collapsed.Add(name);
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
-    config.Write("ShowChartObjects", m_show_chart_objects);
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
     config.Write("ShowLights", m_show_lights);
     config.Write("Language", m_dutch_names ? "nl" : "en");
@@ -2134,72 +2213,24 @@ void legend_pi::CreateLegendWindow()
         [this](wxHtmlLinkEvent &event) {
             wxString href = event.GetLinkInfo().GetHref();
 
-            if (href.StartsWith("legend-reorder:") ||
-                href.StartsWith("legend-reorder-done:")) {
-                const bool on = !href.StartsWith("legend-reorder-done:");
-                m_markdown_view->CallAfter([this, on]() { SetReorderMode(on); });
+            if (href.StartsWith("legend-reorder-done:")) {
+                m_markdown_view->CallAfter([this]() { SetReorderMode(false); });
                 return;
             }
 
-            if (href.StartsWith("legend-collapse-all:") ||
-                href.StartsWith("legend-expand-all:")) {
-                const bool collapse = href.StartsWith("legend-collapse-all:");
-                m_markdown_view->CallAfter([this, collapse]() {
-                    SetAllSectionsCollapsed(collapse);
-                });
+            if (href.StartsWith("legend-settings:")) {
+                m_markdown_view->CallAfter([this]() { ShowSettingsMenu(); });
                 return;
             }
 
-            if (href.StartsWith("legend-language-toggle:")) {
-                m_markdown_view->CallAfter([this]() {
-                    m_dutch_names = !m_dutch_names;
-                    SaveConfig();
-                    // Labels are made when the list is collected.
-                    CollectDynamicLegend();
-                    RenderDynamicLegend(true);
-                });
-                return;
-            }
-
-            if (href.StartsWith("legend-lights-toggle:")) {
-                m_markdown_view->CallAfter([this]() {
-                    m_show_lights = !m_show_lights;
-                    if (!m_show_lights)
-                        SetAllLightsShining(false);
-                    SaveConfig();
-                    RefreshDynamicLegendKeepingState();
-                    RenderDynamicLegend(true);
-                });
-                return;
-            }
-
-            if (href.StartsWith("legend-all-lights:")) {
-                const bool on = !m_all_lights_on;
-                m_markdown_view->CallAfter([this, on]() {
-                    SetAllLightsShining(on);
-                    RenderDynamicLegend(true);
-                });
-                return;
-            }
-
-            if (href.StartsWith("legend-hidden-toggle:")) {
-                m_markdown_view->CallAfter([this]() {
-                    m_show_hidden_at_scale = !m_show_hidden_at_scale;
-                    SaveConfig();
-                    RefreshDynamicLegendKeepingState();
-                    RenderDynamicLegend(true);
-                });
-                return;
-            }
-
-            if (href.StartsWith("legend-chart-toggle:")) {
-                m_markdown_view->CallAfter([this]() {
-                    m_show_chart_objects = !m_show_chart_objects;
-                    SaveConfig();
-                    RefreshDynamicLegendKeepingState();
-                    RenderDynamicLegend(true);
-                });
-                return;
+            // The settings, also reachable as links: "legend-<command>:".
+            for (const char *command : {"reorder", "collapse-all", "expand-all", "language",
+                                        "lights", "all-lights", "hidden"}) {
+                if (href == wxString("legend-") + command + ":") {
+                    const wxString name(command);
+                    m_markdown_view->CallAfter([this, name]() { RunLegendCommand(name); });
+                    return;
+                }
             }
 
             if (href.StartsWith("legend-refresh:")) {
@@ -2229,7 +2260,7 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -2251,6 +2282,7 @@ void legend_pi::CreateLegendWindow()
             {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
             {HitKind::MoveDown,
              legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+            {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
             {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
             {HitKind::Row, legendView->RowAt(pos)},
@@ -2306,6 +2338,7 @@ void legend_pi::CreateLegendWindow()
                 case HitKind::Ahead:
                     ShowAheadItem(static_cast<size_t>(hit.index));
                     break;
+                case HitKind::Tip: // the link inside does the work
                 case HitKind::None:
                     break;
                 }
@@ -2374,6 +2407,10 @@ void legend_pi::CreateLegendWindow()
                 break;
             case HitKind::Ahead:
                 tip = "Op de kaart aanwijzen";
+                break;
+            case HitKind::Tip:
+                tip = hit.index == 0 ? "Instellingen: wat de legenda toont"
+                                     : "Ververs: kaarten en lagen opnieuw inlezen";
                 break;
             case HitKind::None:
                 break;
@@ -2995,7 +3032,7 @@ void legend_pi::SetCurrentViewPort(PlugIn_ViewPort &vp)
     if (plibHash != m_plib_state_hash) {
         const bool first = m_plib_state_hash == 0;
         m_plib_state_hash = plibHash;
-        if (!first && !m_showing_loading_page && m_show_chart_objects) {
+        if (!first && !m_showing_loading_page) {
             m_display_settings.Refresh(true);
             RefreshDynamicLegendKeepingState();
             return;
@@ -3013,7 +3050,7 @@ void legend_pi::CheckVisibilityChanges()
 {
     // OpenCPN wrote new display settings to its configuration file.
     if (IsDynamicLegendVisible() && !m_loading && !m_showing_loading_page &&
-        m_show_chart_objects && m_display_settings.Refresh()) {
+        m_display_settings.Refresh()) {
         RefreshDynamicLegendKeepingState();
         return;
     }
@@ -3612,14 +3649,138 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
         m_collapsed_sections.insert(SectionName(-2));
         m_collapsed_sections.insert(SectionName(-3));
         m_collapsed_sections.insert(SectionName(-1));
+        m_collapsed_sections.insert("@marifoon");
+        m_collapsed_sections.insert("@vooruit");
     }
 
     SaveConfig();
     RenderDynamicLegend(true);
 }
 
+void legend_pi::RunLegendCommand(const wxString &command)
+{
+    if (command == "reorder") {
+        SetReorderMode(true);
+    }
+    else if (command == "collapse-all" || command == "expand-all") {
+        SetAllSectionsCollapsed(command == "collapse-all");
+    }
+    else if (command == "language") {
+        m_dutch_names = !m_dutch_names;
+        SaveConfig();
+        // Labels are made when the list is collected.
+        CollectDynamicLegend();
+        RenderDynamicLegend(true);
+    }
+    else if (command == "lights") {
+        m_show_lights = !m_show_lights;
+        if (!m_show_lights)
+            SetAllLightsShining(false);
+        SaveConfig();
+        RefreshDynamicLegendKeepingState();
+        RenderDynamicLegend(true);
+    }
+    else if (command == "all-lights") {
+        SetAllLightsShining(!m_all_lights_on);
+        RenderDynamicLegend(true);
+    }
+    else if (command == "hidden") {
+        m_show_hidden_at_scale = !m_show_hidden_at_scale;
+        SaveConfig();
+        RefreshDynamicLegendKeepingState();
+        RenderDynamicLegend(true);
+    }
+}
+
+// The menu behind "Instellingen": what is shown, with a tick when it is on,
+// and the actions on the list.
+void legend_pi::ShowSettingsMenu()
+{
+    if (!m_markdown_view)
+        return;
+
+    enum
+    {
+        kLights = 1000, kHidden, kEnglish, kAllLights, kFold, kReorder
+    };
+
+    wxMenu menu;
+    menu.AppendCheckItem(kLights, "Lichten")->Check(m_show_lights);
+    menu.AppendCheckItem(kHidden, "Ook op deze schaal verborgen tonen")
+        ->Check(m_show_hidden_at_scale);
+    if (m_chart_sources_available || m_menu_has_lights)
+        menu.AppendCheckItem(kEnglish, "Engelse namen")->Check(!m_dutch_names);
+
+    menu.AppendSeparator();
+    if (m_show_lights && (m_menu_has_lights || m_all_lights_on))
+        menu.AppendCheckItem(kAllLights, "Alle lichten laten branden")->Check(m_all_lights_on);
+    if (m_menu_has_headings) {
+        menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
+        menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
+    }
+
+    switch (m_markdown_view->GetPopupMenuSelectionFromUser(menu)) {
+    case kLights:
+        RunLegendCommand("lights");
+        break;
+    case kHidden:
+        RunLegendCommand("hidden");
+        break;
+    case kEnglish:
+        RunLegendCommand("language");
+        break;
+    case kAllLights:
+        RunLegendCommand("all-lights");
+        break;
+    case kFold:
+        RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");
+        break;
+    case kReorder:
+        RunLegendCommand("reorder");
+        break;
+    default:
+        break;
+    }
+}
+
+int legend_pi::BuiltInSection(int builtIn) const
+{
+    const wxString name = builtIn == -2 ? "kaartsymbolen" : "lichtkarakters";
+    for (size_t i = 0; i < m_meaning_sections.size(); ++i) {
+        wxString first = m_meaning_sections[i].BeforeFirst('|');
+        first.Trim(true).Trim(false);
+        if (first.Lower() == name)
+            return static_cast<int>(i);
+    }
+    return builtIn;
+}
+
+void legend_pi::AddBuiltInHeadings()
+{
+    wxString missing;
+    if (m_chart_sources_available && BuiltInSection(-2) == -2)
+        missing << "\n[Kaartsymbolen | Chart symbols]\n";
+    if (m_show_lights && BuiltInSection(-3) == -3)
+        missing << "\n[Lichtkarakters | Light characters]\n";
+    if (missing.IsEmpty())
+        return;
+
+    wxFile file;
+    if (!file.Open(GetMeaningsFile(), wxFile::write_append))
+        return;
+    file.Write(missing, wxConvUTF8);
+    file.Close();
+
+    // Read again even when the file time did not change within a second.
+    m_meanings_modified = wxDateTime();
+    LoadMeanings();
+    CollectDynamicLegend();
+}
+
 void legend_pi::SetReorderMode(bool on)
 {
+    if (on)
+        AddBuiltInHeadings();
     m_reorder_mode = on;
     UpdateSearchVisibility();
     RenderDynamicLegend(!on);
@@ -4021,7 +4182,7 @@ void legend_pi::CollectChartObjects(
 
             // Not mentioned in symbolen.txt: under its own heading.
             if (group.order == (1 << 30))
-                group.section = -2;
+                group.section = BuiltInSection(-2);
         }
 
         group.positions.emplace_back(object.lat, object.lon);
@@ -4222,7 +4383,7 @@ void legend_pi::AddLight(
         group.lightText = abbreviation;
         group.label = light.Words(m_dutch_names);
         group.parentKey = parentKey;
-        group.section = -3;
+        group.section = BuiltInSection(-3);
         group.hiddenAtScale = hiddenFrom > 0;
         group.visibleFrom = hiddenFrom;
 
@@ -4327,10 +4488,7 @@ void legend_pi::CollectDynamicLegend()
     }
 
     m_light_sectors.clear();
-    if (m_show_chart_objects)
-        CollectChartObjects(vp, &groups);
-    else
-        m_chart_object_total = m_chart_objects_hidden = 0;
+    CollectChartObjects(vp, &groups);
 
     // Order the positions of every group from near to far, measured from
     // the centre of the screen.
@@ -4370,7 +4528,7 @@ void legend_pi::CollectDynamicLegend()
                 continue;
             }
             group.parentKey.Clear();
-            group.section = -3;
+            group.section = BuiltInSection(-3);
         }
 
         m_dynamic_groups.push_back(group);
@@ -4399,11 +4557,13 @@ void legend_pi::CollectDynamicLegend()
             return a.key.CmpNoCase(b.key) < 0;
         });
 
-    if (m_all_lights_on)
-        UpdateAllLights();
-
-    if (subRows.empty())
+    // Lights shining on the chart follow the list, once it is complete:
+    // the lights under their rows are added below.
+    if (subRows.empty()) {
+        if (m_all_lights_on)
+            UpdateAllLights();
         return;
+    }
 
     // Each row followed by the lights it carries, the most frequent first.
     std::vector<DynamicGroup> ordered;
@@ -4430,6 +4590,9 @@ void legend_pi::CollectDynamicLegend()
         }
     }
     m_dynamic_groups.swap(ordered);
+
+    if (m_all_lights_on)
+        UpdateAllLights();
 }
 
 void legend_pi::RenderDynamicLegend(bool keepScroll)
@@ -4467,6 +4630,21 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
     auto hex = [](const wxColour &colour) { return HtmlColour(colour); };
 
+    // An image of the list under "name.png", and when given its version at
+    // twice the size under "name@2x.png", which wxHTML on macOS takes on a
+    // Retina screen, so it stays sharp there.
+    auto addImage = [this](const wxString &name, const wxImage &image,
+                           const wxImage &doubled) {
+        wxMemoryFSHandler::AddFile(name, image, wxBITMAP_TYPE_PNG);
+        m_dynamic_image_names.push_back(name);
+        if (doubled.IsOk() && name.EndsWith(".png")) {
+            const wxString hiDpi = name.Left(name.length() - 4) + "@2x.png";
+            wxMemoryFSHandler::AddFile(hiDpi, doubled, wxBITMAP_TYPE_PNG);
+            m_dynamic_image_names.push_back(hiDpi);
+        }
+        return name;
+    };
+
     // "×12", or "3/12" once a click went to the third one.
     auto countTextOf = [](const DynamicGroup &group) {
         const size_t count = group.positions.size();
@@ -4497,10 +4675,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             const wxImage rhythm =
                 LightRhythmImage(light, 180, 14, palette.muted, rowColour, SchemeDim());
             if (rhythm.IsOk()) {
-                const wxString name = wxString::Format(
-                    "legend_dyn_%d_rhythm_%zu.png", m_dynamic_generation, index);
-                wxMemoryFSHandler::AddFile(name, rhythm, wxBITMAP_TYPE_PNG);
-                m_dynamic_image_names.push_back(name);
+                const wxString name = addImage(
+                    wxString::Format("legend_dyn_%d_rhythm_%zu.png", m_dynamic_generation, index),
+                    rhythm,
+                    LightRhythmImage(light, 360, 28, palette.muted, rowColour, SchemeDim(), 2.0));
                 label << "<br><img src=\"memory:" << name << "\">";
             }
         }
@@ -4529,6 +4707,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     m_rendered_icon_scale = iconScale;
 
     std::vector<wxImage> icons(m_dynamic_groups.size());
+    std::vector<wxImage> icons2(m_dynamic_groups.size()); // twice the size
     std::vector<wxColour> rowColours(m_dynamic_groups.size());
     int iconBox = 16;
 
@@ -4657,12 +4836,15 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             (palette.iconTiles && parentOf[i] < 0) ? palette.tile : rowColours[i];
 
         wxImage image;
+        wxImage doubled; // drawn at twice the size, for a Retina screen
 
         if (group.lightCharacter) {
             // A lamp in the colours of the light.
             LightCharacter light;
-            if (light.Parse(group.lightText))
+            if (light.Parse(group.lightText)) {
                 image = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim());
+                doubled = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim(), 36);
+            }
         }
         else if (group.chartSymbol) {
             // Chart symbols come from OpenCPN's symbol sheet of the current
@@ -4693,13 +4875,23 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             image = FlattenDimmed(flatten, iconBackground, SchemeDim());
         }
 
-        if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3) {
+        // The version at twice the size comes from the image as loaded, the
+        // file often being larger than it is shown.
+        auto scaled = [](const wxImage &source, double factor) {
             const int width = std::max(
-                1, static_cast<int>(std::lround(image.GetWidth() * iconScale)));
+                1, static_cast<int>(std::lround(source.GetWidth() * factor)));
             const int height = std::max(
-                1, static_cast<int>(std::lround(image.GetHeight() * iconScale)));
-            image = image.Scale(width, height, wxIMAGE_QUALITY_HIGH);
+                1, static_cast<int>(std::lround(source.GetHeight() * factor)));
+            return source.Scale(width, height, wxIMAGE_QUALITY_HIGH);
+        };
+        if (image.IsOk()) {
+            icons2[i] = doubled.IsOk() ? (std::fabs(iconScale - 1.0) > 1e-3
+                                              ? scaled(doubled, iconScale)
+                                              : doubled)
+                                       : scaled(image, 2.0 * iconScale);
         }
+        if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3)
+            image = scaled(image, iconScale);
 
         if (image.IsOk() && !collapsed[i] && shown[i]) {
             iconBox = std::max(
@@ -4716,231 +4908,208 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     wxString html;
     html << "<html>" << LegendBodyTag(true);
 
-    // Title with Ververs on the right, the summary below it and, with
-    // headings, the fold links on a line of their own. Nothing here is kept
-    // on one line by force, so a narrow window never scrolls sideways.
-    // The block sits on its own tint with a firmer line under it, so it
-    // stands apart from the list.
-    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\" "
-         << "bgcolor=\"" << hex(palette.header) << "\">"
-         << "<tr><td valign=\"bottom\"><font size=\"+1\"><b>Kaartlegenda"
-         << "</b></font></td><td align=\"right\" valign=\"bottom\">"
-         << "<a href=\"legend-refresh:\">Ververs</a></td></tr>"
-         << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">";
+    // The title, with the icons of the settings menu and Ververs on the
+    // right (their words in tooltips); one line high. The counts are at
+    // the foot of the list. A line under the title only to say the chart
+    // position is unknown, or how many rows match a search.
+    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" "
+         << "bgcolor=\"" << hex(palette.header) << "\"><tr><td valign=\"middle\">"
+         << "<font size=\"+1\"><b>Kaartlegenda</b></font>";
 
     if (!m_viewport_valid) {
-        html << "De kaartpositie is nog niet bekend. Beweeg de kaart "
-                "een klein stukje en klik daarna op Ververs.";
+        html << "<br><font size=\"-1\" color=\"" << hex(muted) << "\">"
+             << "De kaartpositie is nog niet bekend. Beweeg de kaart "
+                "een klein stukje en klik daarna op Ververs.</font>";
     }
     else if (filtering) {
-        html << static_cast<int>(matches) << " van de "
-             << static_cast<int>(mainRows)
+        html << "<br><font size=\"-1\" color=\"" << hex(muted) << "\">"
+             << static_cast<int>(matches) << " van de " << static_cast<int>(mainRows)
              << " symbolen in beeld passen bij &lsquo;" << escape(m_filter)
-             << "&rsquo;";
+             << "&rsquo;</font>";
+    }
+
+    html << "</td><td align=\"right\" valign=\"middle\" nowrap>";
+    if (showHeadings && m_reorder_mode) {
+        html << "<a href=\"legend-reorder-done:\"><b>Klaar</b></a>";
     }
     else {
-        html << static_cast<int>(m_dynamic_groups.size() - lightRows) << " symbolen"
-             << " &middot; " << m_dynamic_total << " waypoints";
-        if (lightRows > 0)
-            html << " &middot; " << static_cast<int>(lightRows) << " lichtkarakters";
-        if (m_show_chart_objects && m_chart_object_total > 0)
-            html << " &middot; " << m_chart_object_total << " kaartobjecten";
-        html << " in beeld";
-        if (m_show_hidden_at_scale &&
-            m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
-            html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
-                 << " op deze schaal verborgen";
+        auto icon = [&](bool gear) {
+            const wxString base = wxString::Format(
+                "legend_dyn_%d_%s", m_dynamic_generation, gear ? "settings" : "refresh");
+            wxMemoryFSHandler::AddFile(
+                base + ".png", HeaderIcon(gear, palette.text, palette.header, 30),
+                wxBITMAP_TYPE_PNG);
+            m_dynamic_image_names.push_back(base + ".png");
+            // wxHTML on macOS takes "name@2x.png" on a Retina screen: drawn
+            // at twice the size, the icon stays sharp there.
+            wxMemoryFSHandler::AddFile(
+                base + "@2x.png", HeaderIcon(gear, palette.text, palette.header, 60),
+                wxBITMAP_TYPE_PNG);
+            m_dynamic_image_names.push_back(base + "@2x.png");
+            return "<img src=\"memory:" + base + ".png\" align=\"absmiddle\">";
+        };
+        // Cells with an id carry the tooltip; the link does the work.
+        html << "<table cellspacing=\"0\" cellpadding=\"2\"><tr>";
+        if (m_viewport_valid) {
+            html << "<td id=\"" << kLegendTipIdPrefix << "0\"><a href=\"legend-settings:\">"
+                 << icon(true) << "</a></td><td width=\"10\"></td>";
+        }
+        html << "<td id=\"" << kLegendTipIdPrefix << "1\"><a href=\"legend-refresh:\">"
+             << icon(false) << "</a></td></tr></table>";
+    }
+    html << "</td></tr></table>";
+
+    // What the settings menu offers depends on the list.
+    m_menu_has_headings = showHeadings && !m_dynamic_groups.empty() && !filtering;
+    m_menu_any_open = false;
+    for (const DynamicGroup &group : m_dynamic_groups) {
+        if (m_collapsed_sections.count(SectionName(group.section)) == 0) {
+            m_menu_any_open = true;
+            break;
         }
     }
-
-    html << "</font></td></tr>";
-
-    if (showHeadings && m_reorder_mode) {
-        html << "<tr><td colspan=\"2\"><a href=\"legend-reorder-done:\">"
-             << "<b>Klaar</b></a></td></tr>";
-    }
-    else if (m_viewport_valid) {
-        std::vector<wxString> links;
-
-        // While searching nothing is folded, so folding links do nothing.
-        if (showHeadings && !m_dynamic_groups.empty() && !filtering) {
-            // One link that does what makes sense now: fold everything in
-            // while any group in view is open, otherwise fold out.
-            bool anyOpen = false;
-            for (const DynamicGroup &group : m_dynamic_groups) {
-                if (m_collapsed_sections.count(SectionName(group.section)) ==
-                    0) {
-                    anyOpen = true;
-                    break;
-                }
-            }
-
-            links.push_back(
-                anyOpen ? "<a href=\"legend-collapse-all:\">Alles inklappen</a>"
-                        : "<a href=\"legend-expand-all:\">Alles uitklappen</a>");
-        }
-
-        if (showHeadings)
-            links.push_back("<a href=\"legend-reorder:\">Volgorde wijzigen</a>");
-
-        // Chart symbols can be switched off, for a legend of waypoints only.
-        if (m_chart_sources_available || !m_show_chart_objects) {
-            links.push_back(
-                m_show_chart_objects
-                    ? "<a href=\"legend-chart-toggle:\">Kaartsymbolen uit</a>"
-                    : "<a href=\"legend-chart-toggle:\">Kaartsymbolen aan</a>");
-        }
-
-        // Names of chart symbols and light characters in Dutch or English.
-        if (m_chart_sources_available || lightRows > 0) {
-            links.push_back(
-                m_dutch_names
-                    ? "<a href=\"legend-language-toggle:\">English names</a>"
-                    : "<a href=\"legend-language-toggle:\">Nederlandse namen</a>");
-        }
-
-        // Light characters in the list, and all lights in view shining on
-        // the chart, for finding one's way at a glance.
-        if (lightRows > 0 || !m_show_lights) {
-            links.push_back(
-                m_show_lights
-                    ? "<a href=\"legend-lights-toggle:\">Lichten uit</a>"
-                    : "<a href=\"legend-lights-toggle:\">Lichten aan</a>");
-        }
-        if (m_show_lights && (lightRows > 0 || m_all_lights_on)) {
-            links.push_back(
-                m_all_lights_on
-                    ? "<a href=\"legend-all-lights:\">Lichten op de kaart doven</a>"
-                    : "<a href=\"legend-all-lights:\">Alle lichten laten branden</a>");
-        }
-
-        // Symbols hidden at this scale: listed in grey, or left out.
-        links.push_back(
-            m_show_hidden_at_scale
-                ? "<a href=\"legend-hidden-toggle:\">Alleen zichtbare tonen</a>"
-                : "<a href=\"legend-hidden-toggle:\">Ook verborgen tonen</a>");
-
-        if (!links.empty()) {
-            html << "<tr><td colspan=\"2\"><font size=\"-1\">";
-            for (size_t i = 0; i < links.size(); ++i)
-                html << (i > 0 ? " &middot; " : "") << links[i];
-            html << "</font></td></tr>";
-        }
-    }
-
-    html << "</table>";
-
-    // "Marifoon hier": the channels of the VHF areas at the boat, or at the
-    // middle of the chart without a position fix.
-    if (m_viewport_valid && !m_reorder_mode) {
-        bool fromShip = false;
-        bool layerShown = false;
-        const std::vector<const VhfArea *> areas = VhfAreasHere(&fromShip, &layerShown);
-        if (layerShown) {
-            const bool nl = m_dutch_names;
-            html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" "
-                 << "bgcolor=\"" << hex(palette.active) << "\"><tr><td>"
-                 << "<b>" << (nl ? "Marifoon hier" : "VHF here") << "</b> "
-                 << "<font size=\"-1\" color=\"" << hex(muted) << "\">"
-                 << (fromShip ? (nl ? "bij de boot" : "at the boat")
-                              : (nl ? "midden van de kaart (geen GPS)"
-                                    : "middle of the chart (no GPS)"))
-                 << "</font>";
-
-            if (areas.empty()) {
-                html << "<br><font color=\"" << hex(muted) << "\">"
-                     << (nl ? "Geen marifoongebied uit VHFinfo op deze plek."
-                            : "No VHFinfo area at this spot.")
-                     << "</font>";
-            }
-            for (const VhfArea *area : areas) {
-                html << "<br><b>" << (nl ? "kanaal " : "channel ") << escape(area->channel)
-                     << "</b>";
-                const wxString who = area->callName.IsEmpty() ? area->name : area->callName;
-                if (!who.IsEmpty())
-                    html << " &middot; " << escape(who);
-                if (!area->type.IsEmpty())
-                    html << " &middot; " << escape(VhfTypeWord(area->type, nl));
-                if (!area->usage.IsEmpty())
-                    html << " &middot; " << escape(VhfUsageWord(area->usage, nl));
-                if (!area->phone.IsEmpty()) {
-                    html << " &middot; <a href=\"tel:" << escape(area->phone) << "\">"
-                         << escape(area->phone) << "</a>";
-                }
-            }
-            html << "</td></tr></table>";
-        }
-    }
-
-    // "Vooruit": while sailing, what the boat meets in the coming half
-    // hour, in order of arrival.
-    if (m_viewport_valid && !m_reorder_mode) {
-        ComputeAhead();
-        m_ahead_drawn_key = m_ahead_key;
-        m_ahead_rendered = wxGetUTCTimeMillis();
-
-        if (m_ahead_sailing) {
-            const bool nl = m_dutch_names;
-            html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"4\" "
-                 << "bgcolor=\"" << hex(palette.header) << "\">"
-                 << "<tr><td colspan=\"2\"><b>" << (nl ? "Vooruit" : "Ahead") << "</b> "
-                 << "<font size=\"-1\" color=\"" << hex(muted) << "\">"
-                 << (nl ? "komende 30 minuten op koers" : "next 30 minutes on course")
-                 << "</font></td></tr>";
-
-            if (m_ahead.empty()) {
-                html << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">"
-                     << (nl ? "Niets uit de legenda v&oacute;&oacute;r de boot."
-                            : "Nothing from the legend ahead of the boat.")
-                     << "</font></td></tr>";
-            }
-
-            for (size_t k = 0; k < m_ahead.size(); ++k) {
-                const AheadItem &item = m_ahead[k];
-                const DynamicGroup &group = m_dynamic_groups[item.group];
-                const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
-
-                wxString when;
-                if (item.minutes < 1.0)
-                    when = nl ? "nu" : "now";
-                else
-                    when = wxString::Format(nl ? "over %d min" : "in %d min",
-                                            static_cast<int>(std::lround(item.minutes)));
-
-                wxString side;
-                if (std::fabs(item.cross) < 0.02)
-                    side = nl ? "recht vooruit" : "dead ahead";
-                else if (item.cross > 0.0)
-                    side = nl ? "stuurboord" : "starboard";
-                else
-                    side = nl ? "bakboord" : "port";
-
-                html << "<tr><td id=\"" << id << "\" width=\"30\" valign=\"middle\">";
-                if (icons[item.group].IsOk()) {
-                    const wxString name = wxString::Format(
-                        "legend_dyn_%d_ahead_%zu.png", m_dynamic_generation, k);
-                    wxMemoryFSHandler::AddFile(
-                        name, NormalizeIcon(icons[item.group], palette.header, 24, nullptr, 0),
-                        wxBITMAP_TYPE_PNG);
-                    m_dynamic_image_names.push_back(name);
-                    html << "<img src=\"memory:" << name << "\">";
-                }
-                html << "</td><td id=\"" << id << "\" valign=\"middle\">"
-                     << "<b>" << when << "</b> &middot; " << side << " &middot; "
-                     << escape(group.lightCharacter ? group.lightText : group.label);
-                if (!item.light.IsEmpty() && !group.lightCharacter)
-                    html << " &middot; <b>" << escape(item.light) << "</b>";
-                html << "</td></tr>";
-            }
-            html << "</table>";
-        }
-    }
+    m_menu_has_lights = lightRows > 0;
 
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
          << "<tr><td bgcolor=\"" << hex(palette.headerRule)
          << "\" height=\"2\"></td></tr>"
          << "<tr><td height=\"6\"></td></tr>"
          << "</table>";
+
+    // Marifoon and Vooruit: headings at the top of the list that fold like
+    // the others; folded, the heading still tells the channel or the next
+    // object. Not during a search or the order edit mode.
+    m_rendered_headings.clear();
+
+    auto extraHeading = [&](const wxString &key, const wxString &title,
+                            const wxString &summary) {
+        const bool folded = m_collapsed_sections.count(key) > 0;
+        const wxString sectionId = wxString::Format(
+            "%s%zu", kLegendSectionIdPrefix, m_rendered_headings.size());
+        m_rendered_headings.push_back(key);
+        html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
+             << "<tr><td height=\"6\"></td></tr>"
+             << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
+             << "<font size=\"+3\">" << (folded ? "&#9654;" : "&#9660;")
+             << "</font>&nbsp;<b>" << title << "</b>";
+        if (!summary.IsEmpty())
+            html << " <font color=\"" << hex(muted) << "\">&middot; " << summary << "</font>";
+        html << "</td></tr>"
+             << "<tr><td height=\"4\"></td></tr>"
+             << "<tr><td bgcolor=\"" << hex(rule) << "\" height=\"1\"></td></tr></table>";
+        return !folded;
+    };
+
+    if (m_viewport_valid && !m_reorder_mode && !filtering) {
+        const bool nl = m_dutch_names;
+
+        bool fromShip = false;
+        bool layerShown = false;
+        const std::vector<const VhfArea *> areas = VhfAreasHere(&fromShip, &layerShown);
+        if (layerShown) {
+            wxString summary;
+            if (areas.empty()) {
+                summary = nl ? "geen VHFinfo-gebied hier" : "no VHFinfo area here";
+            }
+            else {
+                const VhfArea *first = areas.front();
+                const wxString who = first->callName.IsEmpty() ? first->name : first->callName;
+                summary << (nl ? "kanaal " : "channel ") << escape(first->channel);
+                if (!who.IsEmpty())
+                    summary << ", " << escape(who);
+                if (areas.size() > 1)
+                    summary << wxString::Format(" (+%zu)", areas.size() - 1);
+            }
+            if (!fromShip)
+                summary << (nl ? " &middot; midden van de kaart, geen GPS"
+                               : " &middot; middle of the chart, no GPS");
+
+            if (extraHeading("@marifoon", nl ? "Marifoon" : "VHF", summary) &&
+                !areas.empty()) {
+                html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
+                for (size_t k = 0; k < areas.size(); ++k) {
+                    const VhfArea *area = areas[k];
+                    const wxString who = area->callName.IsEmpty() ? area->name : area->callName;
+                    html << "<tr bgcolor=\"" << hex(k % 2 == 1 ? stripe : background)
+                         << "\"><td><b>" << (nl ? "kanaal " : "channel ")
+                         << escape(area->channel) << "</b>";
+                    if (!who.IsEmpty())
+                        html << " &middot; " << escape(who);
+                    if (!area->type.IsEmpty())
+                        html << " &middot; " << escape(VhfTypeWord(area->type, nl));
+                    if (!area->usage.IsEmpty())
+                        html << " &middot; " << escape(VhfUsageWord(area->usage, nl));
+                    if (!area->phone.IsEmpty()) {
+                        html << " &middot; <a href=\"tel:" << escape(area->phone) << "\">"
+                             << escape(area->phone) << "</a>";
+                    }
+                    html << "</td></tr>";
+                }
+                html << "</table>";
+            }
+        }
+
+        // Vooruit: while sailing, what the boat meets in the coming half
+        // hour, in order of arrival.
+        ComputeAhead();
+        m_ahead_drawn_key = m_ahead_key;
+        m_ahead_rendered = wxGetUTCTimeMillis();
+
+        if (m_ahead_sailing) {
+            auto when = [nl](const AheadItem &item) {
+                if (item.minutes < 1.0)
+                    return wxString(nl ? "nu" : "now");
+                return wxString::Format(nl ? "over %d min" : "in %d min",
+                                        static_cast<int>(std::lround(item.minutes)));
+            };
+            auto side = [nl](const AheadItem &item) {
+                if (std::fabs(item.cross) < 0.02)
+                    return wxString(nl ? "recht vooruit" : "dead ahead");
+                if (item.cross > 0.0)
+                    return wxString(nl ? "stuurboord" : "starboard");
+                return wxString(nl ? "bakboord" : "port");
+            };
+            auto name = [&](const AheadItem &item) {
+                const DynamicGroup &group = m_dynamic_groups[item.group];
+                return escape(group.lightCharacter ? group.lightText : group.label);
+            };
+
+            wxString summary;
+            if (m_ahead.empty())
+                summary = nl ? "niets in de komende 30 minuten" : "nothing in the next 30 minutes";
+            else
+                summary = when(m_ahead.front()) + ", " + side(m_ahead.front()) + ": " +
+                          name(m_ahead.front());
+
+            if (extraHeading("@vooruit", nl ? "Vooruit" : "Ahead", summary)) {
+                html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
+                for (size_t k = 0; k < m_ahead.size(); ++k) {
+                    const AheadItem &item = m_ahead[k];
+                    const DynamicGroup &group = m_dynamic_groups[item.group];
+                    const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
+                    const wxColour &rowColour = k % 2 == 1 ? stripe : background;
+
+                    html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
+                         << "\" width=\"34\" align=\"center\" valign=\"middle\">";
+                    if (icons[item.group].IsOk()) {
+                        const wxString image = addImage(
+                            wxString::Format("legend_dyn_%d_ahead_%zu.png",
+                                             m_dynamic_generation, k),
+                            NormalizeIcon(icons[item.group], rowColour, 24, nullptr, 0),
+                            NormalizeIcon(icons2[item.group], rowColour, 48, nullptr, 0));
+                        html << "<img src=\"memory:" << image << "\">";
+                    }
+                    html << "</td><td id=\"" << id << "\" valign=\"middle\">"
+                         << "<b>" << when(item) << "</b> &middot; " << side(item)
+                         << " &middot; " << name(item);
+                    if (!item.light.IsEmpty() && !group.lightCharacter)
+                        html << " &middot; <b>" << escape(item.light) << "</b>";
+                    html << "</td></tr>";
+                }
+                html << "</table>";
+            }
+        }
+    }
 
     if (showHeadings && m_reorder_mode) {
         // Every heading of symbolen.txt, also those with nothing in view,
@@ -4973,11 +5142,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     palette.iconTiles ? &palette.tile : nullptr,
                     palette.iconTiles ? 2 : 0);
 
-                const wxString name = wxString::Format(
-                    "legend_dyn_%d_order_%zu.png", m_dynamic_generation, j);
-
-                wxMemoryFSHandler::AddFile(name, small, wxBITMAP_TYPE_PNG);
-                m_dynamic_image_names.push_back(name);
+                const wxString name = addImage(
+                    wxString::Format("legend_dyn_%d_order_%zu.png", m_dynamic_generation, j),
+                    small,
+                    NormalizeIcon(icons2[j], rowColour, 40,
+                                  palette.iconTiles ? &palette.tile : nullptr,
+                                  palette.iconTiles ? 4 : 0));
                 strip << "<img src=\"memory:" << name << "\"> ";
             }
 
@@ -5044,8 +5214,6 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     else if (m_viewport_valid) {
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
 
-        m_rendered_headings.clear();
-
         // Section of the last row drawn; a row of another section starts a
         // new heading. Rows left out by a search do not count.
         bool firstRow = true;
@@ -5097,13 +5265,12 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         palette.iconTiles ? &palette.tile : nullptr,
                         palette.iconTiles ? 2 : 0);
 
-                    const wxString name = wxString::Format(
-                        "legend_dyn_%d_strip_%zu.png",
-                        m_dynamic_generation,
-                        j);
-
-                    wxMemoryFSHandler::AddFile(name, small, wxBITMAP_TYPE_PNG);
-                    m_dynamic_image_names.push_back(name);
+                    const wxString name = addImage(
+                        wxString::Format("legend_dyn_%d_strip_%zu.png", m_dynamic_generation, j),
+                        small,
+                        NormalizeIcon(icons2[j], background, 40,
+                                      palette.iconTiles ? &palette.tile : nullptr,
+                                      palette.iconTiles ? 4 : 0));
                     strip << "<img src=\"memory:" << name << "\"> ";
                 }
 
@@ -5161,6 +5328,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             const wxColour &rowColour = rowColours[i];
             wxImage image = icons[i];
+            wxImage doubled = icons2[i];
 
             if (image.IsOk()) {
                 image = NormalizeIcon(
@@ -5169,22 +5337,28 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     iconBox,
                     palette.iconTiles ? &palette.tile : nullptr,
                     tilePadding);
+                if (doubled.IsOk()) {
+                    doubled = NormalizeIcon(
+                        doubled,
+                        rowColour,
+                        2 * iconBox,
+                        palette.iconTiles ? &palette.tile : nullptr,
+                        2 * tilePadding);
+                }
 
                 // The chart does not draw these at this scale: faded.
-                if (group.hiddenAtScale)
+                if (group.hiddenAtScale) {
                     image = FadeImage(image, rowColour, 0.55);
+                    if (doubled.IsOk())
+                        doubled = FadeImage(doubled, rowColour, 0.55);
+                }
             }
 
             if (image.IsOk()) {
-                wxString name = wxString::Format(
-                    "legend_dyn_%d_%zu.png",
-                    m_dynamic_generation,
-                    i);
-
-                wxMemoryFSHandler::AddFile(name, image, wxBITMAP_TYPE_PNG);
-
-                m_dynamic_image_names.push_back(name);
-                group.imageName = name;
+                group.imageName = addImage(
+                    wxString::Format("legend_dyn_%d_%zu.png", m_dynamic_generation, i),
+                    image,
+                    doubled);
             }
 
             wxString label = group.lightCharacter
@@ -5202,11 +5376,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 label = "<font color=\"" + hex(muted) + "\">" + label +
                         "</font>";
 
-                const wxString eyeName = wxString::Format(
-                    "legend_dyn_%d_eye_%zu.png", m_dynamic_generation, i);
-                wxMemoryFSHandler::AddFile(
-                    eyeName, EyeIcon(false, muted, rowColour), wxBITMAP_TYPE_PNG);
-                m_dynamic_image_names.push_back(eyeName);
+                const wxString eyeName = addImage(
+                    wxString::Format("legend_dyn_%d_eye_%zu.png", m_dynamic_generation, i),
+                    EyeIcon(false, muted, rowColour),
+                    EyeIcon(false, muted, rowColour, 2));
 
                 label << "&nbsp; <img src=\"memory:" << eyeName << "\">";
                 if (group.visibleFrom > 0) {
@@ -5287,9 +5460,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     const wxImage lamp = light.hiddenAtScale
                                              ? FadeImage(icons[j], lightColour, 0.55)
                                              : icons[j];
-                    wxMemoryFSHandler::AddFile(name, lamp, wxBITMAP_TYPE_PNG);
-                    m_dynamic_image_names.push_back(name);
-                    light.imageName = name;
+                    wxImage lamp2 = icons2[j];
+                    if (lamp2.IsOk() && light.hiddenAtScale)
+                        lamp2 = FadeImage(lamp2, lightColour, 0.55);
+                    light.imageName = addImage(name, lamp, lamp2);
                 }
 
                 wxString lightText = lightLabel(light, j, lightColour);
@@ -5327,6 +5501,21 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         }
 
         html << "</table>";
+
+        // The counts, at the foot of the list.
+        html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">In beeld: "
+             << static_cast<int>(m_dynamic_groups.size() - lightRows) << " symbolen"
+             << " &middot; " << m_dynamic_total << " waypoints";
+        if (m_chart_object_total > 0)
+            html << " &middot; " << m_chart_object_total << " kaartobjecten";
+        if (lightRows > 0)
+            html << " &middot; " << static_cast<int>(lightRows) << " lichtkarakters";
+        if (m_show_hidden_at_scale && m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
+            html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
+                 << " op deze schaal verborgen";
+        }
+        html << ".</font></p>";
+
         html << "<p><font size=\"-1\" color=\"" << hex(muted) << "\">"
                 "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; "
                 "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
@@ -5334,7 +5523,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 "vanzelf aan als je de kaart verschuift of zoomt.";
         if (showHeadings)
             html << " Klik op een kopje om de groep in of uit te klappen.";
-        if (m_show_chart_objects && m_chart_object_total > 0)
+        if (m_chart_object_total > 0)
             html << " Kaartsymbolen komen uit de kaarten in beeld.";
         if (lightsShown)
             html << " Lichtkarakters staan voluit in woorden; het ritme eronder "

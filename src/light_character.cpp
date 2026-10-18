@@ -878,9 +878,10 @@ wxImage LightLampImage(
     const std::vector<wxString> &colours,
     const wxColour &outline,
     const wxColour &background,
-    double dim)
+    double dim,
+    int size)
 {
-    const int size = 18;
+    const double lineScale = size / 18.0;
     wxBitmap bitmap(size, size, 24);
     {
         wxMemoryDC dc(bitmap);
@@ -891,7 +892,7 @@ wxImage LightLampImage(
         if (gc) {
             gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
             const double centre = size / 2.0;
-            const double radius = size / 2.0 - 1.5;
+            const double radius = size / 2.0 - 1.5 * lineScale;
             const double kPi = 3.14159265358979323846;
             const size_t count = std::max<size_t>(1, colours.size());
 
@@ -913,7 +914,7 @@ wxImage LightLampImage(
             }
 
             gc->SetBrush(*wxTRANSPARENT_BRUSH);
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(1.2)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(1.2 * lineScale)));
             gc->DrawEllipse(centre - radius, centre - radius, 2 * radius, 2 * radius);
             delete gc;
         }
@@ -931,7 +932,8 @@ wxImage LightRhythmImage(
     int height,
     const wxColour &line,
     const wxColour &background,
-    double dim)
+    double dim,
+    double scale)
 {
     const std::vector<LightPhase> phases = light.Phases();
     const std::vector<wxString> colours = light.Colours();
@@ -951,27 +953,29 @@ wxImage LightRhythmImage(
         wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
         if (gc) {
             gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-            const double left = 1.5;
-            const double right = width - 1.5;
-            const double baseline = height - 2.5;
-            const double scale = (right - left) / total;
+            const double left = 1.5 * scale;
+            const double right = width - 1.5 * scale;
+            const double baseline = height - 2.5 * scale;
+            const double perSecond = (right - left) / total;
 
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(1.0)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(1.0 * scale)));
             gc->StrokeLine(left, baseline, right, baseline);
-            gc->StrokeLine(left, baseline - 4.0, left, baseline + 2.0);
-            gc->StrokeLine(right, baseline - 4.0, right, baseline + 2.0);
+            gc->StrokeLine(left, baseline - 4.0 * scale, left, baseline + 2.0 * scale);
+            gc->StrokeLine(right, baseline - 4.0 * scale, right, baseline + 2.0 * scale);
 
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(0.8)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(0.8 * scale)));
             double x = left;
             for (const LightPhase &phase : phases) {
-                const double w = phase.seconds * scale;
+                const double w = phase.seconds * perSecond;
                 if (phase.colour >= 0) {
                     const wxString &code =
                         colours[static_cast<size_t>(phase.colour) % colours.size()];
                     gc->SetBrush(wxBrush(LightDisplayColour(code, dim)));
-                    const double top =
-                        phase.dim ? baseline - (baseline - 1.5) * 0.45 : 1.5;
-                    gc->DrawRectangle(x, top, std::max(1.5, w - 0.4), baseline - top);
+                    const double top = phase.dim
+                                           ? baseline - (baseline - 1.5 * scale) * 0.45
+                                           : 1.5 * scale;
+                    gc->DrawRectangle(x, top, std::max(1.5 * scale, w - 0.4 * scale),
+                                      baseline - top);
                 }
                 x += w;
             }
