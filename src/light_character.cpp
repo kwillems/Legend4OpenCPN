@@ -818,7 +818,7 @@ std::vector<LightPhase> LightCharacter::OnePeriod() const
             const std::vector<int> counts = GroupCounts(part.group);
             for (size_t g = 0; g < counts.size(); ++g) {
                 if (g > 0)
-                    off(gap * 2.0);
+                    off(gap * 2.5);
                 for (int i = 0; i < counts[g]; ++i) {
                     if (i > 0)
                         off(gap);
@@ -1016,4 +1016,494 @@ wxString SectorWords(const std::vector<LightSector> &sectors, bool dutch)
              << wxString::FromUTF8("\u2013") << degrees(ordered[i].to);
     }
     return text;
+}
+
+namespace {
+
+// The period from the time between the starts of groups. A span over a
+// period that could not be seen (in a swell) is two or three periods long:
+// each span is divided by the number of periods it covers, measured against
+// the middle value, and the middle of the results is the period.
+double RobustPeriod(std::vector<double> spans)
+{
+    if (spans.empty())
+        return 0.0;
+    std::vector<double> sorted = spans;
+    std::sort(sorted.begin(), sorted.end());
+    // The lower middle: with periods missed, the longer spans are suspect.
+    const double middle = sorted[(sorted.size() - 1) / 2];
+    if (middle <= 0.0)
+        return 0.0;
+
+    std::vector<double> single;
+    for (double span : spans) {
+        const double periods = std::max(1.0, std::round(span / middle));
+        single.push_back(span / periods);
+    }
+    std::sort(single.begin(), single.end());
+    return single[(single.size() - 1) / 2];
+}
+
+} // namespace
+
+TapPattern AnalyseTaps(const std::vector<std::pair<double, double>> &taps)
+{
+    TapPattern pattern;
+
+    // Taps of a few hundredths of a second are a bounce, not a flash.
+    std::vector<std::pair<double, double>> shines;
+    for (const auto &tap : taps) {
+        if (tap.second - tap.first >= 0.04)
+            shines.push_back(tap);
+    }
+    if (shines.size() < 2)
+        return pattern;
+
+    // Typical lengths of light and dark.
+    std::vector<double> ons;
+    std::vector<double> offs;
+    for (size_t i = 0; i < shines.size(); ++i) {
+        ons.push_back(shines[i].second - shines[i].first);
+        if (i + 1 < shines.size())
+            offs.push_back(shines[i + 1].first - shines[i].second);
+    }
+    // The one dark that stands out (far longer than any other) is the light
+    // out of sight, not part of its rhythm.
+    std::vector<double> darks = offs;
+    std::sort(darks.rbegin(), darks.rend());
+    double outOfSight = -1.0;
+    if (darks.size() >= 2 && darks[0] > 1.8 * darks[1]) {
+        outOfSight = darks[0];
+        darks.erase(darks.begin());
+    }
+    double onTotal = 0.0;
+    for (double value : ons)
+        onTotal += value;
+    double offTotal = 0.0;
+    for (double value : darks)
+        offTotal += value;
+    const double meanOn = onTotal / ons.size();
+    const double meanOff = offTotal / darks.size();
+
+    // Occulting: light most of the time; the eclipses are what counts.
+    const bool occulting = meanOn > 1.6 * meanOff;
+    struct Event
+    {
+        double start;
+        double length;
+    };
+    std::vector<Event> events;
+    if (occulting) {
+        for (size_t i = 0; i + 1 < shines.size(); ++i) {
+            const double dark = shines[i + 1].first - shines[i].second;
+            if (dark != outOfSight)
+                events.push_back({shines[i].second, dark});
+        }
+    }
+    else {
+        for (const auto &shine : shines)
+            events.push_back({shine.first, shine.second - shine.first});
+    }
+
+    pattern.valid = true;
+    if (events.size() < 2) {
+        pattern.kind = occulting ? "Oc" : (meanOn >= 1.6 ? "LFl" : "Fl");
+        pattern.groups = {1};
+        return pattern;
+    }
+
+    // Groups: events close together, separated by clearly longer pauses.
+    std::vector<double> intervals;
+    for (size_t i = 0; i + 1 < events.size(); ++i)
+        intervals.push_back(events[i + 1].start - events[i].start);
+    const double shortest = *std::min_element(intervals.begin(), intervals.end());
+
+    // One flash (or eclipse) per period, with periods missed in between:
+    // most intervals are the period, the others two or three times it.
+    {
+        int ones = 0;
+        bool multiples = true;
+        for (double interval : intervals) {
+            const double ratio = interval / shortest;
+            const double whole = std::round(ratio);
+            if (whole > 3.0 || std::fabs(ratio - whole) > 0.2 * whole)
+                multiples = false;
+            if (whole == 1.0)
+                ++ones;
+        }
+        if (multiples && shortest >= 1.4 && ones >= 0.6 * intervals.size() &&
+            intervals.size() >= 2) {
+            pattern.period = RobustPeriod(intervals);
+            pattern.groups = {1};
+            if (!occulting && meanOn >= 0.8 && meanOn <= 1.6 * meanOff &&
+                meanOff <= 1.6 * meanOn)
+                pattern.kind = "Iso";
+            else
+                pattern.kind = occulting ? "Oc" : (meanOn >= 1.6 ? "LFl" : "Fl");
+            return pattern;
+        }
+    }
+
+    // A pause between groups: the first clear jump in the sorted intervals
+    // (a third longer and at least 0.4 s). Without one, all are alike.
+    std::vector<double> sorted = intervals;
+    std::sort(sorted.begin(), sorted.end());
+    double breakAt = sorted.back() + 1.0;
+    for (size_t i = 0; i + 1 < sorted.size(); ++i) {
+        if (sorted[i + 1] > 1.3 * sorted[i] && sorted[i + 1] - sorted[i] > 0.4) {
+            breakAt = (sorted[i] + sorted[i + 1]) / 2.0;
+            break;
+        }
+    }
+
+    std::vector<std::vector<size_t>> runs(1);
+    std::vector<double> within;
+    for (size_t i = 0; i < events.size(); ++i) {
+        runs.back().push_back(i);
+        if (i + 1 < events.size()) {
+            if (intervals[i] > breakAt)
+                runs.emplace_back();
+            else
+                within.push_back(intervals[i]);
+        }
+    }
+
+    double withinMean = 0.0;
+    for (double value : within)
+        withinMean += value;
+    if (!within.empty())
+        withinMean /= within.size();
+
+    auto flashKind = [&](double gap, double on) -> wxString {
+        if (occulting)
+            return "Oc";
+        if (gap > 0.0 && gap < 0.75)
+            return "VQ";
+        if (gap > 0.0 && gap < 1.4 && on < 0.8)
+            return "Q";
+        return on >= 1.6 ? "LFl" : "Fl";
+    };
+
+    // One run: a continuous quick light, or one flash per period.
+    if (runs.size() == 1) {
+        if (!occulting && events.size() >= 3 && shortest < 1.4 && meanOn < 0.8) {
+            pattern.kind = shortest < 0.75 ? "VQ" : "Q";
+            return pattern; // continuous: no groups, no period
+        }
+        pattern.period = RobustPeriod(intervals);
+        pattern.groups = {1};
+        if (!occulting && meanOn >= 0.8 && meanOn <= 1.6 * meanOff && meanOff <= 1.6 * meanOn)
+            pattern.kind = "Iso";
+        else
+            pattern.kind = occulting ? "Oc" : (meanOn >= 1.6 ? "LFl" : "Fl");
+        return pattern;
+    }
+
+    // Each run separately: one flash in a run is a single flash, also
+    // between groups.
+    std::vector<int> counts;
+    for (const auto &run : runs)
+        counts.push_back(static_cast<int>(run.size()));
+
+    // Morse: long and short marks in one run.
+    if (!occulting) {
+        const auto &run = runs.size() > 1 ? runs[1] : runs[0];
+        bool hasShort = false;
+        bool hasLong = false;
+        wxString code;
+        for (size_t index : run) {
+            const bool dash = events[index].length >= 0.9;
+            (dash ? hasLong : hasShort) = true;
+            code << (dash ? '-' : '.');
+        }
+        const bool lastOnlyLong = hasLong && run.size() > 2 &&
+                                  events[run.back()].length >= 1.5;
+        int longCount = 0;
+        for (size_t index : run) {
+            if (events[index].length >= 0.9)
+                ++longCount;
+        }
+        if (hasShort && hasLong && !(lastOnlyLong && longCount == 1)) {
+            static const std::map<wxString, char> letters = {
+                {".-", 'A'}, {"-...", 'B'}, {"-.-.", 'C'}, {"-..", 'D'}, {".", 'E'},
+                {"..-.", 'F'}, {"--.", 'G'}, {"....", 'H'}, {"..", 'I'}, {".---", 'J'},
+                {"-.-", 'K'}, {".-..", 'L'}, {"--", 'M'}, {"-.", 'N'}, {"---", 'O'},
+                {".--.", 'P'}, {"--.-", 'Q'}, {".-.", 'R'}, {"...", 'S'}, {"-", 'T'},
+                {"..-", 'U'}, {"...-", 'V'}, {".--", 'W'}, {"-..-", 'X'}, {"-.--", 'Y'},
+                {"--..", 'Z'}};
+            auto found = letters.find(code);
+            if (found != letters.end()) {
+                pattern.kind = "Mo";
+                pattern.letter = wxString(found->second);
+            }
+        }
+    }
+
+    // The first run may have started halfway: left out when there are
+    // enough others. The last may be cut short.
+    size_t first = 0;
+    if (counts.size() >= 3 && counts[0] < *std::max_element(counts.begin() + 1, counts.end()))
+        first = 1;
+    std::vector<int> body(counts.begin() + first, counts.end());
+    if (body.size() >= 2 && body.back() < *std::max_element(body.begin(), body.end()))
+        body.pop_back();
+
+    // The shortest repeating unit of groups: {2, 1} in 2, 1, 2, 1. A group
+    // missed in a swell breaks the repetition once, so most is enough.
+    size_t unit = body.size();
+    for (size_t k = 1; k <= std::min<size_t>(3, body.size()); ++k) {
+        if (body.size() <= k) {
+            unit = k;
+            break;
+        }
+        size_t same = 0;
+        for (size_t i = k; i < body.size(); ++i) {
+            if (body[i] == body[i - k])
+                ++same;
+        }
+        if (same >= 0.7 * (body.size() - k)) {
+            unit = k;
+            break;
+        }
+    }
+
+    if (pattern.kind != "Mo") {
+        pattern.groups.assign(body.begin(), body.begin() + unit);
+        // Tapping may start halfway: written with the largest group first,
+        // as charts do (2+1, not 1+2).
+        std::rotate(pattern.groups.begin(),
+                    std::max_element(pattern.groups.begin(), pattern.groups.end()),
+                    pattern.groups.end());
+
+        // A long flash at the end of each group: Q(6)+LFl.
+        bool longLast = true;
+        for (size_t r = first; r < first + body.size(); ++r) {
+            const auto &run = runs[r];
+            if (run.size() < 2 || events[run.back()].length < 1.5) {
+                longLast = false;
+                break;
+            }
+        }
+        double shortOn = 0.0;
+        int shortCount = 0;
+        for (size_t r = first; r < first + body.size(); ++r) {
+            const auto &run = runs[r];
+            for (size_t i = 0; i + (longLast ? 1 : 0) < run.size(); ++i) {
+                shortOn += events[run[i]].length;
+                ++shortCount;
+            }
+        }
+        shortOn = shortCount > 0 ? shortOn / shortCount : meanOn;
+        // Only flashes end in a long flash; a long eclipse is the light
+        // out of sight.
+        if (longLast && pattern.groups.size() == 1 && !occulting) {
+            pattern.longAfter = true;
+            pattern.groups[0] -= 1;
+        }
+        pattern.kind = flashKind(withinMean, shortOn);
+
+        // A continuous quick light seen with gaps: long runs of unequal
+        // length rather than groups.
+        if ((pattern.kind == "Q" || pattern.kind == "VQ") && !pattern.longAfter) {
+            const int largest = *std::max_element(counts.begin(), counts.end());
+            const bool equal = std::all_of(body.begin(), body.end(),
+                                           [&](int n) { return n == body.front(); });
+            if (largest >= 10 && !equal) {
+                pattern.groups.clear();
+                pattern.period = 0.0;
+                return pattern;
+            }
+        }
+    }
+
+    // The period: from the start of a group to the start of the same group
+    // one unit later. A group cut short at the end still starts on time.
+    std::vector<double> spans;
+    for (size_t i = first; i + unit < runs.size(); ++i)
+        spans.push_back(events[runs[i + unit].front()].start - events[runs[i].front()].start);
+    pattern.period = RobustPeriod(spans);
+    return pattern;
+}
+
+wxString TapPattern::Words(bool dutch) const
+{
+    if (!valid)
+        return wxString();
+
+    wxString text;
+    if (kind == "Mo") {
+        text << (dutch ? "morse, de letter " : "Morse, the letter ") << letter;
+    }
+    else if (groups.empty()) {
+        text << (kind == "VQ" ? (dutch ? "snel flikkerlicht" : "very quick flashing")
+                              : (dutch ? "flikkerlicht" : "quick flashing"));
+    }
+    else {
+        wxString counts;
+        for (size_t i = 0; i < groups.size(); ++i)
+            counts << (i > 0 ? "+" : "") << groups[i];
+        const bool single = groups.size() == 1 && groups[0] == 1 && !longAfter;
+
+        wxString noun;
+        if (kind == "Oc")
+            noun = dutch ? "verduistering" : "eclipse";
+        else if (kind == "Iso")
+            noun = dutch ? "isofase" : "isophase";
+        else if (kind == "LFl")
+            noun = dutch ? "lange schittering" : "long flash";
+        else if (kind == "Q" || kind == "VQ")
+            noun = dutch ? "flikkering" : "quick flash";
+        else
+            noun = dutch ? "schittering" : "flash";
+
+        if (kind == "Iso")
+            text << (dutch ? "isofase, even lang licht als donker" : "isophase, as long light as dark");
+        else if (single)
+            text << (dutch ? "een " : "one ") << noun;
+        else
+            text << (dutch ? "groepen van " : "groups of ") << counts << ' '
+                 << (dutch ? (noun.EndsWith("ing") ? noun + "en" : noun)
+                           : noun + (noun.EndsWith("h") ? "es" : "s"));
+        if (longAfter)
+            text << (dutch ? " en een lange schittering" : " and a long flash");
+    }
+    if (period > 0.0) {
+        text << ", " << (dutch ? "elke ~" : "every ~")
+             << wxString::Format(period >= 10.0 ? "%.0f" : "%.1f", period) << " s";
+    }
+    return text;
+}
+
+double LightCharacter::Match(const TapPattern &pattern) const
+{
+    if (!pattern.valid || m_parts.empty())
+        return 0.0;
+
+    const Part &first = m_parts[0];
+    auto family = [](const wxString &kind) -> wxString {
+        if (kind == "Fl" || kind == "LFl")
+            return "flash";
+        if (IsQuick(kind))
+            return "quick";
+        return kind;
+    };
+
+    double kind = 0.0;
+    if (first.kind == pattern.kind ||
+        (first.kind == "IQ" && pattern.kind == "Q") ||
+        (first.kind == "IVQ" && pattern.kind == "VQ"))
+        kind = 1.0;
+    else if (family(first.kind) == family(pattern.kind))
+        kind = 0.6;
+    else if ((first.kind == "Iso" && (pattern.kind == "Fl" || pattern.kind == "LFl" ||
+                                      pattern.kind == "Oc")) ||
+             (pattern.kind == "Iso" && (first.kind == "Oc" || first.kind == "LFl")))
+        kind = 0.4;
+
+    // The groups of the light, as the analysis writes them.
+    std::vector<int> lightGroups;
+    if (!first.group.IsEmpty() && first.kind != "Mo")
+        lightGroups = GroupCounts(first.group);
+    else if (!(IsQuick(first.kind) && first.group.IsEmpty()))
+        lightGroups = {1};
+
+    double groups = 0.0;
+    if (first.kind == "Mo" || pattern.kind == "Mo") {
+        groups = (first.kind == "Mo" && pattern.kind == "Mo" &&
+                  first.group.Upper() == pattern.letter)
+                     ? 1.0
+                     : 0.0;
+    }
+    else if (lightGroups.size() == pattern.groups.size() && !lightGroups.empty() &&
+             [&]() {
+                 // The same groups in turn, whichever comes first.
+                 for (size_t shift = 0; shift < lightGroups.size(); ++shift) {
+                     bool same = true;
+                     for (size_t i = 0; i < lightGroups.size(); ++i) {
+                         if (lightGroups[(i + shift) % lightGroups.size()] != pattern.groups[i]) {
+                             same = false;
+                             break;
+                         }
+                     }
+                     if (same)
+                         return true;
+                 }
+                 return false;
+             }()) {
+        groups = 1.0;
+    }
+    else if (lightGroups.empty() && pattern.groups.empty()) {
+        groups = 1.0;
+    }
+    else {
+        int a = 0;
+        int b = 0;
+        for (int n : lightGroups)
+            a += n;
+        for (int n : pattern.groups)
+            b += n;
+        if (a == b && a > 0)
+            groups = 0.6;
+        else if (a > 0 && b > 0 && std::abs(a - b) == 1)
+            groups = 0.3;
+    }
+    const bool lightLong = m_parts.size() > 1 && m_parts[1].kind == "LFl";
+    if (lightLong != pattern.longAfter)
+        groups *= 0.6;
+
+    double period = 0.5;
+    if (m_period > 0.0 && pattern.period > 0.0) {
+        const double relative = std::fabs(m_period - pattern.period) / m_period;
+        period = std::max(0.0, 1.0 - relative * 2.5);
+    }
+    else if (m_period <= 0.0 && pattern.period <= 0.0) {
+        period = 0.7;
+    }
+
+    return 0.4 * kind + 0.35 * groups + 0.25 * period;
+}
+
+wxImage TapRhythmImage(
+    const std::vector<std::pair<double, double>> &shines,
+    int width,
+    int height,
+    const wxColour &line,
+    const wxColour &light,
+    const wxColour &background,
+    double scale)
+{
+    if (shines.empty())
+        return wxImage();
+
+    const double begin = shines.front().first;
+    const double end = std::max(shines.back().second, begin + 1.0);
+
+    wxBitmap bitmap(width, height, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            const double left = 1.5 * scale;
+            const double right = width - 1.5 * scale;
+            const double baseline = height - 2.5 * scale;
+            const double perSecond = (right - left) / (end - begin);
+
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(1.0 * scale)));
+            gc->StrokeLine(left, baseline, right, baseline);
+
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(0.8 * scale)));
+            gc->SetBrush(wxBrush(light));
+            for (const auto &shine : shines) {
+                const double x = left + (shine.first - begin) * perSecond;
+                const double w = std::max(1.5 * scale, (shine.second - shine.first) * perSecond);
+                gc->DrawRectangle(x, 1.5 * scale, w, baseline - 1.5 * scale);
+            }
+            delete gc;
+        }
+        dc.SelectObject(wxNullBitmap);
+    }
+    return bitmap.ConvertToImage();
 }

@@ -21,6 +21,7 @@
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
+#include <wx/html/winpars.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/gdicmn.h>
@@ -134,6 +135,15 @@ const wxString kLegendMoveDownIdPrefix = "legend-move-down-";
 // 1 Ververs.
 const wxString kLegendTipIdPrefix = "legend-tip-";
 
+// Id of the pad of "Licht herkennen", and of its lines with matching
+// lights, followed by their number.
+const wxString kLegendTapIdPrefix = "legend-tap-";
+const wxString kTapClockId = "legend-tapclock";
+const wxString kLegendMatchIdPrefix = "legend-match-";
+// Buttons of "Licht herkennen", whole cells to click without a link line:
+// 0 clears the taps, 1 closes, 10 to 14 choose a colour.
+const wxString kLegendButtonIdPrefix = "legend-button-";
+
 // Id of a line of the "Vooruit" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
 
@@ -142,6 +152,66 @@ const wxString kLegendAheadIdPrefix = "legend-ahead-";
 // DeInit: wxWidgets deletes registered handlers only when OpenCPN exits,
 // long after the plugin library has been unloaded.
 wxMemoryFSHandler *g_memoryHandler = nullptr;
+
+// The line in the pad of "Licht herkennen" that counts the seconds of light
+// and dark. It is a cell of its own, drawn in the font and colour around
+// it, so it can change several times a second without building the page
+// again. The tag <legendclock id="..."> places it.
+wxString g_tap_clock_text;
+
+class TapClockCell : public wxHtmlCell
+{
+public:
+    explicit TapClockCell(int height) { m_Height = height; }
+
+    // As wide as the line it is on, so the text can be centred.
+    void Layout(int w) override
+    {
+        m_Width = w;
+        wxHtmlCell::Layout(w);
+    }
+
+    // It asks for no width of its own: a table sizing its columns would
+    // otherwise take the width of an earlier layout as what this cell
+    // needs, and grow wider than the window.
+    int GetMaxTotalWidth() const override { return 0; }
+
+    void Draw(wxDC &dc, int x, int y, int, int, wxHtmlRenderingInfo &) override
+    {
+        wxCoord width = 0;
+        wxCoord height = 0;
+        dc.GetTextExtent(g_tap_clock_text, &width, &height);
+        dc.SetBackgroundMode(wxBRUSHSTYLE_TRANSPARENT);
+        dc.DrawText(g_tap_clock_text, x + m_PosX + (m_Width - width) / 2,
+                    y + m_PosY + (m_Height - height) / 2);
+    }
+};
+
+class TapClockTagHandler : public wxHtmlWinTagHandler
+{
+public:
+    wxString GetSupportedTags() override { return "LEGENDCLOCK"; }
+
+    bool HandleTag(const wxHtmlTag &tag) override
+    {
+        auto *cell = new TapClockCell(m_WParser->GetCharHeight() + 2);
+        cell->SetId(tag.GetParam("id"));
+        m_WParser->GetContainer()->InsertCell(cell);
+        return false;
+    }
+};
+
+// Only the legend view gets the tag: the module is registered while that
+// view is made and removed again right after, so no other HTML window of
+// OpenCPN holds a handler of this plugin.
+class TapClockModule : public wxHtmlTagsModule
+{
+public:
+    void FillHandlersTable(wxHtmlWinParser *parser) override
+    {
+        parser->AddTagHandler(new TapClockTagHandler);
+    }
+};
 
 class LegendHtmlWindow : public wxHtmlWindow
 {
@@ -194,6 +264,31 @@ public:
     int IdNumberAt(const wxPoint &windowPos, const wxString &prefix) const
     {
         return HitAt(windowPos, prefix);
+    }
+
+    // Gives the table cell with this id another background and paints it
+    // at once, without building the page again: feedback under a press.
+    void SetCellBackground(const wxString &id, const wxColour &colour)
+    {
+        wxHtmlContainerCell *root = GetInternalRepresentation();
+        if (!root)
+            return;
+
+        auto *cell = dynamic_cast<wxHtmlContainerCell *>(
+            const_cast<wxHtmlCell *>(FindCellWithId(root, id)));
+        if (!cell)
+            return;
+
+        cell->SetBackgroundColour(colour);
+        RefreshCellNow(cell);
+    }
+
+    // Paints the cell with this id again, such as the clock of the pad.
+    void RefreshCell(const wxString &id)
+    {
+        if (const wxHtmlContainerCell *root = GetInternalRepresentation())
+            if (const wxHtmlCell *cell = FindCellWithId(root, id))
+                RefreshCellNow(cell);
     }
 
     void SetRowCursor(bool overRow)
@@ -298,6 +393,24 @@ private:
         }
 
         return -1;
+    }
+
+    void RefreshCellNow(const wxHtmlCell *cell)
+    {
+        const wxPoint at = CalcScrolledPosition(cell->GetAbsPos());
+        RefreshRect(wxRect(at, wxSize(cell->GetWidth(), cell->GetHeight())));
+        Update();
+    }
+
+    static const wxHtmlCell *FindCellWithId(const wxHtmlCell *container, const wxString &id)
+    {
+        for (const wxHtmlCell *cell = container->GetFirstChild(); cell; cell = cell->GetNext()) {
+            if (cell->GetId() == id)
+                return cell;
+            if (const wxHtmlCell *found = FindCellWithId(cell, id))
+                return found;
+        }
+        return nullptr;
     }
 
     wxString m_baseDirectory;
@@ -1145,6 +1258,10 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnAllLightsTimer(); });
 
+    m_tap_clock_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { UpdateTapClock(); });
+
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
@@ -1231,6 +1348,7 @@ bool legend_pi::DeInit()
     m_light_active = false;
     m_all_lights_timer.Stop();
     m_all_lights_on = false;
+    m_tap_clock_timer.Stop();
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.
@@ -2167,12 +2285,25 @@ void legend_pi::CreateLegendWindow()
 
     m_image_page->SetSizer(imageSizer);
 
+    TapClockModule clockModule;
+    wxHtmlWinParser::AddModule(&clockModule);
     m_markdown_view = new LegendHtmlWindow(
         m_content_book,
         wxID_ANY,
         wxDefaultPosition,
         wxDefaultSize,
         wxHW_SCROLLBAR_AUTO);
+    wxHtmlWinParser::RemoveModule(&clockModule);
+
+    // The rhythms of lights are images; in a narrow window they are drawn
+    // narrower, so a row never needs more width than the window has.
+    m_markdown_view->Bind(
+        wxEVT_SIZE,
+        [this](wxSizeEvent &event) {
+            event.Skip();
+            if (IsDynamicLegendVisible() && RhythmWidth() != m_rhythm_width)
+                m_markdown_view->CallAfter([this]() { RenderDynamicLegend(true); });
+        });
 
     // Give Markdown some breathing room without using extra layout rows.
     m_markdown_view->SetBorders(12);
@@ -2218,6 +2349,12 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            if (href.StartsWith("legend-identify-")) {
+                const wxString what = href.Mid(16).BeforeFirst(':');
+                m_markdown_view->CallAfter([this, what]() { RunIdentifyCommand(what); });
+                return;
+            }
+
             if (href.StartsWith("legend-settings:")) {
                 m_markdown_view->CallAfter([this]() { ShowSettingsMenu(); });
                 return;
@@ -2260,7 +2397,7 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -2282,6 +2419,9 @@ void legend_pi::CreateLegendWindow()
             {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
             {HitKind::MoveDown,
              legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+            {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
+            {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
+            {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
             {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
             {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
@@ -2302,8 +2442,14 @@ void legend_pi::CreateLegendWindow()
 
     m_markdown_view->Bind(
         wxEVT_LEFT_DOWN,
-        [hitAt, pressed](wxMouseEvent &event) {
+        [this, hitAt, pressed](wxMouseEvent &event) {
             *pressed = hitAt(event.GetPosition());
+            // The pad of "Licht herkennen": the light shines while held.
+            if (pressed->kind == HitKind::Tap) {
+                TapDown();
+                *pressed = Hit();
+                return;
+            }
             event.Skip();
         });
 
@@ -2311,6 +2457,11 @@ void legend_pi::CreateLegendWindow()
         wxEVT_LEFT_UP,
         [this, hitAt, pressed](wxMouseEvent &event) {
             event.Skip();
+
+            if (m_tap_down) {
+                TapUp();
+                return;
+            }
 
             const Hit hit = *pressed;
             *pressed = Hit();
@@ -2338,6 +2489,21 @@ void legend_pi::CreateLegendWindow()
                 case HitKind::Ahead:
                     ShowAheadItem(static_cast<size_t>(hit.index));
                     break;
+                case HitKind::Match:
+                    if (static_cast<size_t>(hit.index) < m_identify_matches.size())
+                        GoToDynamicGroup(m_identify_matches[hit.index]);
+                    break;
+                case HitKind::Button: {
+                    static const char *const colours[] = {"any", "W", "R", "G", "Y"};
+                    if (hit.index == 0)
+                        RunIdentifyCommand("reset");
+                    else if (hit.index == 1)
+                        RunIdentifyCommand("stop");
+                    else if (hit.index >= 10 && hit.index < 15)
+                        RunIdentifyCommand(wxString("colour-") + colours[hit.index - 10]);
+                    break;
+                }
+                case HitKind::Tap:
                 case HitKind::Tip: // the link inside does the work
                 case HitKind::None:
                     break;
@@ -2408,6 +2574,17 @@ void legend_pi::CreateLegendWindow()
             case HitKind::Ahead:
                 tip = "Op de kaart aanwijzen";
                 break;
+            case HitKind::Tap:
+                tip = "Ingedrukt houden zolang het licht brandt (of de spatiebalk)";
+                break;
+            case HitKind::Match:
+                tip = "Dit licht op de kaart laten branden";
+                break;
+            case HitKind::Button:
+                tip = hit.index == 0   ? "Het getikte ritme weggooien en opnieuw beginnen"
+                      : hit.index == 1 ? "Licht herkennen sluiten; het menu opent het weer"
+                                       : "Alleen lichten van deze kleur vergelijken";
+                break;
             case HitKind::Tip:
                 tip = hit.index == 0 ? "Instellingen: wat de legenda toont"
                                      : "Ververs: kaarten en lagen opnieuw inlezen";
@@ -2430,6 +2607,9 @@ void legend_pi::CreateLegendWindow()
     m_markdown_view->Bind(
         wxEVT_LEAVE_WINDOW,
         [this, legendView, shownTip](wxMouseEvent &event) {
+            // A press on the pad that ends outside the window ends there.
+            if (m_tap_down)
+                TapUp();
             legendView->SetRowCursor(false);
             if (!shownTip->IsEmpty()) {
                 shownTip->Clear();
@@ -2525,6 +2705,19 @@ void legend_pi::CreateLegendWindow()
             });
         });
 
+    // Letting go of the space bar ends a tap; key-up events go to the window
+    // with the focus, so every window of the legend listens.
+    auto spaceUp = [this](wxKeyEvent &event) {
+        if (m_tap_down && event.GetKeyCode() == WXK_SPACE) {
+            TapUp();
+            return;
+        }
+        event.Skip();
+    };
+    m_markdown_view->Bind(wxEVT_KEY_UP, spaceUp);
+    m_legend_choice->Bind(wxEVT_KEY_UP, spaceUp);
+    m_legend_window->Bind(wxEVT_KEY_UP, spaceUp);
+
     m_legend_window->Bind(
         wxEVT_CHAR_HOOK,
         [this](wxKeyEvent &event) {
@@ -2532,6 +2725,15 @@ void legend_pi::CreateLegendWindow()
                 !event.ControlDown() &&
                 !event.AltDown() &&
                 !event.MetaDown();
+
+            // The space bar is the pad of "Licht herkennen", outside the
+            // search field.
+            if (m_identify_on && event.GetKeyCode() == WXK_SPACE && plainKey &&
+                !(m_search && wxWindow::FindFocus() == m_search)) {
+                if (!m_tap_down)
+                    TapDown();
+                return;
+            }
 
             // Cmd+F (Ctrl+F elsewhere) goes to the search field.
             if (event.GetKeyCode() == 'F' && event.GetModifiers() == wxMOD_CMD &&
@@ -3651,6 +3853,7 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
         m_collapsed_sections.insert(SectionName(-1));
         m_collapsed_sections.insert("@marifoon");
         m_collapsed_sections.insert("@vooruit");
+        m_collapsed_sections.insert("@herkennen");
     }
 
     SaveConfig();
@@ -3701,7 +3904,7 @@ void legend_pi::ShowSettingsMenu()
 
     enum
     {
-        kLights = 1000, kHidden, kEnglish, kAllLights, kFold, kReorder
+        kLights = 1000, kHidden, kEnglish, kAllLights, kIdentify, kFold, kReorder
     };
 
     wxMenu menu;
@@ -3714,6 +3917,8 @@ void legend_pi::ShowSettingsMenu()
     menu.AppendSeparator();
     if (m_show_lights && (m_menu_has_lights || m_all_lights_on))
         menu.AppendCheckItem(kAllLights, "Alle lichten laten branden")->Check(m_all_lights_on);
+    if (m_show_lights && (m_menu_has_lights || m_identify_on))
+        menu.AppendCheckItem(kIdentify, "Licht herkennen")->Check(m_identify_on);
     if (m_menu_has_headings) {
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
@@ -3731,6 +3936,9 @@ void legend_pi::ShowSettingsMenu()
         break;
     case kAllLights:
         RunLegendCommand("all-lights");
+        break;
+    case kIdentify:
+        SetIdentify(!m_identify_on);
         break;
     case kFold:
         RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");
@@ -4595,6 +4803,18 @@ void legend_pi::CollectDynamicLegend()
         UpdateAllLights();
 }
 
+// Width of the rhythm image under a light: 180 pixels, less in a window
+// too narrow for that beside the icon, the lamp and the counter of a light
+// row under its buoy (about 210 pixels together, with the margins).
+int legend_pi::RhythmWidth() const
+{
+    if (!m_markdown_view)
+        return 180;
+    const int page = m_markdown_view->GetClientSize().GetWidth() -
+                     wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_markdown_view) - 24;
+    return std::max(60, std::min(180, page - 210));
+}
+
 void legend_pi::RenderDynamicLegend(bool keepScroll)
 {
     if (!m_markdown_view)
@@ -4604,6 +4824,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         g_memoryHandler = new wxMemoryFSHandler;
         wxFileSystem::AddHandler(g_memoryHandler);
     }
+
+    m_rhythm_width = RhythmWidth();
 
     int scrollX = 0;
     int scrollY = 0;
@@ -4672,13 +4894,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         }
         LightCharacter light;
         if (light.Parse(group.lightText)) {
+            const int width = m_rhythm_width;
             const wxImage rhythm =
-                LightRhythmImage(light, 180, 14, palette.muted, rowColour, SchemeDim());
+                LightRhythmImage(light, width, 14, palette.muted, rowColour, SchemeDim());
             if (rhythm.IsOk()) {
                 const wxString name = addImage(
                     wxString::Format("legend_dyn_%d_rhythm_%zu.png", m_dynamic_generation, index),
                     rhythm,
-                    LightRhythmImage(light, 360, 28, palette.muted, rowColour, SchemeDim(), 2.0));
+                    LightRhythmImage(light, 2 * width, 28, palette.muted, rowColour, SchemeDim(), 2.0));
                 label << "<br><img src=\"memory:" << name << "\">";
             }
         }
@@ -5107,6 +5330,167 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     html << "</td></tr>";
                 }
                 html << "</table>";
+            }
+        }
+
+        // Licht herkennen: tap along with a light, see which lights fit.
+        m_identify_matches.clear();
+        if (m_identify_on) {
+            const TapPattern pattern = AnalyseTaps(m_taps);
+
+            // Each light character in view once, best fits first.
+            std::vector<std::pair<double, size_t>> scored;
+            std::set<wxString> seen;
+            for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+                const DynamicGroup &group = m_dynamic_groups[i];
+                if (!group.lightCharacter || group.hiddenAtScale ||
+                    !seen.insert(group.lightText).second)
+                    continue;
+                LightCharacter light;
+                if (!light.Parse(group.lightText))
+                    continue;
+                if (!m_identify_colour.IsEmpty()) {
+                    const std::vector<wxString> colours = light.Colours();
+                    if (std::find(colours.begin(), colours.end(), m_identify_colour) ==
+                        colours.end())
+                        continue;
+                }
+                const double score = pattern.valid ? light.Match(pattern) : 0.0;
+                scored.emplace_back(score, i);
+            }
+            std::sort(scored.begin(), scored.end(),
+                      [](const std::pair<double, size_t> &a, const std::pair<double, size_t> &b) {
+                          return a.first > b.first;
+                      });
+
+            wxString summary;
+            if (!pattern.valid)
+                summary = nl ? "tik mee met het licht" : "tap along with the light";
+            else if (!scored.empty() && scored.front().first >= 0.45)
+                summary = (nl ? "lijkt op " : "looks like ") +
+                          escape(m_dynamic_groups[scored.front().second].lightText);
+            else
+                summary = escape(pattern.Words(nl));
+
+            if (extraHeading("@herkennen", nl ? "Licht herkennen" : "Identify a light",
+                             summary)) {
+                // A frame sets the block apart from the list below it: a
+                // coloured border around a striped panel.
+                html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"2\" bgcolor=\""
+                     << hex(palette.headerRule) << "\"><tr><td>"
+                     << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\" bgcolor=\""
+                     << hex(stripe) << "\">"
+                     << "<tr><td colspan=\"2\"><font size=\"-1\" color=\"" << hex(muted) << "\">"
+                     << (nl ? "Houd het vlak of de spatiebalk ingedrukt zolang het licht "
+                              "brandt en laat los als het donker is, twee of drie perioden lang."
+                            : "Hold the pad or the space bar while the light shines and let go "
+                              "while it is dark, for two or three periods.")
+                     << "</font></td></tr>"
+                     << "<tr><td colspan=\"2\" id=\"" << kLegendTapIdPrefix << "0\" bgcolor=\""
+                     << hex(palette.active) << "\" align=\"center\" valign=\"middle\" height=\"64\">"
+                     << "<font size=\"+1\"><b>"
+                     << (nl ? "Indrukken = licht aan" : "Press = light on")
+                     << "</b></font><br><font size=\"-1\" color=\"" << hex(muted) << "\">"
+                     << "<legendclock id=\"" << kTapClockId << "\"></font></td></tr>";
+                g_tap_clock_text = TapClockText();
+
+                // Colour of the light seen: a lamp to click for each colour,
+                // the chosen one on a highlighted tile.
+                html << "<tr><td colspan=\"2\"><font size=\"-1\">"
+                     << (nl ? "Klik op de kleur van het licht:" : "Click the colour of the light:")
+                     << "</font><br><table cellspacing=\"2\" cellpadding=\"4\"><tr>";
+                const char *codes[] = {"", "W", "R", "G", "Y"};
+                const char *namesNl[] = {"elke", "wit", "rood", "groen", "geel"};
+                const char *namesEn[] = {"any", "white", "red", "green", "yellow"};
+                for (int c = 0; c < 5; ++c) {
+                    const bool chosen = m_identify_colour == codes[c];
+                    const wxColour tile = chosen ? palette.active : stripe;
+                    const std::vector<wxString> colours =
+                        c == 0 ? std::vector<wxString>{"W", "R", "G", "Y"}
+                               : std::vector<wxString>{codes[c]};
+                    const wxString lamp = addImage(
+                        wxString::Format("legend_dyn_%d_idcolour_%d.png", m_dynamic_generation, c),
+                        LightLampImage(colours, muted, tile, SchemeDim(), 18),
+                        LightLampImage(colours, muted, tile, SchemeDim(), 36));
+                    const wxString label = nl ? namesNl[c] : namesEn[c];
+                    html << "<td id=\"" << kLegendButtonIdPrefix << 10 + c << "\" align=\"center\" bgcolor=\""
+                         << hex(tile) << "\"><img src=\"memory:" << lamp << "\"><br><font size=\"-1\">"
+                         << (chosen ? "<b>" + label + "</b>" : label) << "</font></td>";
+                }
+                html << "</tr></table></td></tr>";
+
+                if (!m_taps.empty()) {
+                    const wxString name = addImage(
+                        wxString::Format("legend_dyn_%d_taps.png", m_dynamic_generation),
+                        TapRhythmImage(m_taps, m_rhythm_width + 20, 16, muted, palette.text, stripe),
+                        TapRhythmImage(m_taps, 2 * (m_rhythm_width + 20), 32, muted, palette.text,
+                                       stripe, 2.0));
+                    html << "<tr><td colspan=\"2\"><img src=\"memory:" << name << "\">";
+                    if (pattern.valid)
+                        html << "<br><font size=\"-1\">" << escape(pattern.Words(nl)) << "</font>";
+                    html << "</td></tr>";
+                }
+
+                if (scored.empty()) {
+                    html << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">"
+                         << (nl ? "Geen lichten in beeld om mee te vergelijken."
+                                : "No lights in view to compare with.")
+                         << "</font></td></tr>";
+                }
+                else if (pattern.valid) {
+                    const size_t kShown = 5;
+                    for (size_t k = 0; k < scored.size() && k < kShown; ++k) {
+                        if (scored[k].first < 0.45)
+                            break;
+                        const DynamicGroup &group = m_dynamic_groups[scored[k].second];
+                        const wxString id =
+                            wxString::Format("%s%zu", kLegendMatchIdPrefix, m_identify_matches.size());
+                        m_identify_matches.push_back(scored[k].second);
+                        const int percent = static_cast<int>(std::lround(scored[k].first * 100));
+                        const wxString fit =
+                            scored[k].first >= 0.85 ? (nl ? "past goed" : "good fit")
+                            : scored[k].first >= 0.65 ? (nl ? "past redelijk" : "fair fit")
+                                                     : (nl ? "past matig" : "weak fit");
+                        html << "<tr bgcolor=\"" << hex(k % 2 == 0 ? background : stripe) << "\">"
+                             << "<td colspan=\"2\" id=\"" << id << "\"><b>" << escape(group.lightText)
+                             << "</b>&nbsp; " << escape(group.label) << "<br><font size=\"-1\" color=\""
+                             << hex(muted) << "\">" << fit << " (" << percent << "%) &middot; &times;"
+                             << group.positions.size() << "</font></td></tr>";
+                    }
+                    if (m_identify_matches.empty()) {
+                        html << "<tr><td colspan=\"2\"><font color=\"" << hex(muted) << "\">"
+                             << (nl ? "Geen licht in beeld past bij dit ritme."
+                                    : "No light in view fits this rhythm.")
+                             << "</font></td></tr>";
+                    }
+                }
+
+                // Two buttons at the foot: erase the taps and start again,
+                // or close the block (the settings menu opens it again).
+                auto button = [&](int number, const wxString &label) {
+                    html << "<td><table cellspacing=\"0\" cellpadding=\"1\" bgcolor=\""
+                         << hex(palette.headerRule) << "\"><tr><td>"
+                         << "<table cellspacing=\"0\" cellpadding=\"5\" bgcolor=\"" << hex(background)
+                         << "\"><tr><td id=\"" << kLegendButtonIdPrefix << number << "\" nowrap>"
+                         << label << "</td></tr></table></td></tr></table></td>";
+                };
+                html << "<tr><td colspan=\"2\" align=\"right\">"
+                     << "<table align=\"right\" cellspacing=\"0\" cellpadding=\"0\"><tr>";
+                if (!m_taps.empty()) {
+                    button(0, nl ? "Tikken wissen" : "Clear taps");
+                    html << "<td width=\"10\"></td>";
+                }
+                button(1, nl ? "Sluiten" : "Close");
+                html << "</tr></table></td></tr></table></td></tr></table>";
+
+                // Room between the frame and the list.
+                const wxString space = wxString::Format("legend_dyn_%d_idspace.png",
+                                                        m_dynamic_generation);
+                wxImage spaceImage(1, 12);
+                spaceImage.SetRGB(wxRect(0, 0, 1, 12), background.Red(), background.Green(),
+                                  background.Blue());
+                addImage(space, spaceImage, wxImage());
+                html << "<img src=\"memory:" << space << "\"><br>";
             }
         }
     }
@@ -6591,6 +6975,124 @@ void legend_pi::ComputeAhead()
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
     }
     m_ahead_key = key.IsEmpty() ? wxString("nothing") : key;
+}
+
+// What a button of "Licht herkennen" does: "reset", "stop" or
+// "colour-W" (R, G, Y, or "any").
+void legend_pi::RunIdentifyCommand(const wxString &what)
+{
+    if (what == "stop") {
+        SetIdentify(false);
+        return;
+    }
+    if (what == "reset")
+        m_taps.clear();
+    else if (what.StartsWith("colour-"))
+        m_identify_colour = what.Mid(7) == "any" ? wxString() : what.Mid(7);
+    RenderDynamicLegend(true);
+}
+
+void legend_pi::SetIdentify(bool on)
+{
+    m_identify_on = on;
+    m_taps.clear();
+    m_tap_down = false;
+    if (on)
+        m_tap_clock_timer.Start(100);
+    else
+        m_tap_clock_timer.Stop();
+    if (on) {
+        // Open the heading and keep the space bar for tapping.
+        m_collapsed_sections.erase("@herkennen");
+        if (m_markdown_view)
+            m_markdown_view->SetFocus();
+    }
+    RenderDynamicLegend(!on);
+}
+
+void legend_pi::TapDown()
+{
+    const wxLongLong now = wxGetUTCTimeMillis();
+    // A pause of a minute starts a new rhythm. Shorter pauses happen when
+    // the light is out of sight for a while, in a swell for instance.
+    if (!m_taps.empty() && (now - m_tap_last) > 60000)
+        m_taps.clear();
+    if (m_taps.empty())
+        m_tap_origin = now;
+    m_tap_start = (now - m_tap_origin).ToDouble() / 1000.0;
+    m_tap_down = true;
+
+    // The pad lights up in the colour of the light while it is held, so it
+    // is clear the press counts. A red or green light lights it in its
+    // colour; a white one, or any, in a warm yellow that shows on white.
+    if (m_markdown_view) {
+        const wxString code =
+            m_identify_colour == "R" || m_identify_colour == "G" ? m_identify_colour
+                                                                 : wxString("Y");
+        static_cast<LegendHtmlWindow *>(m_markdown_view)
+            ->SetCellBackground(kLegendTapIdPrefix + "0", LightDisplayColour(code, SchemeDim()));
+    }
+    UpdateTapClock();
+}
+
+// "4 tikken · licht 1,2 s", "4 tikken · donker 3,4 s": how long the light
+// has been held or let go, so a long dark spell shows the count still runs,
+// and when a new rhythm is about to begin.
+wxString legend_pi::TapClockText() const
+{
+    const bool nl = m_dutch_names;
+    if (m_taps.empty() && !m_tap_down)
+        return nl ? "nog niet getikt" : "no taps yet";
+
+    const wxLongLong now = wxGetUTCTimeMillis();
+    wxString text = wxString::Format(nl ? "%zu tikken" : "%zu taps", m_taps.size());
+    if (m_tap_down) {
+        const double lit = (now - m_tap_origin).ToDouble() / 1000.0 - m_tap_start;
+        text << wxString::Format(nl ? " | licht %.1f s" : " | light %.1f s", lit);
+    }
+    else {
+        const double dark = (now - m_tap_last).ToDouble() / 1000.0;
+        if (dark > 60.0)
+            text << (nl ? " | donker > 1 min: de volgende tik begint opnieuw"
+                        : " | dark > 1 min: the next tap starts again");
+        else if (dark > 40.0)
+            text << wxString::Format(nl ? " | donker %.0f s | over %.0f s begint het opnieuw"
+                                        : " | dark %.0f s | starts again in %.0f s",
+                                     std::floor(dark), std::ceil(60.0 - dark));
+        else
+            text << wxString::Format(nl ? " | donker %.1f s" : " | dark %.1f s", dark);
+    }
+    if (nl)
+        text.Replace(".", ",");
+    text.Replace(" | ", wxString::FromUTF8(" \u00b7 "));
+    return text;
+}
+
+void legend_pi::UpdateTapClock()
+{
+    if (!m_identify_on || !m_markdown_view)
+        return;
+    const wxString text = TapClockText();
+    if (text == g_tap_clock_text)
+        return;
+    g_tap_clock_text = text;
+    static_cast<LegendHtmlWindow *>(m_markdown_view)->RefreshCell(kTapClockId);
+}
+
+void legend_pi::TapUp()
+{
+    if (!m_tap_down)
+        return;
+    m_tap_down = false;
+    const wxLongLong now = wxGetUTCTimeMillis();
+    m_tap_last = now;
+    m_taps.emplace_back(m_tap_start, (now - m_tap_origin).ToDouble() / 1000.0);
+    if (m_taps.size() > 60)
+        m_taps.erase(m_taps.begin());
+
+    // Drawn after the release, so the page is not replaced under a press.
+    if (m_markdown_view)
+        m_markdown_view->CallAfter([this]() { RenderDynamicLegend(true); });
 }
 
 // A click on a line of the "Vooruit" block: that object on the chart.

@@ -488,6 +488,26 @@ private:
     bool m_ahead_sailing = false; // a recent fix and some speed
     void ComputeAhead();
     void ShowAheadItem(size_t index);
+
+    // "Licht herkennen": the user holds a pad or the space bar while a light
+    // shines; the rhythm is compared with the lights in view.
+    bool m_identify_on = false;
+    std::vector<std::pair<double, double>> m_taps; // seconds since the first
+    wxLongLong m_tap_origin = 0;  // UTC milliseconds of the first tap
+    wxLongLong m_tap_last = 0;    // UTC milliseconds of the last release
+    bool m_tap_down = false;
+    double m_tap_start = 0.0;
+    wxString m_identify_colour;   // "W", "R", "G", "Y" or empty: any
+    std::vector<size_t> m_identify_matches; // rows shown as matches
+    wxTimer m_tap_clock_timer;    // the seconds of light and dark in the pad
+    int m_rhythm_width = 180;     // pixels, as RhythmWidth() at the last render
+    int RhythmWidth() const;
+    void SetIdentify(bool on);
+    void TapDown();
+    void TapUp();
+    wxString TapClockText() const;
+    void RunIdentifyCommand(const wxString &what);
+    void UpdateTapClock();
     // The areas at the position the banner uses; fromShip tells which.
     std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);
 

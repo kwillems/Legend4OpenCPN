@@ -34,6 +34,7 @@ Op dit moment ondersteunt Legend4OpenCPN:
   een zoekveld en een markering op de kaart (zie hieronder);
 - lichtkarakters in woorden, met hun ritme, en lichten die op de kaart gaan
   branden;
+- een licht herkennen door met zijn ritme mee te tikken;
 - het marifoonkanaal van het gebied waar de boot is, en wat er het komende
   half uur op koers ligt;
 - een lichte en een donkere weergave die macOS volgt, scherp op een
@@ -85,8 +86,8 @@ Bovenaan staan, als ze van toepassing zijn, de kopjes **Marifoon** en
 - Het kopblok is één regel: de titel met rechts een tandwiel voor
   **Instellingen** en een pijl voor **Ververs**. Instellingen opent een klein
   menu met vinkjes: Lichten, Ook op deze schaal verborgen tonen, Engelse
-  namen, Alle lichten laten branden, Alles in- of uitklappen en Volgorde
-  wijzigen. Hoeveel symbolen, waypoints, kaartobjecten en lichtkarakters er
+  namen, Alle lichten laten branden, Licht herkennen, Alles in- of uitklappen
+  en Volgorde wijzigen. Hoeveel symbolen, waypoints, kaartobjecten en lichtkarakters er
   in beeld zijn, staat onderaan de lijst.
 - **Ook op deze schaal verborgen tonen** voegt grijze rijen toe voor
   symbolen die de kaart op deze schaal niet tekent vanwege hun schaalgrens,
@@ -207,6 +208,27 @@ zoals in de Nautin-laag.
   *rood 090°–115°, wit 115°–120°*, als peilingen naar het licht. Brandt het
   op de kaart, dan staan de sectoren als gekleurde taartpunten om het licht.
 - Met **Lichten** in het menu gaan de lichtrijen uit of aan.
+
+### Licht herkennen
+
+Zie je 's avonds een licht en weet je niet welk het is, kies dan **Licht
+herkennen** in het menu. Bovenaan de lijst verschijnt een kader met een groot
+vlak.
+
+- Houd het vlak of de spatiebalk ingedrukt zolang het licht brandt en laat
+  los als het donker is, twee of drie perioden lang. Zolang je drukt, licht
+  het vlak op; een regel in het vlak telt de tikken en de seconden licht of
+  donker.
+- Daaronder kies je de kleur van het licht (of *elke*), en verschijnt je
+  getikte ritme als tekening en in woorden, bijvoorbeeld *groepen van 2+1
+  schitteringen, elke ~10 s*.
+- De plugin vergelijkt het ritme met de lichten in beeld en toont de vijf
+  die het best passen, met hoe goed ze passen. Een klik op zo'n licht laat
+  het op de kaart branden.
+- Een periode missen, bijvoorbeeld doordat de boot in de deining ligt, is
+  niet erg: de plugin houdt daar rekening mee. Pas na een minuut zonder
+  tikken begint hij opnieuw; **Tikken wissen** doet dat meteen.
+- **Sluiten** haalt het kader weg.
 
 ### Marifoon en Vooruit
 
@@ -585,7 +607,6 @@ Voor de dynamische legenda in het bijzonder:
 - betekenissen bewerken vanuit de legenda zelf;
 - gegevens van het gekozen object tonen, zoals doorvaarthoogte en telefoon;
 - bruggen en kabels markeren waar de boot niet onder past;
-- een licht herkennen aan het ritme dat je ziet;
 - dezelfde boei uit een laag en uit de kaart als één rij;
 - een Engelse vertaling van de bediening.
 
