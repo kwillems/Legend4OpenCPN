@@ -115,7 +115,8 @@ wxImage LightLampImage(
     const std::vector<wxString> &colours,
     const wxColour &outline,
     const wxColour &background,
-    double dim);
+    double dim,
+    int size = 18);
 
 // The rhythm of a light: a thin line for the dark, bars in the colour of
 // the light where it shines and a low bar for the steady part of a fixed
@@ -126,6 +127,7 @@ wxImage LightRhythmImage(
     int height,
     const wxColour &line,
     const wxColour &background,
-    double dim);
+    double dim,
+    double scale = 1.0); // line widths and margins, 2 for a Retina version
 
 #endif
