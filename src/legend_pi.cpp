@@ -517,7 +517,7 @@ const char *kMeaningsTemplate =
     "# vhf_*         =\n"
     "#\n"
     "# [Betonning]\n"
-    "# 022           = Groene spitse ton\n"
+    "# 011           = Groene spitse ton\n"
     "\n";
 
 // OpenCPN's colour scheme (day, dusk, night), set through SetColorScheme().
