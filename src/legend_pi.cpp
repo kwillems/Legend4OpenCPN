@@ -519,8 +519,8 @@ const char *kMeaningsTemplate =
     "# vhf_b11b_*    = Meldplicht marifoon, kanaal *\n"
     "# vhf_*         =\n"
     "#\n"
-    "# [Betonning]\n"
-    "# 022           = Groene spitse ton\n"
+    "# [Betonning | Buoyage]\n"
+    "# 011           = Groene spitse ton | Green conical buoy\n"
     "\n";
 
 // OpenCPN's colour scheme (day, dusk, night), set through SetColorScheme().
