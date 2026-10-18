@@ -5315,12 +5315,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         wxString::Format("legend_dyn_%d_taps.png", m_dynamic_generation),
                         TapRhythmImage(m_taps, 260, 16, muted, palette.text, stripe),
                         TapRhythmImage(m_taps, 520, 32, muted, palette.text, stripe, 2.0));
-                    html << "<tr><td colspan=\"2\"><img src=\"memory:" << name << "\"><br>"
-                         << "<font size=\"-1\">";
+                    html << "<tr><td colspan=\"2\"><img src=\"memory:" << name << "\">";
                     if (pattern.valid)
-                        html << escape(pattern.Words(nl)) << " &middot; ";
-                    html << "<a href=\"legend-identify-reset:\">"
-                         << (nl ? "Opnieuw" : "Again") << "</a></font></td></tr>";
+                        html << "<br><font size=\"-1\">" << escape(pattern.Words(nl)) << "</font>";
+                    html << "</td></tr>";
                 }
 
                 if (scored.empty()) {
@@ -5358,9 +5356,22 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     }
                 }
 
-                html << "<tr><td colspan=\"2\"><font size=\"-1\"><a href=\"legend-identify-stop:\">"
-                     << (nl ? "Stoppen met herkennen" : "Stop identifying")
-                     << "</a></font></td></tr></table></td></tr></table>";
+                // Two buttons at the foot: erase the taps and start again,
+                // or close the block (the settings menu opens it again).
+                auto button = [&](const wxString &href, const wxString &label) {
+                    html << "<td><table cellspacing=\"0\" cellpadding=\"1\" bgcolor=\""
+                         << hex(palette.headerRule) << "\"><tr><td>"
+                         << "<table cellspacing=\"0\" cellpadding=\"5\" bgcolor=\"" << hex(background)
+                         << "\"><tr><td nowrap><a href=\"" << href << "\">" << label
+                         << "</a></td></tr></table></td></tr></table></td>";
+                };
+                html << "<tr><td colspan=\"2\"><table cellspacing=\"0\" cellpadding=\"0\"><tr>";
+                if (!m_taps.empty()) {
+                    button("legend-identify-reset:", nl ? "Tikken wissen" : "Clear taps");
+                    html << "<td width=\"10\"></td>";
+                }
+                button("legend-identify-stop:", nl ? "Sluiten" : "Close");
+                html << "</tr></table></td></tr></table></td></tr></table>";
 
                 // Room between the frame and the list.
                 const wxString space = wxString::Format("legend_dyn_%d_idspace.png",
