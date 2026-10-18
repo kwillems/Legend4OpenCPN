@@ -104,6 +104,12 @@ public:
 
     void OnToolbarToolCallback(int id) override;
     void SetColorScheme(PI_ColorScheme cs) override;
+
+    // From the chart to the legend: a click on a symbol, or "Toon in
+    // legenda" in the chart's context menu, reveals the symbol's row.
+    bool MouseEventHook(wxMouseEvent &event) override;
+    void SetCursorLatLon(double lat, double lon) override;
+    void OnContextMenuItemCallback(int id) override;
     void SetCurrentViewPort(PlugIn_ViewPort &vp) override;
 
     using opencpn_plugin_118::RenderOverlayMultiCanvas;
@@ -151,6 +157,11 @@ private:
     void RenderDynamicLegend(bool keepScroll = false);
     void GoToDynamicGroup(size_t index);
     void MarkAllOfDynamicGroup(size_t index);
+    // The row of the object nearest to a position, within tolerancePx
+    // viewport pixels. With openWindow the legend is opened first.
+    bool RevealObjectAt(double lat, double lon, double tolerancePx, bool openWindow);
+    void RevealGroupPosition(size_t groupIndex, size_t positionIndex);
+    double ViewportPixelsPerWindowPixel() const;
     // View scale (pixels per metre) at which a scale limit is just passed,
     // or 0 when it cannot be computed.
     double ViewScaleForLimit(int limit);
@@ -280,6 +291,18 @@ private:
     DisplaySettings m_display_settings; // category and class filter of OpenCPN
     int m_plib_state_hash = 0;          // OpenCPN's vector display settings
     bool m_log_next_viewport = false;   // diagnostics after a zoom
+
+    int m_context_menu_id = -1;
+    double m_cursor_lat = 0.0;
+    double m_cursor_lon = 0.0;
+    bool m_cursor_valid = false;
+    wxPoint m_mouse_down;
+    bool m_mouse_down_valid = false;
+    int m_scroll_to_row = -1;          // row to scroll to after rendering
+    bool m_pending_reveal = false;      // reveal once loading has finished
+    double m_pending_reveal_lat = 0.0;
+    double m_pending_reveal_lon = 0.0;
+    double m_pending_reveal_tolerance = 0.0;
     float m_logged_chart_scale = 0.0f;
 
     // The scale OpenCPN shows in its status bar and compares waypoint

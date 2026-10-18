@@ -117,6 +117,12 @@ public:
         SetPage(html);
     }
 
+    // Scrolls a row of the dynamic legend into view (anchor "legend-row-N").
+    void ScrollToRow(int row)
+    {
+        ScrollToAnchor(wxString::Format("legend-row-%d", row));
+    }
+
     // Row of the dynamic legend at a window position, or -1.
     int RowAt(const wxPoint &windowPos) const
     {
@@ -977,6 +983,12 @@ int legend_pi::Init()
     EnsureDirectories();
     LoadConfig();
 
+    // "Toon in legenda" in the chart's right-click menu. OpenCPN keeps the
+    // menu item; it is removed again in DeInit.
+    m_context_menu_id = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")),
+        this);
+
     m_ocharts.SetCacheFile(
         GetConfigDirectory() + wxFileName::GetPathSeparator() +
         "ocharts-cells.txt");
@@ -995,7 +1007,8 @@ int legend_pi::Init()
     return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
            WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
            WANTS_OPENGL_OVERLAY_CALLBACK |
-           WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK;
+           WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK | WANTS_MOUSE_EVENTS |
+           WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS;
 }
 
 bool legend_pi::DeInit()
@@ -1041,6 +1054,11 @@ bool legend_pi::DeInit()
     if (m_toolbar_item_id >= 0) {
         RemovePlugInTool(m_toolbar_item_id);
         m_toolbar_item_id = -1;
+    }
+
+    if (m_context_menu_id >= 0) {
+        RemoveCanvasContextMenuItem(m_context_menu_id);
+        m_context_menu_id = -1;
     }
 
     return true;
@@ -2361,6 +2379,157 @@ void legend_pi::SetColorScheme(PI_ColorScheme cs)
         RefreshAllCanvases();
 }
 
+// Viewport pixels per window pixel: the viewport counts physical pixels,
+// mouse events logical ones (2 to 1 on a Retina display).
+double legend_pi::ViewportPixelsPerWindowPixel() const
+{
+    wxWindow *canvas = PluginGetFocusCanvas();
+    if (!canvas)
+        canvas = GetCanvasByIndex(0);
+    if (!canvas || canvas->GetClientSize().x <= 0 || !m_viewport_valid)
+        return 1.0;
+    return static_cast<double>(m_viewport.pix_width) / canvas->GetClientSize().x;
+}
+
+// Looks at clicks on the chart; OpenCPN handles every event as usual.
+bool legend_pi::MouseEventHook(wxMouseEvent &event)
+{
+    if (event.LeftDown()) {
+        m_mouse_down = event.GetPosition();
+        m_mouse_down_valid = true;
+        return false;
+    }
+
+    if (!event.LeftUp() || !m_mouse_down_valid)
+        return false;
+    m_mouse_down_valid = false;
+
+    // A drag is not a click.
+    const wxPoint up = event.GetPosition();
+    if (std::abs(up.x - m_mouse_down.x) > 4 || std::abs(up.y - m_mouse_down.y) > 4)
+        return false;
+
+    if (!IsDynamicLegendVisible() || !m_viewport_valid)
+        return false;
+
+    const double ratio = ViewportPixelsPerWindowPixel();
+    PlugIn_ViewPort vp = m_viewport;
+    double lat = 0.0;
+    double lon = 0.0;
+    GetCanvasLLPix(
+        &vp,
+        wxPoint(static_cast<int>(std::lround(up.x * ratio)),
+                static_cast<int>(std::lround(up.y * ratio))),
+        &lat, &lon);
+
+    RevealObjectAt(lat, lon, 14.0 * ratio, false);
+    return false;
+}
+
+void legend_pi::SetCursorLatLon(double lat, double lon)
+{
+    m_cursor_lat = lat;
+    m_cursor_lon = lon;
+    m_cursor_valid = true;
+}
+
+void legend_pi::OnContextMenuItemCallback(int id)
+{
+    if (id != m_context_menu_id || !m_cursor_valid)
+        return;
+
+    RevealObjectAt(
+        m_cursor_lat, m_cursor_lon, 20.0 * ViewportPixelsPerWindowPixel(), true);
+}
+
+bool legend_pi::RevealObjectAt(
+    double lat,
+    double lon,
+    double tolerancePx,
+    bool openWindow)
+{
+    if (openWindow) {
+        CreateLegendWindow();
+        if (!m_legend_window->IsShown()) {
+            RefreshLegendFiles();
+            m_legend_window->Show();
+            m_legend_window->Raise();
+        }
+        // The dynamic legend is always the first item.
+        if (m_current_legend_path != kDynamicGpxId && !m_legend_files.IsEmpty())
+            ShowLegend(0);
+    }
+
+    if (!IsDynamicLegendVisible() || !m_viewport_valid || m_reorder_mode)
+        return false;
+
+    // The list is still being filled: reveal when that is done.
+    if (m_loading || m_showing_loading_page) {
+        m_pending_reveal = true;
+        m_pending_reveal_lat = lat;
+        m_pending_reveal_lon = lon;
+        m_pending_reveal_tolerance = tolerancePx;
+        return false;
+    }
+
+    PlugIn_ViewPort vp = m_viewport;
+    wxPoint target;
+    GetCanvasPixLL(&vp, &target, lat, lon);
+
+    double best = tolerancePx * tolerancePx;
+    size_t bestGroup = 0;
+    size_t bestPosition = 0;
+    bool found = false;
+
+    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
+        const DynamicGroup &group = m_dynamic_groups[i];
+        for (size_t j = 0; j < group.positions.size(); ++j) {
+            wxPoint pixel;
+            GetCanvasPixLL(&vp, &pixel, group.positions[j].first,
+                           group.positions[j].second);
+            const double dx = pixel.x - target.x;
+            const double dy = pixel.y - target.y;
+            const double distance = dx * dx + dy * dy;
+            if (distance <= best) {
+                best = distance;
+                bestGroup = i;
+                bestPosition = j;
+                found = true;
+            }
+        }
+    }
+
+    if (!found)
+        return false;
+
+    RevealGroupPosition(bestGroup, bestPosition);
+    return true;
+}
+
+// Shows one object in the list: its group open, its row highlighted and
+// scrolled into view, the counter on this object, and a marker on the chart.
+void legend_pi::RevealGroupPosition(size_t groupIndex, size_t positionIndex)
+{
+    if (groupIndex >= m_dynamic_groups.size())
+        return;
+
+    DynamicGroup &group = m_dynamic_groups[groupIndex];
+    if (positionIndex >= group.positions.size())
+        return;
+
+    group.current = static_cast<int>(positionIndex);
+    m_active_group_key = group.key;
+
+    if (m_collapsed_sections.erase(SectionName(group.section)) > 0)
+        SaveConfig();
+
+    m_scroll_to_row = static_cast<int>(groupIndex);
+    RenderDynamicLegend(false);
+
+    const auto &position = group.positions[positionIndex];
+    ShowMarker(position.first, position.second);
+}
+
 void legend_pi::OnToolbarToolCallback(int id)
 {
     if (id == m_toolbar_item_id)
@@ -2919,6 +3088,12 @@ void legend_pi::FinishWaypointLoading()
 
     if (IsDynamicLegendVisible())
         RefreshDynamicLegendKeepingState();
+
+    if (m_pending_reveal) {
+        m_pending_reveal = false;
+        RevealObjectAt(m_pending_reveal_lat, m_pending_reveal_lon,
+                       m_pending_reveal_tolerance, false);
+    }
 }
 
 void legend_pi::RenderLoadingPage()
@@ -3948,7 +4123,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             html << "<tr bgcolor=\"" << hex(rowColour) << "\">"
                  << "<td id=\"" << rowId << "\" width=\"" << iconCell + 10
                  << "\" height=\"" << iconCell + 10
-                 << "\" align=\"center\" valign=\"middle\">";
+                 << "\" align=\"center\" valign=\"middle\">"
+                 << "<a name=\"legend-row-" << i << "\"></a>";
             if (!group.imageName.IsEmpty())
                 html << "<img src=\"memory:" << group.imageName << "\">";
             html << "</td><td id=\"" << rowId << "\" valign=\"middle\">"
@@ -3981,7 +4157,15 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
     static_cast<LegendHtmlWindow *>(m_markdown_view)->SetDynamicPage(html);
     m_showing_loading_page = false;
 
-    if (keepScroll) {
+    if (m_scroll_to_row >= 0) {
+        const int row = m_scroll_to_row;
+        m_scroll_to_row = -1;
+        m_markdown_view->CallAfter([this, row]() {
+            if (m_markdown_view && m_current_legend_path == kDynamicGpxId)
+                static_cast<LegendHtmlWindow *>(m_markdown_view)->ScrollToRow(row);
+        });
+    }
+    else if (keepScroll) {
         m_markdown_view->CallAfter(
             [this, scrollX, scrollY]() {
                 if (m_markdown_view &&
