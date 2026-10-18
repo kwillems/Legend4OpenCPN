@@ -5439,7 +5439,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                          << "\"><tr><td nowrap><a href=\"" << href << "\">" << label
                          << "</a></td></tr></table></td></tr></table></td>";
                 };
-                html << "<tr><td colspan=\"2\"><table cellspacing=\"0\" cellpadding=\"0\"><tr>";
+                html << "<tr><td colspan=\"2\" align=\"right\">"
+                     << "<table align=\"right\" cellspacing=\"0\" cellpadding=\"0\"><tr>";
                 if (!m_taps.empty()) {
                     button("legend-identify-reset:", nl ? "Tikken wissen" : "Clear taps");
                     html << "<td width=\"10\"></td>";
