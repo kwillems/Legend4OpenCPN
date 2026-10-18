@@ -137,6 +137,10 @@ en `s57-cells.txt` in de instellingenmap), zodat latere starts direct zijn.
 De o-charts-bron werkt alleen als de o-charts-plugin geladen is. Versleutelde
 S-63-cellen worden niet gelezen.
 
+De o-charts-plugin tekent met een eigen tekenbibliotheek. De plugin zet het
+kleurenschema op elke cel die hij zelf opent, zodat de kaart in de schemer-
+en nachtstand haar kleuren houdt.
+
 ### Weergave
 
 - De legenda volgt de kleurenschema's dag, schemer en nacht van OpenCPN
