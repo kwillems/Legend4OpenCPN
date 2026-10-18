@@ -225,6 +225,15 @@ private:
     // down. The new order is written to symbolen.txt.
     void SetReorderMode(bool on);
 
+    // "Kaartsymbolen" (-2) and "Lichtkarakters" (-3) are headings of the
+    // plugin; a heading of that name in symbolen.txt takes their place, so
+    // they can be moved like the others. BuiltInSection() gives the heading
+    // in the file, or the built-in number when there is none.
+    int BuiltInSection(int builtIn) const;
+    // Adds those headings to symbolen.txt when missing (for the order
+    // edit mode).
+    void AddBuiltInHeadings();
+
     // The settings of the dynamic legend, from the menu behind
     // "Instellingen" or from a link: "lights", "hidden",
     // "language", "all-lights", "collapse-all", "expand-all", "reorder".

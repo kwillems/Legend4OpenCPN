@@ -3743,8 +3743,44 @@ void legend_pi::ShowSettingsMenu()
     }
 }
 
+int legend_pi::BuiltInSection(int builtIn) const
+{
+    const wxString name = builtIn == -2 ? "kaartsymbolen" : "lichtkarakters";
+    for (size_t i = 0; i < m_meaning_sections.size(); ++i) {
+        wxString first = m_meaning_sections[i].BeforeFirst('|');
+        first.Trim(true).Trim(false);
+        if (first.Lower() == name)
+            return static_cast<int>(i);
+    }
+    return builtIn;
+}
+
+void legend_pi::AddBuiltInHeadings()
+{
+    wxString missing;
+    if (m_chart_sources_available && BuiltInSection(-2) == -2)
+        missing << "\n[Kaartsymbolen | Chart symbols]\n";
+    if (m_show_lights && BuiltInSection(-3) == -3)
+        missing << "\n[Lichtkarakters | Light characters]\n";
+    if (missing.IsEmpty())
+        return;
+
+    wxFile file;
+    if (!file.Open(GetMeaningsFile(), wxFile::write_append))
+        return;
+    file.Write(missing, wxConvUTF8);
+    file.Close();
+
+    // Read again even when the file time did not change within a second.
+    m_meanings_modified = wxDateTime();
+    LoadMeanings();
+    CollectDynamicLegend();
+}
+
 void legend_pi::SetReorderMode(bool on)
 {
+    if (on)
+        AddBuiltInHeadings();
     m_reorder_mode = on;
     UpdateSearchVisibility();
     RenderDynamicLegend(!on);
@@ -4146,7 +4182,7 @@ void legend_pi::CollectChartObjects(
 
             // Not mentioned in symbolen.txt: under its own heading.
             if (group.order == (1 << 30))
-                group.section = -2;
+                group.section = BuiltInSection(-2);
         }
 
         group.positions.emplace_back(object.lat, object.lon);
@@ -4347,7 +4383,7 @@ void legend_pi::AddLight(
         group.lightText = abbreviation;
         group.label = light.Words(m_dutch_names);
         group.parentKey = parentKey;
-        group.section = -3;
+        group.section = BuiltInSection(-3);
         group.hiddenAtScale = hiddenFrom > 0;
         group.visibleFrom = hiddenFrom;
 
@@ -4492,7 +4528,7 @@ void legend_pi::CollectDynamicLegend()
                 continue;
             }
             group.parentKey.Clear();
-            group.section = -3;
+            group.section = BuiltInSection(-3);
         }
 
         m_dynamic_groups.push_back(group);
