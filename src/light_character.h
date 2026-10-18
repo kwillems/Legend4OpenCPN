@@ -10,6 +10,7 @@
 #ifndef _LIGHT_CHARACTER_H_
 #define _LIGHT_CHARACTER_H_
 
+#include <utility>
 #include <vector>
 
 #include <wx/colour.h>
@@ -23,6 +24,35 @@ struct LightPhase
     int colour = -1;     // index in LightCharacter::Colours(), -1 = dark
     bool dim = false;    // the steady part of a fixed and flashing light
 };
+
+// What someone tapped while watching a light, read as a light character:
+// the kind, the groups and the period. Tapping means holding a key or a pad
+// while the light shines and letting go while it is dark.
+struct TapPattern
+{
+    bool valid = false;
+    wxString kind;           // Fl, LFl, Q, VQ, Iso, Oc or Mo
+    std::vector<int> groups; // {2, 1} for 2+1; empty for a continuous quick light
+    bool longAfter = false;  // each group ends in a long flash: Q(6)+LFl
+    wxString letter;         // Morse code letter
+    double period = 0.0;     // seconds, 0 = not known yet
+
+    // "groepen van 2+1 schitteringen, elke ~10 s".
+    wxString Words(bool dutch) const;
+};
+
+// The moments a light shone (start, end in seconds), as tapped.
+TapPattern AnalyseTaps(const std::vector<std::pair<double, double>> &shines);
+
+// The tapped moments drawn like a rhythm: bars where the light shone.
+wxImage TapRhythmImage(
+    const std::vector<std::pair<double, double>> &shines,
+    int width,
+    int height,
+    const wxColour &line,
+    const wxColour &light,
+    const wxColour &background,
+    double scale = 1.0);
 
 // The character of a light as charts write it, such as "Fl(2+1)G.10s" or
 // "Iso.G.4s": read from text or from the attributes of an S-57 light, and
@@ -67,6 +97,10 @@ public:
     // The abbreviation without colours: the rhythm the parts of a sector
     // light share.
     wxString RhythmAbbreviation() const;
+
+    // How well a tapped rhythm fits this light, from 0 to 1: the kind, the
+    // groups and the period count.
+    double Match(const TapPattern &pattern) const;
 
     // The rhythm, drawn to scale but schematic: the lengths of flashes and
     // eclipses are typical values, not taken from a chart. One period, or
