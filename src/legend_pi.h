@@ -506,6 +506,7 @@ private:
     void TapDown();
     void TapUp();
     wxString TapClockText() const;
+    void RunIdentifyCommand(const wxString &what);
     void UpdateTapClock();
     // The areas at the position the banner uses; fromShip tells which.
     std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);

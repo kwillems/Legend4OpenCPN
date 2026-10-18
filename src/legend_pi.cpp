@@ -140,6 +140,9 @@ const wxString kLegendTipIdPrefix = "legend-tip-";
 const wxString kLegendTapIdPrefix = "legend-tap-";
 const wxString kTapClockId = "legend-tapclock";
 const wxString kLegendMatchIdPrefix = "legend-match-";
+// Buttons of "Licht herkennen", whole cells to click without a link line:
+// 0 clears the taps, 1 closes, 10 to 14 choose a colour.
+const wxString kLegendButtonIdPrefix = "legend-button-";
 
 // Id of a line of the "Vooruit" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
@@ -2348,17 +2351,7 @@ void legend_pi::CreateLegendWindow()
 
             if (href.StartsWith("legend-identify-")) {
                 const wxString what = href.Mid(16).BeforeFirst(':');
-                m_markdown_view->CallAfter([this, what]() {
-                    if (what == "stop") {
-                        SetIdentify(false);
-                        return;
-                    }
-                    if (what == "reset")
-                        m_taps.clear();
-                    else if (what.StartsWith("colour-"))
-                        m_identify_colour = what.Mid(7) == "any" ? wxString() : what.Mid(7);
-                    RenderDynamicLegend(true);
-                });
+                m_markdown_view->CallAfter([this, what]() { RunIdentifyCommand(what); });
                 return;
             }
 
@@ -2404,7 +2397,7 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -2428,6 +2421,7 @@ void legend_pi::CreateLegendWindow()
              legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
             {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
             {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
+            {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
             {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
             {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
@@ -2499,6 +2493,16 @@ void legend_pi::CreateLegendWindow()
                     if (static_cast<size_t>(hit.index) < m_identify_matches.size())
                         GoToDynamicGroup(m_identify_matches[hit.index]);
                     break;
+                case HitKind::Button: {
+                    static const char *const colours[] = {"any", "W", "R", "G", "Y"};
+                    if (hit.index == 0)
+                        RunIdentifyCommand("reset");
+                    else if (hit.index == 1)
+                        RunIdentifyCommand("stop");
+                    else if (hit.index >= 10 && hit.index < 15)
+                        RunIdentifyCommand(wxString("colour-") + colours[hit.index - 10]);
+                    break;
+                }
                 case HitKind::Tap:
                 case HitKind::Tip: // the link inside does the work
                 case HitKind::None:
@@ -2575,6 +2579,11 @@ void legend_pi::CreateLegendWindow()
                 break;
             case HitKind::Match:
                 tip = "Dit licht op de kaart laten branden";
+                break;
+            case HitKind::Button:
+                tip = hit.index == 0   ? "Het getikte ritme weggooien en opnieuw beginnen"
+                      : hit.index == 1 ? "Licht herkennen sluiten; het menu opent het weer"
+                                       : "Alleen lichten van deze kleur vergelijken";
                 break;
             case HitKind::Tip:
                 tip = hit.index == 0 ? "Instellingen: wat de legenda toont"
@@ -5403,13 +5412,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         wxString::Format("legend_dyn_%d_idcolour_%d.png", m_dynamic_generation, c),
                         LightLampImage(colours, muted, tile, SchemeDim(), 18),
                         LightLampImage(colours, muted, tile, SchemeDim(), 36));
-                    const wxString href =
-                        wxString("legend-identify-colour-") + (c == 0 ? "any" : codes[c]) + ":";
                     const wxString label = nl ? namesNl[c] : namesEn[c];
-                    html << "<td align=\"center\" bgcolor=\"" << hex(tile) << "\">"
-                         << "<a href=\"" << href << "\"><img src=\"memory:" << lamp
-                         << "\"></a><br><font size=\"-1\"><a href=\"" << href << "\">"
-                         << (chosen ? "<b>" + label + "</b>" : label) << "</a></font></td>";
+                    html << "<td id=\"" << kLegendButtonIdPrefix << 10 + c << "\" align=\"center\" bgcolor=\""
+                         << hex(tile) << "\"><img src=\"memory:" << lamp << "\"><br><font size=\"-1\">"
+                         << (chosen ? "<b>" + label + "</b>" : label) << "</font></td>";
                 }
                 html << "</tr></table></td></tr>";
 
@@ -5461,20 +5467,20 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
                 // Two buttons at the foot: erase the taps and start again,
                 // or close the block (the settings menu opens it again).
-                auto button = [&](const wxString &href, const wxString &label) {
+                auto button = [&](int number, const wxString &label) {
                     html << "<td><table cellspacing=\"0\" cellpadding=\"1\" bgcolor=\""
                          << hex(palette.headerRule) << "\"><tr><td>"
                          << "<table cellspacing=\"0\" cellpadding=\"5\" bgcolor=\"" << hex(background)
-                         << "\"><tr><td nowrap><a href=\"" << href << "\">" << label
-                         << "</a></td></tr></table></td></tr></table></td>";
+                         << "\"><tr><td id=\"" << kLegendButtonIdPrefix << number << "\" nowrap>"
+                         << label << "</td></tr></table></td></tr></table></td>";
                 };
                 html << "<tr><td colspan=\"2\" align=\"right\">"
                      << "<table align=\"right\" cellspacing=\"0\" cellpadding=\"0\"><tr>";
                 if (!m_taps.empty()) {
-                    button("legend-identify-reset:", nl ? "Tikken wissen" : "Clear taps");
+                    button(0, nl ? "Tikken wissen" : "Clear taps");
                     html << "<td width=\"10\"></td>";
                 }
-                button("legend-identify-stop:", nl ? "Sluiten" : "Close");
+                button(1, nl ? "Sluiten" : "Close");
                 html << "</tr></table></td></tr></table></td></tr></table>";
 
                 // Room between the frame and the list.
@@ -6969,6 +6975,21 @@ void legend_pi::ComputeAhead()
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
     }
     m_ahead_key = key.IsEmpty() ? wxString("nothing") : key;
+}
+
+// What a button of "Licht herkennen" does: "reset", "stop" or
+// "colour-W" (R, G, Y, or "any").
+void legend_pi::RunIdentifyCommand(const wxString &what)
+{
+    if (what == "stop") {
+        SetIdentify(false);
+        return;
+    }
+    if (what == "reset")
+        m_taps.clear();
+    else if (what.StartsWith("colour-"))
+        m_identify_colour = what.Mid(7) == "any" ? wxString() : what.Mid(7);
+    RenderDynamicLegend(true);
 }
 
 void legend_pi::SetIdentify(bool on)
