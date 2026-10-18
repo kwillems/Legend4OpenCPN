@@ -168,6 +168,11 @@ public:
         wxHtmlCell::Layout(w);
     }
 
+    // It asks for no width of its own: a table sizing its columns would
+    // otherwise take the width of an earlier layout as what this cell
+    // needs, and grow wider than the window.
+    int GetMaxTotalWidth() const override { return 0; }
+
     void Draw(wxDC &dc, int x, int y, int, int, wxHtmlRenderingInfo &) override
     {
         wxCoord width = 0;
@@ -2286,6 +2291,16 @@ void legend_pi::CreateLegendWindow()
         wxDefaultSize,
         wxHW_SCROLLBAR_AUTO);
     wxHtmlWinParser::RemoveModule(&clockModule);
+
+    // The rhythms of lights are images; in a narrow window they are drawn
+    // narrower, so a row never needs more width than the window has.
+    m_markdown_view->Bind(
+        wxEVT_SIZE,
+        [this](wxSizeEvent &event) {
+            event.Skip();
+            if (IsDynamicLegendVisible() && RhythmWidth() != m_rhythm_width)
+                m_markdown_view->CallAfter([this]() { RenderDynamicLegend(true); });
+        });
 
     // Give Markdown some breathing room without using extra layout rows.
     m_markdown_view->SetBorders(12);
@@ -4779,6 +4794,18 @@ void legend_pi::CollectDynamicLegend()
         UpdateAllLights();
 }
 
+// Width of the rhythm image under a light: 180 pixels, less in a window
+// too narrow for that beside the icon, the lamp and the counter of a light
+// row under its buoy (about 210 pixels together, with the margins).
+int legend_pi::RhythmWidth() const
+{
+    if (!m_markdown_view)
+        return 180;
+    const int page = m_markdown_view->GetClientSize().GetWidth() -
+                     wxSystemSettings::GetMetric(wxSYS_VSCROLL_X, m_markdown_view) - 24;
+    return std::max(60, std::min(180, page - 210));
+}
+
 void legend_pi::RenderDynamicLegend(bool keepScroll)
 {
     if (!m_markdown_view)
@@ -4788,6 +4815,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         g_memoryHandler = new wxMemoryFSHandler;
         wxFileSystem::AddHandler(g_memoryHandler);
     }
+
+    m_rhythm_width = RhythmWidth();
 
     int scrollX = 0;
     int scrollY = 0;
@@ -4856,13 +4885,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
         }
         LightCharacter light;
         if (light.Parse(group.lightText)) {
+            const int width = m_rhythm_width;
             const wxImage rhythm =
-                LightRhythmImage(light, 180, 14, palette.muted, rowColour, SchemeDim());
+                LightRhythmImage(light, width, 14, palette.muted, rowColour, SchemeDim());
             if (rhythm.IsOk()) {
                 const wxString name = addImage(
                     wxString::Format("legend_dyn_%d_rhythm_%zu.png", m_dynamic_generation, index),
                     rhythm,
-                    LightRhythmImage(light, 360, 28, palette.muted, rowColour, SchemeDim(), 2.0));
+                    LightRhythmImage(light, 2 * width, 28, palette.muted, rowColour, SchemeDim(), 2.0));
                 label << "<br><img src=\"memory:" << name << "\">";
             }
         }
@@ -5358,15 +5388,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 // Colour of the light seen: a lamp to click for each colour,
                 // the chosen one on a highlighted tile.
                 html << "<tr><td colspan=\"2\"><font size=\"-1\">"
-                     << (nl ? "Welke kleur heeft het licht? Klik om te kiezen:"
-                            : "Which colour is the light? Click to choose:")
+                     << (nl ? "Klik op de kleur van het licht:" : "Click the colour of the light:")
                      << "</font><br><table cellspacing=\"2\" cellpadding=\"4\"><tr>";
                 const char *codes[] = {"", "W", "R", "G", "Y"};
                 const char *namesNl[] = {"elke", "wit", "rood", "groen", "geel"};
                 const char *namesEn[] = {"any", "white", "red", "green", "yellow"};
                 for (int c = 0; c < 5; ++c) {
                     const bool chosen = m_identify_colour == codes[c];
-                    const wxColour tile = chosen ? palette.active : background;
+                    const wxColour tile = chosen ? palette.active : stripe;
                     const std::vector<wxString> colours =
                         c == 0 ? std::vector<wxString>{"W", "R", "G", "Y"}
                                : std::vector<wxString>{codes[c]};
@@ -5387,8 +5416,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 if (!m_taps.empty()) {
                     const wxString name = addImage(
                         wxString::Format("legend_dyn_%d_taps.png", m_dynamic_generation),
-                        TapRhythmImage(m_taps, 260, 16, muted, palette.text, stripe),
-                        TapRhythmImage(m_taps, 520, 32, muted, palette.text, stripe, 2.0));
+                        TapRhythmImage(m_taps, m_rhythm_width + 20, 16, muted, palette.text, stripe),
+                        TapRhythmImage(m_taps, 2 * (m_rhythm_width + 20), 32, muted, palette.text,
+                                       stripe, 2.0));
                     html << "<tr><td colspan=\"2\"><img src=\"memory:" << name << "\">";
                     if (pattern.valid)
                         html << "<br><font size=\"-1\">" << escape(pattern.Words(nl)) << "</font>";
@@ -5416,9 +5446,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                             : scored[k].first >= 0.65 ? (nl ? "past redelijk" : "fair fit")
                                                      : (nl ? "past matig" : "weak fit");
                         html << "<tr bgcolor=\"" << hex(k % 2 == 0 ? background : stripe) << "\">"
-                             << "<td id=\"" << id << "\"><b>" << escape(group.lightText)
-                             << "</b>&nbsp; " << escape(group.label) << "</td>"
-                             << "<td id=\"" << id << "\" align=\"right\" nowrap><font size=\"-1\" color=\""
+                             << "<td colspan=\"2\" id=\"" << id << "\"><b>" << escape(group.lightText)
+                             << "</b>&nbsp; " << escape(group.label) << "<br><font size=\"-1\" color=\""
                              << hex(muted) << "\">" << fit << " (" << percent << "%) &middot; &times;"
                              << group.positions.size() << "</font></td></tr>";
                     }
