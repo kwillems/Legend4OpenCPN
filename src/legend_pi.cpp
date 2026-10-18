@@ -1128,7 +1128,7 @@ int legend_pi::Init()
            WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
            WANTS_OPENGL_OVERLAY_CALLBACK |
            WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK | WANTS_MOUSE_EVENTS |
-           WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS;
+           WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
 }
 
 bool legend_pi::DeInit()
@@ -2203,6 +2203,7 @@ void legend_pi::CreateLegendWindow()
                 m_markdown_view->CallAfter([this]() {
                     m_ocharts.Rescan();
                     m_s57.Rescan();
+                    m_vhf_loaded = false;
                     LoadChartNames();
                     ShowDynamicLegend(true);
                 });
@@ -3154,6 +3155,16 @@ void legend_pi::RefreshDynamicLegendKeepingState()
                 }
             }
         }
+    }
+
+    // The VHF banner follows the middle of the chart when there is no
+    // position fix: a move into another area counts as a change.
+    if (!changed) {
+        const wxString previous = m_vhf_shown_key;
+        bool fromShip = false;
+        bool layerShown = false;
+        VhfAreasHere(&fromShip, &layerShown);
+        changed = m_vhf_shown_key != previous;
     }
 
     // Nothing to show differently: leave the window alone.
@@ -4809,6 +4820,48 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
     html << "</table>";
 
+    // "Marifoon hier": the channels of the VHF areas at the boat, or at the
+    // middle of the chart without a position fix.
+    if (m_viewport_valid && !m_reorder_mode) {
+        bool fromShip = false;
+        bool layerShown = false;
+        const std::vector<const VhfArea *> areas = VhfAreasHere(&fromShip, &layerShown);
+        if (layerShown) {
+            const bool nl = m_dutch_names;
+            html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" "
+                 << "bgcolor=\"" << hex(palette.active) << "\"><tr><td>"
+                 << "<b>" << (nl ? "Marifoon hier" : "VHF here") << "</b> "
+                 << "<font size=\"-1\" color=\"" << hex(muted) << "\">"
+                 << (fromShip ? (nl ? "bij de boot" : "at the boat")
+                              : (nl ? "midden van de kaart (geen GPS)"
+                                    : "middle of the chart (no GPS)"))
+                 << "</font>";
+
+            if (areas.empty()) {
+                html << "<br><font color=\"" << hex(muted) << "\">"
+                     << (nl ? "Geen marifoongebied uit VHFinfo op deze plek."
+                            : "No VHFinfo area at this spot.")
+                     << "</font>";
+            }
+            for (const VhfArea *area : areas) {
+                html << "<br><b>" << (nl ? "kanaal " : "channel ") << escape(area->channel)
+                     << "</b>";
+                const wxString who = area->callName.IsEmpty() ? area->name : area->callName;
+                if (!who.IsEmpty())
+                    html << " &middot; " << escape(who);
+                if (!area->type.IsEmpty())
+                    html << " &middot; " << escape(VhfTypeWord(area->type, nl));
+                if (!area->usage.IsEmpty())
+                    html << " &middot; " << escape(VhfUsageWord(area->usage, nl));
+                if (!area->phone.IsEmpty()) {
+                    html << " &middot; <a href=\"tel:" << escape(area->phone) << "\">"
+                         << escape(area->phone) << "</a>";
+                }
+            }
+            html << "</td></tr></table>";
+        }
+    }
+
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
          << "<tr><td bgcolor=\"" << hex(palette.headerRule)
          << "\" height=\"2\"></td></tr>"
@@ -6124,6 +6177,71 @@ bool legend_pi::DrawLightMarkersGL(PlugIn_ViewPort *vp)
     glPopAttrib();
 
     return true;
+}
+
+// A position from OpenCPN (GPS). The banner is redrawn only when the
+// areas the boat is in change.
+void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
+{
+    if (std::isnan(pfix.Lat) || std::isnan(pfix.Lon) ||
+        (pfix.Lat == 0.0 && pfix.Lon == 0.0))
+        return;
+
+    m_ship_lat = pfix.Lat;
+    m_ship_lon = pfix.Lon;
+    m_ship_time = wxGetUTCTimeMillis();
+
+    if (!IsDynamicLegendVisible() || m_loading || m_showing_loading_page ||
+        m_reorder_mode)
+        return;
+
+    // VhfAreasHere() keeps the key of what it found.
+    const wxString previous = m_vhf_shown_key;
+    bool fromShip = false;
+    bool layerShown = false;
+    VhfAreasHere(&fromShip, &layerShown);
+    if (m_vhf_shown_key != previous)
+        RenderDynamicLegend(true);
+}
+
+std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
+{
+    if (!m_vhf_loaded) {
+        m_vhf_loaded = true;
+        wxString *privateDir = GetpPrivateApplicationDataLocation();
+        if (privateDir && !privateDir->IsEmpty()) {
+            const size_t count = m_vhf_areas.Load(
+                *privateDir + wxFileName::GetPathSeparator() + "layers");
+            wxLogMessage("Legend: %zu VHF areas from the layers", count);
+        }
+    }
+
+    // Shown only while a layer with these areas is shown in OpenCPN: one
+    // of its waypoints is visible.
+    *layerShown = false;
+    if (!m_vhf_areas.IsEmpty()) {
+        for (const CachedWaypoint &wp : m_waypoint_cache) {
+            if (wp.visible && m_vhf_areas.Icons().count(wp.icon) > 0) {
+                *layerShown = true;
+                break;
+            }
+        }
+    }
+
+    // A fix of the last minute counts as the boat's position.
+    *fromShip = m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000;
+    const double lat = *fromShip ? m_ship_lat : m_viewport.clat;
+    const double lon = *fromShip ? m_ship_lon : m_viewport.clon;
+
+    std::vector<const VhfArea *> areas;
+    if (*layerShown)
+        areas = m_vhf_areas.At(lat, lon);
+
+    m_vhf_shown_key = *layerShown ? "shown" : "hidden";
+    m_vhf_shown_key << (*fromShip ? "|ship" : "|chart");
+    for (const VhfArea *area : areas)
+        m_vhf_shown_key << '|' << area->name;
+    return areas;
 }
 
 void legend_pi::SetAllLightsShining(bool on)

@@ -17,6 +17,7 @@
 #include "display_settings.h"
 #include "chart_names.h"
 #include "light_character.h"
+#include "vhf_areas.h"
 
 #include <map>
 #include <set>
@@ -126,6 +127,7 @@ public:
     void SetCursorLatLon(double lat, double lon) override;
     void OnContextMenuItemCallback(int id) override;
     void SetCurrentViewPort(PlugIn_ViewPort &vp) override;
+    void SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) override;
 
     using opencpn_plugin_118::RenderOverlayMultiCanvas;
     using opencpn_plugin_118::RenderGLOverlayMultiCanvas;
@@ -440,6 +442,17 @@ private:
         m_light_sectors;
     std::vector<LightSector> SectorsAt(double lat, double lon, const wxString &rhythm) const;
     wxString m_light_rhythm; // rhythm of the light shining for a click
+
+    // "Marifoon hier": the VHF areas (VHFinfo layer) the boat is in, or
+    // the middle of the chart without a recent position fix.
+    VhfAreas m_vhf_areas;
+    bool m_vhf_loaded = false;
+    double m_ship_lat = 0.0;
+    double m_ship_lon = 0.0;
+    wxLongLong m_ship_time = 0;   // UTC milliseconds of the last fix, 0 = none
+    wxString m_vhf_shown_key;     // areas in the banner last drawn
+    // The areas at the position the banner uses; fromShip tells which.
+    std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);
 
     bool m_show_lights = true;     // setting: light characters in the list
     bool m_all_lights_on = false;
