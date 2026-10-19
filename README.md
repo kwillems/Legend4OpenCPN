@@ -186,17 +186,30 @@ meteen. **Sluiten** haalt het kader weg.
 
 ## Onderweg
 
-**Marifoon** staat bovenaan de lijst en toont het kanaal van het gebied waar
-de boot is: kanaal, oproepnaam, soort post, wat je moet doen (uitluisteren,
-melden of aanmelden) en het telefoonnummer. De gegevens komen uit de laag
-*VHFinfo Nederland* van [VHF2OpenCPN](https://github.com/kwillems/VHF2OpenCPN).
-Zonder recente GPS-positie geldt het midden van de kaart; dat staat er dan
-bij. Staat de laag uit, dan verdwijnt het kopje.
+### Marifoon
 
-**Vooruit** verschijnt tijdens het varen. Het toont tot acht objecten uit de
-legenda die je de komende dertig minuten op koers tegenkomt, op volgorde van
-aankomst, met de kant waar ze liggen en hun licht. Een klik wijst het object
-aan op de kaart. Testen zonder te varen kan met de plugin ShipDriver.
+Het kopje **Marifoon** staat bovenaan de lijst en toont het kanaal van het
+gebied waar de boot is: kanaal, oproepnaam, soort post, wat je moet doen
+(uitluisteren, melden of aanmelden) en het telefoonnummer. De gegevens komen
+uit de laag *VHFinfo Nederland* van
+[VHF2OpenCPN](https://github.com/kwillems/VHF2OpenCPN). Zonder recente
+GPS-positie geldt het midden van de kaart; dat staat er dan bij. Staat de
+laag uit, dan verdwijnt het kopje.
+
+### Vooruit
+
+Het kopje **Vooruit** laat zien wat je de komende dertig minuten op koers
+tegenkomt. Het verschijnt zodra de boot vaart: een recente GPS-positie en
+minstens een halve knoop.
+
+- Tot acht objecten uit de legenda, op volgorde van aankomst, bijvoorbeeld
+  *over 4 min · stuurboord · Rode spitse ton*, met het lichtkarakter erbij.
+- De plugin kijkt in een waaier vóór de boot die verder weg breder wordt, tot
+  zo ver als je in een half uur komt (hooguit 8 zeemijl).
+- Ingeklapt noemt het kopje nog het eerstvolgende object.
+- Een klik op een regel wijst het object aan op de kaart, of laat zijn licht
+  branden.
+- Testen zonder te varen kan met de plugin ShipDriver.
 
 ## Je eigen betekenissen: `symbolen.txt`
 
