@@ -58,6 +58,8 @@ set(SRC
     src/display_settings.cpp
     src/chart_names.h
     src/chart_names.cpp
+    src/note_editor.h
+    src/note_editor.cpp
     src/light_character.h
     src/light_character.cpp
     src/vhf_areas.h

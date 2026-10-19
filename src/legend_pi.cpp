@@ -41,7 +41,11 @@
 #include <wx/stattext.h>
 #include <wx/stdpaths.h>
 #include <wx/stopwatch.h>
+#include <wx/filedlg.h>
+#include <wx/msgdlg.h>
+#include <wx/textdlg.h>
 #include <wx/textfile.h>
+#include <wx/wrapsizer.h>
 #include <wx/tokenzr.h>
 #include <wx/utils.h>
 
@@ -340,6 +344,9 @@ protected:
         if (fragmentPos != wxNOT_FOUND)
             imagePath = imagePath.Left(fragmentPos);
 
+        // Markdown writes a space in a path as %20.
+        imagePath.Replace("%20", " ");
+
         wxFileName imageFile(imagePath);
 
         if (!imageFile.IsAbsolute())
@@ -421,6 +428,82 @@ void Md4cOutputCallback(const MD_CHAR *text, MD_SIZE size, void *userdata)
 {
     auto *out = static_cast<std::string *>(userdata);
     out->append(text, size);
+}
+
+// wxHTML knows no check boxes. A list of tasks becomes an indented list
+// without bullets (<dl>), each item starting with an empty or a ticked box.
+std::string ShowTaskLists(const std::string &html)
+{
+    static const std::string kTaskItem = "<li class=\"task-list-item\">";
+    static const std::string kBox =
+        "<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled";
+    if (html.find(kTaskItem) == std::string::npos)
+        return html;
+
+    std::string out;
+    out.reserve(html.size() + 64);
+    std::vector<bool> lists; // per open <ul>: shown as <dl>
+    std::vector<bool> items; // per open <li>: shown as <dd>
+    bool dropParagraphEnd = false;
+    size_t pos = 0;
+    while (pos < html.size()) {
+        if (html.compare(pos, 4, "<ul>") == 0) {
+            const size_t next = html.find('<', pos + 4);
+            const bool tasks =
+                next != std::string::npos && html.compare(next, kTaskItem.size(), kTaskItem) == 0;
+            lists.push_back(tasks);
+            out += tasks ? "<dl>" : "<ul>";
+            pos += 4;
+        }
+        else if (html.compare(pos, 5, "</ul>") == 0) {
+            const bool tasks = !lists.empty() && lists.back();
+            if (!lists.empty())
+                lists.pop_back();
+            out += tasks ? "</dl>" : "</ul>";
+            pos += 5;
+        }
+        else if (html.compare(pos, kTaskItem.size(), kTaskItem) == 0) {
+            pos += kTaskItem.size();
+            bool checked = false;
+            if (html.compare(pos, kBox.size(), kBox) == 0) {
+                const size_t end = html.find('>', pos);
+                checked = html.substr(pos, end - pos).find("checked") != std::string::npos;
+                pos = end == std::string::npos ? html.size() : end + 1;
+            }
+            const bool asTerm = !lists.empty() && lists.back();
+            items.push_back(asTerm);
+            out += asTerm ? "<dd>" : "<li>";
+            out += checked ? "<font size=\"+1\">\xE2\x98\x91</font>&nbsp;"
+                           : "<font size=\"+1\">\xE2\x98\x90</font>&nbsp;";
+            // In a list with empty lines between the items the text is a
+            // paragraph; it stays on the line of its box.
+            if (html.compare(pos, 3, "<p>") == 0) {
+                pos += 3;
+                dropParagraphEnd = true;
+            }
+        }
+        else if (dropParagraphEnd && html.compare(pos, 4, "</p>") == 0) {
+            dropParagraphEnd = false;
+            pos += 4;
+        }
+        else if (html.compare(pos, 4, "<li>") == 0 || html.compare(pos, 4, "<li ") == 0) {
+            items.push_back(false);
+            const size_t end = html.find('>', pos);
+            out.append(html, pos, end - pos + 1);
+            pos = end + 1;
+        }
+        else if (html.compare(pos, 5, "</li>") == 0) {
+            const bool asTerm = !items.empty() && items.back();
+            if (!items.empty())
+                items.pop_back();
+            out += asTerm ? "</dd>" : "</li>";
+            pos += 5;
+        }
+        else {
+            out += html[pos++];
+        }
+    }
+    return out;
 }
 
 // Draw an image (with or without alpha channel or mask) on a background
@@ -1347,6 +1430,9 @@ int legend_pi::Init()
 
 bool legend_pi::DeInit()
 {
+    m_save_timer.Stop();
+    if (m_editing)
+        SaveNote();
     SaveCurrentMarkdownScroll();
     SaveWindowState();
     SaveConfig();
@@ -1387,6 +1473,16 @@ bool legend_pi::DeInit()
         m_legend_bitmap = nullptr;
         m_markdown_view = nullptr;
         m_search = nullptr;
+        m_edit_button = nullptr;
+        m_new_button = nullptr;
+        m_rename_button = nullptr;
+        m_delete_button = nullptr;
+        m_format_bar = nullptr;
+        m_format_icons.clear();
+        m_editor = nullptr;
+        m_nav_panel = nullptr;
+        m_edit_footer = nullptr;
+        m_save_status = nullptr;
     }
 
     if (g_memoryHandler) {
@@ -1786,10 +1882,16 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
         return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
 
+    return RenderMarkdownText(markdown);
+}
+
+// Markdown text (UTF-8) as the page of the viewer.
+wxString legend_pi::RenderMarkdownText(std::string markdown, bool dropTitle) const
+{
     // If the first non-empty Markdown line is an H1, it is already used
     // as the document title in the selector/header. Remove that one line
     // from the rendered body to avoid showing the title twice.
-    {
+    if (dropTitle) {
         size_t pos = 0;
 
         // Skip UTF-8 BOM if present.
@@ -1861,6 +1963,8 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
 
     if (result != 0)
         return "<html>" + LegendBodyTag() + "<p>Markdown kon niet worden verwerkt.</p></body></html>";
+
+    html = ShowTaskLists(html);
 
     wxString wrapped;
     wrapped << "<html>" << LegendBodyTag()
@@ -2004,6 +2108,13 @@ void legend_pi::UpdateImageScale()
 
 void legend_pi::ShowLegend(size_t index)
 {
+    // While a note is edited the window stays on it; a refresh from
+    // elsewhere (colours, the folder) only redraws the preview.
+    if (m_editing) {
+        UpdateNoteButtons();
+        return;
+    }
+
     SaveCurrentMarkdownScroll();
 
     if (m_legend_files.IsEmpty()) {
@@ -2075,6 +2186,7 @@ void legend_pi::ShowLegend(size_t index)
     }
 
     UpdateSearchVisibility();
+    UpdateNoteButtons();
 
     if (m_legend_window)
         m_legend_window->Layout();
@@ -2123,6 +2235,321 @@ void legend_pi::OnLegendSelected(wxCommandEvent &event)
     // Keep keyboard focus on the selector after a choice has been made.
     // This allows Up/Down to continue moving through the list immediately.
     m_legend_choice->SetFocus();
+}
+
+bool legend_pi::IsMarkdownItem(const wxString &path) const
+{
+    if (path.IsEmpty() || path == kDynamicGpxId)
+        return false;
+    const wxString ext = wxFileName(path).GetExt().Lower();
+    return ext == "md" || ext == "markdown";
+}
+
+// Outside editing: the pencil for a note and the plus. While editing: the
+// buttons that format the text, and Klaar.
+void legend_pi::UpdateNoteButtons()
+{
+    if (!m_edit_button || !m_new_button || !m_format_bar || !m_nav_panel || !m_edit_footer)
+        return;
+
+    m_edit_button->Show(!m_editing && IsMarkdownItem(m_current_legend_path));
+    const bool note = !m_editing && IsMarkdownItem(m_current_legend_path);
+    if (m_rename_button)
+        m_rename_button->Show(note);
+    if (m_delete_button)
+        m_delete_button->Show(note);
+    m_new_button->Show(!m_editing);
+    m_format_bar->Show(m_editing);
+    m_nav_panel->Show(!m_editing);
+    m_edit_footer->Show(m_editing);
+    if (m_legend_choice)
+        m_legend_choice->Enable(!m_editing);
+    m_edit_button->GetParent()->Layout();
+}
+
+void legend_pi::StartEditing()
+{
+    if (m_editing || !m_editor || !m_content_book || !IsMarkdownItem(m_current_legend_path))
+        return;
+
+    wxString text;
+    wxFile file(m_current_legend_path);
+    if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
+        wxMessageBox("Deze notitie kon niet worden geopend.", "Notitie bewerken",
+                     wxOK | wxICON_WARNING, m_legend_window);
+        return;
+    }
+
+    SaveCurrentMarkdownScroll();
+    m_editing = true;
+    m_editing_path = m_current_legend_path;
+    m_note_dirty = false;
+    m_editor->LoadMarkdown(text, wxFileName(m_editing_path).GetPath());
+    if (m_save_status)
+        m_save_status->SetLabel("Wijzigingen worden vanzelf bewaard");
+    m_content_book->SetSelection(2);
+    UpdateNoteButtons();
+    m_editor->SetFocus();
+}
+
+void legend_pi::StopEditing()
+{
+    if (!m_editing)
+        return;
+
+    SaveNote();
+    m_editing = false;
+    m_editing_path.Clear();
+
+    // The title may have changed: build the choice again and show the note
+    // as it is now.
+    RefreshLegendFiles();
+    UpdateNoteButtons();
+}
+
+// Writes the note as Markdown, through a temporary file so a failure never
+// leaves half a note behind.
+void legend_pi::SaveNote()
+{
+    m_save_timer.Stop();
+    if (!m_editor || m_editing_path.IsEmpty() || !m_note_dirty)
+        return;
+
+    wxTempFile file(m_editing_path);
+    const bool saved =
+        file.IsOpened() && file.Write(m_editor->ToMarkdown(), wxConvUTF8) && file.Commit();
+    if (saved) {
+        m_note_dirty = false;
+        if (m_save_status)
+            m_save_status->SetLabel("Bewaard om " + wxDateTime::Now().Format("%H:%M"));
+    }
+    else {
+        wxLogMessage("Legend: could not save %s", m_editing_path);
+        if (m_save_status)
+            m_save_status->SetLabel("Kon niet bewaren");
+    }
+}
+
+// A new note in the Legend folder, named after its title, opened for
+// writing.
+void legend_pi::NewNote()
+{
+    if (m_editing)
+        StopEditing();
+
+    wxTextEntryDialog dialog(m_legend_window, "Titel van de nieuwe notitie:", "Nieuwe notitie");
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+
+    wxString title = dialog.GetValue();
+    title.Trim(true).Trim(false);
+    if (title.IsEmpty())
+        return;
+
+    const wxString name = NoteFileName(title);
+
+    EnsureDirectories();
+    wxFileName file(GetLegendDirectory(), name, "md");
+    for (int n = 2; file.FileExists(); ++n)
+        file.SetName(wxString::Format("%s %d", name, n));
+
+    wxFile out;
+    if (!out.Create(file.GetFullPath()) || !out.Write("# " + title + "\n\n", wxConvUTF8)) {
+        wxMessageBox("De notitie kon niet worden aangemaakt in\n" + GetLegendDirectory(),
+                     "Nieuwe notitie", wxOK | wxICON_WARNING, m_legend_window);
+        return;
+    }
+    out.Close();
+
+    ShowNoteNamed(file.GetFullName());
+    StartEditing();
+    if (m_editor) {
+        m_editor->SetInsertionPointEnd();
+        m_editor->Newline();
+    }
+}
+
+// The selected text becomes a link; without a selection the address itself
+// is put in.
+void legend_pi::InsertLink()
+{
+    if (!m_editor)
+        return;
+
+    wxTextEntryDialog dialog(m_legend_window, "Adres van de link:", "Link", "https://");
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+    wxString address = dialog.GetValue();
+    address.Trim(true).Trim(false);
+    if (address.IsEmpty() || address == "https://")
+        return;
+    m_editor->AddLink(address);
+}
+
+// A picture from outside the Legend folder is copied into its images folder
+// first, so the note keeps working when the original moves.
+void legend_pi::InsertImage()
+{
+    if (!m_editor)
+        return;
+
+    const wxString legendDir = GetLegendDirectory();
+    wxFileDialog dialog(m_legend_window, "Afbeelding kiezen", legendDir, wxEmptyString,
+                        "Afbeeldingen (*.png;*.jpg;*.jpeg;*.gif)|*.png;*.jpg;*.jpeg;*.gif",
+                        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+
+    wxFileName image(dialog.GetPath());
+    wxFileName relative(image);
+    if (!relative.MakeRelativeTo(legendDir) || relative.GetFullPath().StartsWith("..")) {
+        wxFileName copy(legendDir + wxFileName::GetPathSeparator() + "images",
+                        image.GetFullName());
+        wxFileName::Mkdir(copy.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        for (int n = 2; copy.FileExists(); ++n)
+            copy.SetName(wxString::Format("%s %d", image.GetName(), n));
+        if (!wxCopyFile(image.GetFullPath(), copy.GetFullPath())) {
+            wxMessageBox("De afbeelding kon niet naar de Legend-map worden gekopieerd.",
+                         "Afbeelding", wxOK | wxICON_WARNING, m_legend_window);
+            return;
+        }
+        relative = copy;
+        relative.MakeRelativeTo(legendDir);
+    }
+
+    wxString path = relative.GetFullPath(wxPATH_UNIX);
+    if (path.Contains(" "))
+        path = "<" + path + ">";
+    if (!m_editor->InsertNoteImage(path, image.GetName()))
+        wxMessageBox("Deze afbeelding kon niet worden geopend.", "Afbeelding",
+                     wxOK | wxICON_WARNING, m_legend_window);
+}
+
+// The file name of a note: its title without the characters file systems
+// refuse.
+wxString legend_pi::NoteFileName(const wxString &title) const
+{
+    wxString name = title;
+    for (const char *bad = "/\\:*?\"<>|"; *bad; ++bad)
+        name.Replace(wxString(*bad), "-");
+    name.Trim(true).Trim(false);
+    while (name.StartsWith("."))
+        name.Remove(0, 1);
+    return name.IsEmpty() ? wxString("Notitie") : name;
+}
+
+// Shows the note with this file name, after the folder changed.
+void legend_pi::ShowNoteNamed(const wxString &fullName)
+{
+    ScanLegendFiles();
+    RebuildLegendChoice();
+    size_t index = 0;
+    for (size_t i = 0; i < m_legend_files.GetCount(); ++i) {
+        if (wxFileName(m_legend_files[i]).GetFullName() == fullName)
+            index = i;
+    }
+    ShowLegend(index);
+}
+
+// A new title: the file gets the matching name, and a "# Title" on the
+// first line changes along.
+void legend_pi::RenameNote()
+{
+    if (m_editing || !IsMarkdownItem(m_current_legend_path))
+        return;
+
+    const wxString path = m_current_legend_path;
+    const wxString oldTitle = MakeDisplayTitle(path);
+    wxTextEntryDialog dialog(m_legend_window, "Nieuwe titel van de notitie:", "Notitie hernoemen",
+                             oldTitle);
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+    wxString title = dialog.GetValue();
+    title.Trim(true).Trim(false);
+    if (title.IsEmpty() || title == oldTitle)
+        return;
+
+    wxFileName target(path);
+    target.SetName(NoteFileName(title));
+    if (target.GetFullPath() != path && target.FileExists()) {
+        wxMessageBox("Er is al een notitie met de naam \"" + target.GetName() + "\".",
+                     "Notitie hernoemen", wxOK | wxICON_INFORMATION, m_legend_window);
+        return;
+    }
+
+    // The heading on the first line.
+    wxString text;
+    {
+        wxFile file(path);
+        if (file.IsOpened())
+            file.ReadAll(&text, wxConvUTF8);
+    }
+    size_t start = 0;
+    while (start < text.length() && (text[start] == '\n' || text[start] == '\r' ||
+                                     text[start] == ' ' || text[start] == '\t'))
+        ++start;
+    if (text.Mid(start, 2) == "# ") {
+        size_t end = text.find('\n', start);
+        if (end == wxString::npos)
+            end = text.length();
+        text = text.Left(start) + "# " + title + text.Mid(end);
+        wxTempFile out(path);
+        if (!out.IsOpened() || !out.Write(text, wxConvUTF8) || !out.Commit()) {
+            wxMessageBox("De notitie kon niet worden aangepast.", "Notitie hernoemen",
+                         wxOK | wxICON_WARNING, m_legend_window);
+            return;
+        }
+    }
+
+    if (target.GetFullPath() != path && !wxRenameFile(path, target.GetFullPath(), false)) {
+        wxMessageBox("Het bestand kon niet worden hernoemd.", "Notitie hernoemen",
+                     wxOK | wxICON_WARNING, m_legend_window);
+        return;
+    }
+
+    auto scroll = m_markdown_scroll_positions.find(path);
+    if (scroll != m_markdown_scroll_positions.end()) {
+        m_markdown_scroll_positions[target.GetFullPath()] = scroll->second;
+        m_markdown_scroll_positions.erase(path);
+    }
+    m_current_legend_path = target.GetFullPath();
+    ShowNoteNamed(target.GetFullName());
+}
+
+// Moves the note into the folder "Verwijderd" in the Legend folder, where
+// it can be fetched back; images it uses stay where they are.
+void legend_pi::DeleteNote()
+{
+    if (m_editing || !IsMarkdownItem(m_current_legend_path))
+        return;
+
+    const wxString path = m_current_legend_path;
+    const wxString title = MakeDisplayTitle(path);
+    wxMessageDialog confirm(m_legend_window,
+                            "Notitie \"" + title + "\" verwijderen?\n\nHet bestand gaat naar de map "
+                            "\"Verwijderd\" in de Legend-map; daar kun je het terughalen.",
+                            "Notitie verwijderen", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    confirm.SetYesNoLabels("Verwijderen", "Annuleren");
+    if (confirm.ShowModal() != wxID_YES)
+        return;
+
+    wxFileName target(GetLegendDirectory() + wxFileName::GetPathSeparator() + "Verwijderd",
+                      wxFileName(path).GetFullName());
+    wxFileName::Mkdir(target.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+    for (int n = 2; target.FileExists(); ++n)
+        target.SetName(wxString::Format("%s %d", wxFileName(path).GetName(), n));
+    if (!wxRenameFile(path, target.GetFullPath(), false)) {
+        wxMessageBox("De notitie kon niet worden verplaatst.", "Notitie verwijderen",
+                     wxOK | wxICON_WARNING, m_legend_window);
+        return;
+    }
+
+    m_markdown_scroll_positions.erase(path);
+    m_current_legend_path.Clear();
+    const size_t index = m_legend_index > 0 ? m_legend_index - 1 : 0;
+    ScanLegendFiles();
+    RebuildLegendChoice();
+    ShowLegend(std::min(index, m_legend_files.IsEmpty() ? 0 : m_legend_files.GetCount() - 1));
 }
 
 void legend_pi::CreateLegendWindow()
@@ -2213,8 +2640,90 @@ void legend_pi::CreateLegendWindow()
     m_header_book->SetSelection(0);
     m_header_book->Hide();
 
+    // The header row: the choice of item, with buttons for notes: edit,
+    // rename, delete (into the folder "Verwijderd") and a new one.
+    auto *headerRow = new wxBoxSizer(wxHORIZONTAL);
+    headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
+
+    auto noteButton = [&](const wxString &icon, const wxString &tip) {
+        auto *button = new wxBitmapButton(panel, wxID_ANY,
+                                          NoteToolIcon(icon, GetLegendPalette().text),
+                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        button->SetToolTip(tip);
+        m_format_icons.push_back(std::make_pair(button, icon));
+        headerRow->Add(button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+        return button;
+    };
+    headerRow->AddSpacer(4);
+    m_edit_button = noteButton("edit", "Deze notitie bewerken");
+    m_rename_button = noteButton("rename", "Deze notitie een andere naam geven");
+    m_delete_button = noteButton("trash", "Deze notitie verwijderen (naar de map Verwijderd)");
+    m_new_button = noteButton("new", "Nieuwe notitie");
+
     mainSizer->Add(
-        m_header_book,
+        headerRow,
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
+    m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
+    m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
+    m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { NewNote(); });
+
+    // Buttons that put Markdown into the note, for those who do not know
+    // it by heart and on a tablet, where # and * are hard to reach. They
+    // wrap to a second line in a narrow window.
+    m_format_bar = new wxPanel(panel);
+    auto *formatSizer = new wxWrapSizer(wxHORIZONTAL);
+    auto formatButton = [&](const wxString &icon, const wxString &tip,
+                            std::function<void()> action) {
+        auto *button = new wxBitmapButton(m_format_bar, wxID_ANY,
+                                          NoteToolIcon(icon, GetLegendPalette().text),
+                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        button->SetToolTip(tip);
+        if (action)
+            button->Bind(wxEVT_BUTTON, [action](wxCommandEvent &) { action(); });
+        formatSizer->Add(button, 0, wxRIGHT | wxBOTTOM, 2);
+        m_format_icons.push_back(std::make_pair(button, icon));
+        return button;
+    };
+    auto groupGap = [&]() { formatSizer->AddSpacer(8); };
+
+    // H opens a menu with the heading levels; the current one is ticked.
+    wxBitmapButton *headingButton = formatButton(
+        "heading", "Kopniveau: kop 1 tot en met 6, of gewone tekst", std::function<void()>());
+    headingButton->Bind(wxEVT_BUTTON, [this, headingButton](wxCommandEvent &) {
+        if (!m_editor)
+            return;
+        const int current = m_editor->HeadingLevel();
+        wxMenu menu;
+        menu.AppendRadioItem(100, "Gewone tekst")->Check(current == 0);
+        for (int level = 1; level <= 6; ++level)
+            menu.AppendRadioItem(100 + level, wxString::Format("Kop %d", level))
+                ->Check(current == level);
+        const int choice = headingButton->GetPopupMenuSelectionFromUser(menu);
+        if (choice >= 100 && choice <= 106)
+            m_editor->SetHeading(choice - 100);
+    });
+    formatButton("bold", "Vet (Cmd+B)", [this]() { m_editor->ToggleBold(); });
+    formatButton("italic", "Cursief (Cmd+I)", [this]() { m_editor->ToggleItalic(); });
+    groupGap();
+    formatButton("bullets", "Opsomming met bolletjes aan of uit",
+                 [this]() { m_editor->ToggleList(); });
+    formatButton("numbers", "Genummerde lijst aan of uit",
+                 [this]() { m_editor->ToggleNumbered(); });
+    formatButton("tasks", "Afvinklijst aan of uit; klik op een hokje om af te vinken",
+                 [this]() { m_editor->ToggleTasks(); });
+    groupGap();
+    formatButton("link", "Van de geselecteerde tekst een link maken", [this]() { InsertLink(); });
+    formatButton("image", "Een afbeelding uit de Legend-map of daarbuiten",
+                 [this]() { InsertImage(); });
+    m_format_bar->SetSizer(formatSizer);
+    m_format_bar->Hide();
+
+    mainSizer->Add(
+        m_format_bar,
         0,
         wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
         10);
@@ -2633,8 +3142,21 @@ void legend_pi::CreateLegendWindow()
             event.Skip();
         });
 
+    // A note while it is edited, as it looks; saved as Markdown a moment
+    // after typing stops.
+    m_editor = new NoteEditor(m_content_book, wxID_ANY);
+    m_editor->SetChangedHandler([this]() {
+        if (!m_editing)
+            return;
+        m_note_dirty = true;
+        if (m_save_status)
+            m_save_status->SetLabel(wxString::FromUTF8("Nog niet bewaard\u2026"));
+        m_save_timer.StartOnce(1500);
+    });
+
     m_content_book->AddPage(m_image_page, "Afbeelding");
     m_content_book->AddPage(m_markdown_view, "Markdown");
+    m_content_book->AddPage(m_editor, "Notitie");
 
     mainSizer->Add(
         m_content_book,
@@ -2656,12 +3178,13 @@ void legend_pi::CreateLegendWindow()
         10);
 
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_nav_panel = new wxPanel(panel);
 
     m_previous_button =
-        new wxButton(panel, wxID_ANY, wxString::FromUTF8("‹  Vorige"));
+        new wxButton(m_nav_panel, wxID_ANY, wxString::FromUTF8("‹  Vorige"));
 
     m_next_button =
-        new wxButton(panel, wxID_ANY, wxString::FromUTF8("Volgende  ›"));
+        new wxButton(m_nav_panel, wxID_ANY, wxString::FromUTF8("Volgende  ›"));
 
     m_previous_button->SetMinSize(wxSize(110, 36));
     m_next_button->SetMinSize(wxSize(110, 36));
@@ -2671,12 +3194,34 @@ void legend_pi::CreateLegendWindow()
 
     buttonSizer->Add(m_previous_button, 0, wxRIGHT, 8);
     buttonSizer->Add(m_next_button, 0, wxLEFT, 8);
+    m_nav_panel->SetSizer(buttonSizer);
 
     mainSizer->Add(
-        buttonSizer,
+        m_nav_panel,
         0,
         wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
         10);
+
+    // While a note is edited: whether it has been saved, and Klaar.
+    m_edit_footer = new wxPanel(panel);
+    auto *footerSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_save_status = new wxStaticText(m_edit_footer, wxID_ANY, "Bewaard");
+    auto *doneButton = new wxButton(m_edit_footer, wxID_ANY, "Klaar");
+    doneButton->SetMinSize(wxSize(110, 36));
+    doneButton->SetToolTip("Klaar met bewerken (Esc)");
+    footerSizer->Add(m_save_status, 1, wxALIGN_CENTER_VERTICAL);
+    footerSizer->Add(doneButton, 0, wxALIGN_CENTER_VERTICAL);
+    m_edit_footer->SetSizer(footerSizer);
+    m_edit_footer->Hide();
+    doneButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StopEditing(); });
+
+    mainSizer->Add(
+        m_edit_footer,
+        0,
+        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
+
+    m_save_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { SaveNote(); });
 
     m_previous_button->Bind(
         wxEVT_BUTTON,
@@ -2699,6 +3244,8 @@ void legend_pi::CreateLegendWindow()
     m_legend_window->Bind(
         wxEVT_CLOSE_WINDOW,
         [this](wxCloseEvent &event) {
+            if (m_editing)
+                StopEditing();
             SaveCurrentMarkdownScroll();
             SaveWindowState();
             SaveConfig();
@@ -2740,6 +3287,27 @@ void legend_pi::CreateLegendWindow()
                 !event.ControlDown() &&
                 !event.AltDown() &&
                 !event.MetaDown();
+
+            // While a note is edited the keys are for the text: Escape and
+            // Cmd+B are the only ones the legend takes.
+            if (m_editing) {
+                if (event.GetKeyCode() == WXK_ESCAPE && plainKey) {
+                    StopEditing();
+                    return;
+                }
+                if (event.GetModifiers() == wxMOD_CMD && m_editor) {
+                    if (event.GetKeyCode() == 'B') {
+                        m_editor->ToggleBold();
+                        return;
+                    }
+                    if (event.GetKeyCode() == 'I') {
+                        m_editor->ToggleItalic();
+                        return;
+                    }
+                }
+                event.Skip();
+                return;
+            }
 
             // The space bar is the pad of "Licht herkennen", outside the
             // search field.
@@ -2845,6 +3413,14 @@ void legend_pi::ApplyViewColours()
     m_markdown_view->SetForegroundColour(palette.text);
     m_markdown_view->Refresh();
 
+    for (const auto &icon : m_format_icons)
+        icon.first->SetBitmap(NoteToolIcon(icon.second, palette.text));
+
+    if (m_editor) {
+        m_editor->SetColours(palette.background, palette.text,
+                             palette.link == palette.text ? palette.muted : palette.link);
+    }
+
     // The page of PNG legends darkens along in dusk and night; by day it
     // keeps the normal window colour.
     if (m_image_page) {
@@ -2859,6 +3435,8 @@ void legend_pi::ToggleLegendWindow()
     CreateLegendWindow();
 
     if (m_legend_window->IsShown()) {
+        if (m_editing)
+            StopEditing();
         SaveCurrentMarkdownScroll();
         SaveWindowState();
         SaveConfig();
