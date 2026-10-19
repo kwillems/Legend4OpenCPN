@@ -5396,9 +5396,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
                 // Colour of the light seen: a lamp to click for each colour,
                 // the chosen one on a highlighted tile.
-                html << "<tr><td colspan=\"2\"><font size=\"-1\">"
+                html << "<tr><td colspan=\"2\" align=\"center\"><font size=\"-1\">"
                      << (nl ? "Klik op de kleur van het licht:" : "Click the colour of the light:")
-                     << "</font><br><table cellspacing=\"2\" cellpadding=\"4\"><tr>";
+                     << "</font><br><table align=\"center\" cellspacing=\"2\" cellpadding=\"4\"><tr>";
                 const char *codes[] = {"", "W", "R", "G", "Y"};
                 const char *namesNl[] = {"elke", "wit", "rood", "groen", "geel"};
                 const char *namesEn[] = {"any", "white", "red", "green", "yellow"};
