@@ -742,10 +742,20 @@ const char *kMeaningsTemplate =
 // OpenCPN's colour scheme (day, dusk, night), set through SetColorScheme().
 PI_ColorScheme g_color_scheme = PI_GLOBAL_COLOR_SCHEME_DAY;
 
+// Nachtvoorbeeld is on: the legend takes the night colours, whatever the
+// scheme of OpenCPN is.
+bool g_night_preview = false;
+
+// The scheme the legend window is drawn in.
+PI_ColorScheme LegendScheme()
+{
+    return g_night_preview ? PI_GLOBAL_COLOR_SCHEME_NIGHT : g_color_scheme;
+}
+
 bool IsDimScheme()
 {
-    return g_color_scheme == PI_GLOBAL_COLOR_SCHEME_DUSK ||
-           g_color_scheme == PI_GLOBAL_COLOR_SCHEME_NIGHT;
+    return LegendScheme() == PI_GLOBAL_COLOR_SCHEME_DUSK ||
+           LegendScheme() == PI_GLOBAL_COLOR_SCHEME_NIGHT;
 }
 
 // Brightness of icons and images in the current scheme. OpenCPN has darker
@@ -753,7 +763,7 @@ bool IsDimScheme()
 // they are dimmed instead.
 double SchemeDim()
 {
-    switch (g_color_scheme) {
+    switch (LegendScheme()) {
     case PI_GLOBAL_COLOR_SCHEME_DUSK:
         return 0.55;
     case PI_GLOBAL_COLOR_SCHEME_NIGHT:
@@ -1089,11 +1099,14 @@ struct LegendPalette
 // not provide usable ones.
 LegendPalette GetDimPalette()
 {
-    const bool night = g_color_scheme == PI_GLOBAL_COLOR_SCHEME_NIGHT;
+    const bool night = LegendScheme() == PI_GLOBAL_COLOR_SCHEME_NIGHT;
 
+    // In Nachtvoorbeeld by day, OpenCPN's dialog colours are those of the
+    // day; the fixed night colours are used then.
     wxColour background;
     wxColour text;
     const bool fromOpenCPN =
+        LegendScheme() == g_color_scheme &&
         GetGlobalColor("DILG1", &background) && GetGlobalColor("UITX1", &text);
 
     auto luminance = [](const wxColour &c) {
@@ -1348,6 +1361,8 @@ bool legend_pi::DeInit()
     m_light_active = false;
     m_all_lights_timer.Stop();
     m_all_lights_on = false;
+    m_night_preview = false;
+    g_night_preview = false;
     m_tap_clock_timer.Stop();
     m_loading = false;
 
@@ -3877,14 +3892,22 @@ void legend_pi::RunLegendCommand(const wxString &command)
     }
     else if (command == "lights") {
         m_show_lights = !m_show_lights;
-        if (!m_show_lights)
+        if (!m_show_lights) {
+            SetNightPreview(false);
             SetAllLightsShining(false);
+        }
         SaveConfig();
         RefreshDynamicLegendKeepingState();
         RenderDynamicLegend(true);
     }
     else if (command == "all-lights") {
+        if (m_night_preview)
+            SetNightPreview(false);
         SetAllLightsShining(!m_all_lights_on);
+        RenderDynamicLegend(true);
+    }
+    else if (command == "night") {
+        SetNightPreview(!m_night_preview);
         RenderDynamicLegend(true);
     }
     else if (command == "hidden") {
@@ -3904,7 +3927,7 @@ void legend_pi::ShowSettingsMenu()
 
     enum
     {
-        kLights = 1000, kHidden, kEnglish, kAllLights, kIdentify, kFold, kReorder
+        kLights = 1000, kHidden, kEnglish, kAllLights, kNight, kIdentify, kFold, kReorder
     };
 
     wxMenu menu;
@@ -3917,6 +3940,8 @@ void legend_pi::ShowSettingsMenu()
     menu.AppendSeparator();
     if (m_show_lights && (m_menu_has_lights || m_all_lights_on))
         menu.AppendCheckItem(kAllLights, "Alle lichten laten branden")->Check(m_all_lights_on);
+    if (m_show_lights && (m_menu_has_lights || m_night_preview))
+        menu.AppendCheckItem(kNight, "Nachtvoorbeeld")->Check(m_night_preview);
     if (m_show_lights && (m_menu_has_lights || m_identify_on))
         menu.AppendCheckItem(kIdentify, "Licht herkennen")->Check(m_identify_on);
     if (m_menu_has_headings) {
@@ -3936,6 +3961,9 @@ void legend_pi::ShowSettingsMenu()
         break;
     case kAllLights:
         RunLegendCommand("all-lights");
+        break;
+    case kNight:
+        RunLegendCommand("night");
         break;
     case kIdentify:
         SetIdentify(!m_identify_on);
@@ -5073,7 +5101,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             // Chart symbols come from OpenCPN's symbol sheet of the current
             // colour scheme, which already has dusk and night versions.
             const wxImage picture =
-                m_chart_symbols.SymbolImage(group.symbol, g_color_scheme);
+                m_chart_symbols.SymbolImage(group.symbol, LegendScheme());
             if (picture.IsOk())
                 image = FlattenImage(picture, iconBackground);
         }
@@ -6286,14 +6314,16 @@ bool legend_pi::RenderOverlayMultiCanvas(
 {
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on) || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview) || !vp)
         return false;
 
     // Draw once per frame.
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    const bool drewAll = m_all_lights_on && DrawAllLights(dc, vp);
+    if (m_night_preview)
+        DrawNightShade(dc, vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview;
     const bool drewLight = (m_light_active && DrawLightMarkers(dc, vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -6352,14 +6382,16 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)pcontext;
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on) || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview) || !vp)
         return false;
 
     // Draw once per frame.
     if (priority != OVERLAY_LEGACY && priority != -1)
         return false;
 
-    const bool drewAll = m_all_lights_on && DrawAllLightsGL(vp);
+    if (m_night_preview)
+        DrawNightShadeGL(vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview;
     const bool drewLight = (m_light_active && DrawLightMarkersGL(vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -7159,6 +7191,63 @@ std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layer
     for (const VhfArea *area : areas)
         m_vhf_shown_key << '|' << area->name;
     return areas;
+}
+
+// Nachtvoorbeeld: the chart as it looks from the water at night. A dark
+// shade over the chart, through which the coast still shows faintly, with
+// all lights in view shining on it in their rhythm.
+void legend_pi::SetNightPreview(bool on)
+{
+    if (on == m_night_preview)
+        return;
+    m_night_preview = on;
+    g_night_preview = on;
+    ApplyViewColours();
+    if (on) {
+        m_night_had_all_lights = m_all_lights_on;
+        if (!m_all_lights_on)
+            SetAllLightsShining(true);
+    }
+    else if (!m_night_had_all_lights) {
+        SetAllLightsShining(false);
+    }
+    RefreshAllCanvases();
+}
+
+namespace {
+
+// Night blue, dark enough that only lights stand out, light enough that
+// coast and fairways stay faintly visible.
+const wxColour kNightShade(4, 8, 22, 222);
+
+} // namespace
+
+void legend_pi::DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (!gc)
+        return;
+    gc->SetPen(*wxTRANSPARENT_PEN);
+    gc->SetBrush(wxBrush(kNightShade));
+    gc->DrawRectangle(0, 0, vp->pix_width, vp->pix_height);
+}
+
+void legend_pi::DrawNightShadeGL(PlugIn_ViewPort *vp)
+{
+    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4ub(kNightShade.Red(), kNightShade.Green(), kNightShade.Blue(),
+               kNightShade.Alpha());
+    glBegin(GL_QUADS);
+    glVertex2d(0, 0);
+    glVertex2d(vp->pix_width, 0);
+    glVertex2d(vp->pix_width, vp->pix_height);
+    glVertex2d(0, vp->pix_height);
+    glEnd();
+    glColor4ub(255, 255, 255, 255);
+    glPopAttrib();
 }
 
 void legend_pi::SetAllLightsShining(bool on)

@@ -278,6 +278,9 @@ private:
     // All lights in view shining on the chart at once, each in its own
     // rhythm, until switched off. Follows the chart as the list does.
     void SetAllLightsShining(bool on);
+    void SetNightPreview(bool on);
+    void DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp);
+    void DrawNightShadeGL(PlugIn_ViewPort *vp);
     void UpdateAllLights();
     void OnAllLightsTimer();
     bool DrawAllLights(wxDC &dc, PlugIn_ViewPort *vp);
@@ -513,6 +516,8 @@ private:
 
     bool m_show_lights = true;     // setting: light characters in the list
     bool m_all_lights_on = false;
+    bool m_night_preview = false;        // dark chart with the lights shining
+    bool m_night_had_all_lights = false; // all lights were on before it
     std::vector<ShiningCharacter> m_shining_characters;
     std::vector<ShiningLight> m_shining_lights;
     wxLongLong m_all_lights_started;
