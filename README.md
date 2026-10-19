@@ -8,6 +8,13 @@ je eigen legenda's, notities en routebeschrijvingen.
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
 
+> **Gebruik op eigen risico.** Legend4OpenCPN is een hulpmiddel, geen
+> navigatiemiddel. De uitleg, lichtkarakters, kanalen en andere informatie
+> kunnen onvolledig, verouderd of fout zijn. Vertrouw er nooit alleen op:
+> gebruik officiële kaarten en berichten, en blijf zelf goed uitkijken. De
+> maker is niet aansprakelijk voor schade of ongelukken door het gebruik van
+> deze plugin.
+
 ## In het kort
 
 - **Kaartlegenda:** alle symbolen in beeld, uit waypoint-lagen en uit de
@@ -416,7 +423,8 @@ eigen notities en routebeschrijvingen toe.
 
 Legend4OpenCPN is vrije software onder de
 [GNU General Public License, versie 2](LICENSE) of, naar keuze, een latere
-versie (SPDX: `GPL-2.0-or-later`).
+versie (SPDX: `GPL-2.0-or-later`). Zoals die licentie zegt, komt de plugin
+zonder enige garantie; je gebruikt hem volledig op eigen risico.
 
 Externe onderdelen houden hun eigen licentie; MD4C valt bijvoorbeeld onder de
 MIT-licentie. De buildbestanden uit de OpenCPN-pluginsjabloon (zoals
