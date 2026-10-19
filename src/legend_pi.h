@@ -17,15 +17,18 @@
 #include "display_settings.h"
 #include "chart_names.h"
 #include "light_character.h"
+#include "note_editor.h"
 #include "vhf_areas.h"
 
 #include <map>
+#include <string>
 #include <set>
 #include <vector>
 
 #include <wx/arrstr.h>
 #include <wx/bitmap.h>
 #include <wx/button.h>
+#include <wx/bmpbuttn.h>
 #include <wx/choice.h>
 #include <wx/datetime.h>
 #include <wx/frame.h>
@@ -37,6 +40,7 @@
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
 #include <wx/timer.h>
+#include <wx/textctrl.h>
 
 // One group of identical waypoint symbols in the dynamic legend.
 struct DynamicGroup
@@ -301,6 +305,23 @@ private:
 
     wxString MakeDisplayTitle(const wxString &path) const;
     wxString RenderMarkdownFile(const wxString &path) const;
+    // dropTitle leaves out a first "# Title" line, which the choice shows.
+    wxString RenderMarkdownText(std::string markdown, bool dropTitle = true) const;
+
+    // Writing notes: the current Markdown item in a text box, saved on its
+    // own a moment after typing stops.
+    bool IsMarkdownItem(const wxString &path) const;
+    void StartEditing();
+    void StopEditing();
+    void SaveNote();
+    void NewNote();
+    void RenameNote();
+    void DeleteNote();
+    wxString NoteFileName(const wxString &title) const;
+    void ShowNoteNamed(const wxString &fullName);
+    void UpdateNoteButtons();
+    void InsertLink();
+    void InsertImage();
 
     void LoadConfig();
     void SaveConfig() const;
@@ -324,6 +345,21 @@ private:
     wxImage m_current_image;
 
     wxHtmlWindow *m_markdown_view;
+
+    wxButton *m_edit_button = nullptr;    // pencil: edit this note
+    wxButton *m_new_button = nullptr;     // plus: a new note
+    wxButton *m_rename_button = nullptr;  // another name for this note
+    wxButton *m_delete_button = nullptr;  // into the folder "Verwijderd"
+    wxPanel *m_format_bar = nullptr;      // buttons that format the note
+    std::vector<std::pair<wxBitmapButton *, wxString>> m_format_icons; // and their icons
+    NoteEditor *m_editor = nullptr;
+    wxPanel *m_nav_panel = nullptr;       // Vorige / Volgende
+    wxPanel *m_edit_footer = nullptr;     // Bewaard / Klaar
+    wxStaticText *m_save_status = nullptr;
+    bool m_editing = false;
+    bool m_note_dirty = false;
+    wxString m_editing_path;
+    wxTimer m_save_timer;
 
     wxSearchCtrl *m_search = nullptr;
     wxString m_filter;                    // search text, trimmed

@@ -70,7 +70,7 @@ set(wxWidgets_USE_UNICODE ON)
 set(wxWidgets_USE_UNIVERSAL OFF)
 set(wxWidgets_USE_STATIC OFF)
 
-set(WX_COMPONENTS base core net xml html adv stc aui)
+set(WX_COMPONENTS base core net xml html adv stc aui richtext)
 if (TARGET OpenGL::OpenGL OR TARGET OpenGL::GL)
   list(APPEND WX_COMPONENTS gl)
 endif ()
