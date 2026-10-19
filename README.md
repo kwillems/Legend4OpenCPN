@@ -29,7 +29,8 @@ je eigen legenda's, notities en routebeschrijvingen.
 - **Onderweg:** het marifoonkanaal van het gebied waar je vaart, en wat je het
   komende half uur op koers tegenkomt.
 - **Eigen legenda's en notities:** PNG-afbeeldingen en Markdown-bestanden uit
-  een vaste map, om doorheen te bladeren.
+  een vaste map, om doorheen te bladeren. Notities schrijf en bewerk je in het
+  venster zelf, zoals in een tekstverwerker.
 
 ## Installeren
 
@@ -294,8 +295,40 @@ Een voorbeeld:
 ![Brug](images/brug.png)
 ```
 
-Markdown is een open tekstformaat: je schrijft notities met elke editor en
-kunt ze ook buiten OpenCPN gebruiken.
+Markdown is een open tekstformaat: je kunt notities ook met elke andere
+editor schrijven en buiten OpenCPN gebruiken.
+
+### Notities schrijven
+
+Naast de keuzelijst staan vier knoppen. Het potlood, de naam en de
+prullenbak verschijnen alleen bij een notitie:
+
+| Knop | Wat het doet |
+|---|---|
+| Potlood | De notitie bewerken |
+| Tekstvak met cursor | Een andere titel geven: het bestand en de `# Titel` bovenaan veranderen mee |
+| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map `Verwijderd` in de Legend-map; zet het terug om het weer te gebruiken |
+| Plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
+
+Tijdens het bewerken zie je de notitie zoals hij eruitziet, zonder
+Markdown-tekens. Bovenin staat een rij knoppen:
+
+- **H** kiest het kopniveau: kop 1 tot en met 6, of gewone tekst;
+- **B** en *I* voor vet en cursief (ook `Cmd+B` en `Cmd+I`);
+- een lijst met bolletjes, een genummerde lijst of een afvinklijst; klik op
+  een hokje om het af te vinken;
+- een link van de geselecteerde tekst, en een afbeelding. Een afbeelding van
+  buiten de Legend-map wordt eerst naar `images/` gekopieerd.
+
+Enter na een kop geeft weer gewone tekst, Enter op een lege lijstregel
+beëindigt de lijst en `Shift+Enter` begint een nieuwe regel binnen dezelfde
+alinea. Alles wordt vanzelf bewaard, anderhalve seconde nadat je stopt met
+typen; onderin staat wanneer. **Klaar** of `Esc` brengt je terug naar de
+gewone weergave.
+
+Op schijf blijft een notitie gewone Markdown. Een tabel zie je tijdens het
+bewerken als Markdown-tekst in een vaste letter; zo kun je hem bewerken en
+blijft hij precies bewaard.
 
 ## Weergave
 
@@ -348,6 +381,8 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
 - Iconen worden gelezen uit de PNG-bestanden van OpenCPN. Ontbreekt het
   bestand, dan kan het icoon op macOS leeg blijven.
 - De Legend-map is nog niet instelbaar.
+- De notitie-editor heeft geen spellingcontrole. Een kop binnen een citaat
+  wordt bij het bewaren een gewone kop.
 
 ## Ontwikkelen
 
@@ -409,6 +444,7 @@ Legend4OpenCPN/
 │   ├── display_settings.cpp/.h # wat de kaart nu tekent
 │   ├── chart_names.cpp/.h      # namen van kaartobjecten (NL/EN)
 │   ├── light_character.cpp/.h  # lichtkarakters: lezen, woorden, ritme, herkennen
+│   ├── note_editor.cpp/.h      # notities bewerken: Markdown in en uit
 │   └── vhf_areas.cpp/.h        # marifoongebieden uit de lagen
 ├── third_party/md4c/        # Markdown-verwerking (submodule)
 ├── opencpn-libs/            # OpenCPN-plugin-API (submodule)
@@ -423,7 +459,7 @@ Ideeën voor volgende versies:
 - dezelfde boei uit een laag en uit de kaart als één rij;
 - bruggen markeren waar de boot niet onder past;
 - het bereik van een licht laten zien in het nachtvoorbeeld;
-- betekenissen en notities bewerken in het venster zelf;
+- betekenissen bewerken in het venster zelf;
 - notities die bij een plek horen en verschijnen als die in beeld is;
 - een instelbare Legend-map;
 - builds voor Windows en Linux, en een Engelse vertaling van de bediening.
