@@ -19,6 +19,7 @@
 
 #include <wx/button.h>
 #include <wx/dc.h>
+#include <wx/bmpbndl.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
 #include <wx/html/winpars.h>
@@ -549,15 +550,81 @@ wxImage FlattenImage(const wxImage &image, const wxColour &background)
     return flat;
 }
 
-// OpenCPN keeps waypoint icons as PNG files: user icons in the private data
-// directory (UserIcons) and the built-in ones in the shared data directory.
-// Reading the file ourselves is more reliable than asking OpenCPN for a
-// bitmap, which can come back empty on macOS.
-wxImage LoadIconFromFile(const wxString &key, const wxColour &background)
+bool IsSafeIconKey(const wxString &key)
 {
-    if (key.IsEmpty() || key.Find('/') != wxNOT_FOUND ||
-        key.Find('\\') != wxNOT_FOUND || key.Find("..") != wxNOT_FOUND)
+    return !key.IsEmpty() && key.Find('/') == wxNOT_FOUND &&
+           key.Find('\\') == wxNOT_FOUND && key.Find("..") == wxNOT_FOUND;
+}
+
+// A user icon can also be an SVG file (UserIcons/<key>.svg); OpenCPN then
+// uses it instead of a PNG of the same name.
+wxString SvgIconPath(const wxString &key)
+{
+    if (!IsSafeIconKey(key))
+        return wxString();
+
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (!privateDir || privateDir->IsEmpty())
+        return wxString();
+
+    const wxString path = *privateDir + wxFileName::GetPathSeparator() +
+                          "UserIcons" + wxFileName::GetPathSeparator() + key +
+                          ".svg";
+    return wxFileName::FileExists(path) ? path : wxString();
+}
+
+// The size OpenCPN shows an SVG icon at: its width and height attributes in
+// pixels, as OpenCPN reads them.
+wxSize SvgIconSize(const wxString &path)
+{
+    wxSize size(64, 64);
+    wxFile file(path);
+    wxString text;
+    if (!file.IsOpened() || !file.ReadAll(&text))
+        return size;
+
+    const int svg = text.Find("<svg");
+    if (svg == wxNOT_FOUND)
+        return size;
+    const wxString tag = text.Mid(svg).BeforeFirst('>');
+
+    auto attribute = [&tag](const wxString &name, int fallback) {
+        const int at = tag.Find(" " + name + "=\"");
+        long value = 0;
+        if (at == wxNOT_FOUND ||
+            !tag.Mid(at + name.length() + 3).BeforeFirst('"').ToLong(&value) ||
+            value <= 0 || value > 512)
+            return fallback;
+        return static_cast<int>(value);
+    };
+    size.SetWidth(attribute("width", size.GetWidth()));
+    size.SetHeight(attribute("height", size.GetHeight()));
+    return size;
+}
+
+// OpenCPN keeps waypoint icons as PNG or SVG files: user icons in the
+// private data directory (UserIcons) and the built-in ones in the shared
+// data directory. Reading the file ourselves is more reliable than asking
+// OpenCPN for a bitmap, which can come back empty on macOS. An SVG icon is
+// drawn at `scale` times its size, so a Retina screen gets it sharp.
+wxImage LoadIconFromFile(const wxString &key, const wxColour &background,
+                         int scale = 1)
+{
+    if (!IsSafeIconKey(key))
         return wxImage();
+
+    const wxString svg = SvgIconPath(key);
+    if (!svg.IsEmpty()) {
+        wxLogNull quiet;
+        const wxSize size = SvgIconSize(svg);
+        const wxBitmap bitmap = wxBitmapBundle::FromSVGFile(svg, size)
+                                    .GetBitmap(size * std::max(1, scale));
+        if (bitmap.IsOk()) {
+            const wxImage image = bitmap.ConvertToImage();
+            if (image.IsOk())
+                return FlattenImage(image, background);
+        }
+    }
 
     wxArrayString candidates;
 
@@ -795,8 +862,9 @@ const char *kMeaningsTemplate =
     "# Legend4OpenCPN.\n"
     "#\n"
     "# Per regel: icoonnaam = betekenis\n"
-    "# De icoonnaam is de bestandsnaam van het icoon zonder .png, zoals\n"
-    "# de legenda hem in grijs toont zolang er geen betekenis bekend is.\n"
+    "# De icoonnaam is de bestandsnaam van het icoon zonder .png of .svg,\n"
+    "# zoals de legenda hem in grijs toont zolang er geen betekenis bekend\n"
+    "# is.\n"
     "#\n"
     "# Een '*' in de icoonnaam staat voor een willekeurig stuk tekst. Een '*'\n"
     "# in de betekenis wordt vervangen door dat stuk. Exacte namen gaan voor,\n"
@@ -5684,9 +5752,9 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 image = FlattenImage(picture, iconBackground);
         }
         else {
-            // First choice: the icon's own PNG file. Fall back to asking
-            // OpenCPN for the bitmap. In dusk and night the icon is dimmed,
-            // the background it sits on is not.
+            // First choice: the icon's own SVG or PNG file. Fall back to
+            // asking OpenCPN for the bitmap. In dusk and night the icon is
+            // dimmed, the background it sits on is not.
             const wxString key =
                 group.iconName.IsEmpty() ? group.key : group.iconName;
             auto flatten = [&key](const wxColour &colour) {
@@ -5702,6 +5770,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             };
 
             image = FlattenDimmed(flatten, iconBackground, SchemeDim());
+
+            // An SVG icon is drawn again at twice the size, not enlarged.
+            if (image.IsOk() && !SvgIconPath(key).IsEmpty()) {
+                auto flatten2 = [&key](const wxColour &colour) {
+                    return LoadIconFromFile(key, colour, 2);
+                };
+                doubled = FlattenDimmed(flatten2, iconBackground, SchemeDim());
+            }
         }
 
         // The version at twice the size comes from the image as loaded, the
