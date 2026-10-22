@@ -26,8 +26,9 @@ je eigen legenda's, notities en routebeschrijvingen.
   nachtvoorbeeld op een donkere kaart.
 - **Licht herkennen:** tik mee met een licht dat je ziet, en de plugin zegt
   welk licht in beeld het best past.
-- **Onderweg:** het marifoonkanaal van het gebied waar je vaart, en wat je het
-  komende half uur op koers tegenkomt.
+- **Onderweg:** het marifoonkanaal van het gebied waar je vaart, met een
+  melding als je een nieuw gebied binnenvaart, en wat je het komende half uur
+  op koers tegenkomt. Een marifoongebied licht op de kaart op met een klik.
 - **Eigen legenda's en notities:** PNG-afbeeldingen en Markdown-bestanden uit
   een vaste map, om doorheen te bladeren. Notities schrijf en bewerk je in het
   venster zelf, zoals in een tekstverwerker.
@@ -102,6 +103,8 @@ In het menu Instellingen:
 | Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
 | Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
 | Licht herkennen | Een licht herkennen aan zijn ritme |
+| Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
+| Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -197,6 +200,25 @@ uit de laag *VHFinfo Nederland* van
 GPS-positie geldt het midden van de kaart; dat staat er dan bij. Staat de
 laag uit, dan verdwijnt het kopje.
 
+Een marifoongebied kan op de kaart oplichten, lichtrood zoals op
+[vhfinfo.org](https://vhfinfo.org/map.html):
+
+- **Klik op een VHF-icoon** van de laag op de kaart, op zijn rij in de
+  legenda of op een regel van het Marifoon-kopje: het hele gebied licht op.
+  Bestaat een gebied uit meer stukken, dan lichten ze allemaal op. De teller
+  ◎ van een rij laat alle gebieden van dat icoon in beeld oplichten.
+- **Marifoon hier** in het rechtsklikmenu van de kaart laat alle gebieden op
+  die plek oplichten en noemt hun kanalen in een venstertje.
+- Een gebied licht zes seconden op en vervaagt dan, of blijft staan tot je
+  weer op de kaart klikt (instelling *Marifoongebied blijft oplichten*).
+
+**Melding bij een nieuw gebied.** Vaar je met GPS een marifoongebied binnen
+waar je net nog niet was, dan licht het op en verschijnt bovenaan de kaart
+een venstertje met het kanaal, bijvoorbeeld *kanaal 18 · Ketelbrug ·
+verkeerspost · melden*, met zes pieptonen. Het venstertje verdwijnt na twaalf
+seconden of met een klik. Dit werkt ook als het legendavenster dicht is, en
+is uit te zetten met *Melding bij nieuw marifoongebied*.
+
 ### Vooruit
 
 Het kopje **Vooruit** laat zien wat je de komende dertig minuten op koers
@@ -205,6 +227,9 @@ minstens een halve knoop.
 
 - Tot acht objecten uit de legenda, op volgorde van aankomst, bijvoorbeeld
   *over 4 min · stuurboord · Rode spitse ton*, met het lichtkarakter erbij.
+- Tot twee marifoongebieden waar de koers in gaat, op hun plek in de tijd,
+  bijvoorbeeld *over 12 min · marifoongebied kanaal 22 · Houtribsluizen ·
+  melden*. Een klik laat het gebied oplichten.
 - De plugin kijkt in een waaier vóór de boot die verder weg breder wordt, tot
   zo ver als je in een half uur komt (hooguit 8 zeemijl).
 - Ingeklapt noemt het kopje nog het eerstvolgende object.
@@ -233,8 +258,8 @@ BOYPIL60      = Rode pilaarton | Red pillar buoy
 ```
 
 - Per regel `icoonnaam = betekenis`. De icoonnaam is de bestandsnaam van het
-  icoon zonder `.png`, of voor een kaartsymbool de S-52-naam (die staat in de
-  tooltip van de rij).
+  icoon zonder `.png` of `.svg`, of voor een kaartsymbool de S-52-naam (die
+  staat in de tooltip van de rij).
 - Een `*` in de naam staat voor willekeurige tekst; een `*` in de betekenis
   wordt door die tekst vervangen. Exacte namen gaan voor.
 - `[Kopje]` begint een groep. Kopjes en regels verschijnen in de volgorde van
@@ -338,6 +363,10 @@ blijft hij precies bewaard.
 - Iconen volgen de schaalfactor voor kaartobjecten uit de instellingen van
   OpenCPN, zodat ze even groot zijn als op de kaart.
 - Op een Retina-scherm blijven iconen, lampjes en ritmes scherp.
+- Waypoint-iconen mogen PNG of SVG zijn. Staat er in `UserIcons` een SVG met
+  dezelfde naam als een PNG, dan gebruikt de legenda net als OpenCPN de SVG,
+  op zijn eigen formaat en op een Retina-scherm opnieuw getekend op dubbele
+  grootte in plaats van vergroot.
 - In een smal venster worden de ritmetekeningen smaller.
 
 ## Waar de gegevens vandaan komen
@@ -378,8 +407,8 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
 - Vooruit kijkt alleen naar wat in beeld is.
 - De markering op de kaart is getest met **OpenGL aan**.
-- Iconen worden gelezen uit de PNG-bestanden van OpenCPN. Ontbreekt het
-  bestand, dan kan het icoon op macOS leeg blijven.
+- Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
+  het bestand, dan kan het icoon op macOS leeg blijven.
 - De Legend-map is nog niet instelbaar.
 - De notitie-editor heeft geen spellingcontrole. Een kop binnen een citaat
   wordt bij het bewaren een gewone kop.
