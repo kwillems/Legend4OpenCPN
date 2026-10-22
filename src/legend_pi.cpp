@@ -1160,9 +1160,19 @@ wxImage EyeIcon(
 
 // The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
 // drawn rather than taken from a font, so their size is certain.
-// The sign of a note for a row of the legend: a sheet with a folded corner.
+// A colour darkened for dusk and night (dim 1 = as it is).
+wxColour Dimmed(const wxColour &colour, double dim)
+{
+    return wxColour(static_cast<unsigned char>(colour.Red() * dim),
+                    static_cast<unsigned char>(colour.Green() * dim),
+                    static_cast<unsigned char>(colour.Blue() * dim), colour.Alpha());
+}
+
+// The sign of a note for a row of the legend: a sheet with a folded corner,
+// darkened in dusk and night like the other icons (the row stays as it is).
 wxImage NoteSignImage(const wxColour &background, int size)
 {
+    const double dim = SchemeDim();
     wxBitmap bitmap(size, size, 24);
     {
         wxMemoryDC dc(bitmap);
@@ -1184,8 +1194,9 @@ wxImage NoteSignImage(const wxColour &background, int size)
             sheet.AddLineToPoint(x + w, y + h);
             sheet.AddLineToPoint(x - w, y + h);
             sheet.CloseSubpath();
-            gc->SetBrush(wxBrush(wxColour(250, 199, 117)));
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(133, 79, 11)).Width(1.2 * s)));
+            gc->SetBrush(wxBrush(Dimmed(wxColour(250, 199, 117), dim)));
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(Dimmed(wxColour(133, 79, 11), dim)).Width(1.2 * s)));
             gc->DrawPath(sheet);
             wxGraphicsPath marks = gc->CreatePath();
             marks.MoveToPoint(x + w - fold, y - h);
@@ -1196,7 +1207,8 @@ wxImage NoteSignImage(const wxColour &background, int size)
                 marks.MoveToPoint(x - w * 0.6, ly);
                 marks.AddLineToPoint(x + w * 0.6, ly);
             }
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(133, 79, 11)).Width(1.0 * s)));
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(Dimmed(wxColour(133, 79, 11), dim)).Width(1.0 * s)));
             gc->StrokePath(marks);
             delete gc;
         }
@@ -1208,6 +1220,7 @@ wxImage NoteSignImage(const wxColour &background, int size)
 // like the icons of the VHFinfo layer.
 wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int size)
 {
+    const double dim = SchemeDim();
     wxBitmap bitmap(size, size, 24);
     {
         wxMemoryDC dc(bitmap);
@@ -1217,11 +1230,12 @@ wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int s
         if (gc) {
             gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
             const double s = size;
-            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(220, 40, 40)).Width(s * 0.08)));
-            gc->SetBrush(wxBrush(wxColour(255, 235, 235)));
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(Dimmed(wxColour(220, 40, 40), dim)).Width(s * 0.08)));
+            gc->SetBrush(wxBrush(Dimmed(wxColour(255, 235, 235), dim)));
             gc->DrawRoundedRectangle(s * 0.08, s * 0.14, s * 0.84, s * 0.72, s * 0.14);
             wxFont font(wxFontInfo(s * (channel.length() > 2 ? 0.3 : 0.4)).Bold());
-            gc->SetFont(font, wxColour(160, 20, 20));
+            gc->SetFont(font, Dimmed(wxColour(160, 20, 20), dim));
             double w = 0, h = 0, descent = 0, leading = 0;
             gc->GetTextExtent(channel, &w, &h, &descent, &leading);
             gc->DrawText(channel, (s - w) / 2, (s - h) / 2);
@@ -8617,7 +8631,8 @@ namespace {
 // dusk and night.
 void NoteSignColours(wxColour *fill, wxColour *edge)
 {
-    const double dim = IsDimScheme() ? 0.55 : 1.0;
+    // As bright as the icons: 55 % at dusk, 30 % at night.
+    const double dim = SchemeDim();
     *fill = wxColour(static_cast<unsigned char>(250 * dim), static_cast<unsigned char>(199 * dim),
                      static_cast<unsigned char>(117 * dim));
     *edge = wxColour(static_cast<unsigned char>(133 * dim), static_cast<unsigned char>(79 * dim),
