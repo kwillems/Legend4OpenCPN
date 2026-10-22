@@ -52,6 +52,26 @@ bool ParseRadius(wxString value, double *radius)
     return value.ToCDouble(radius) && *radius > 0.0 && *radius < 100.0;
 }
 
+// "1:50000", "1:50.000", "50000" or "1:50k".
+bool ParseScale(wxString value, int *scale)
+{
+    value.Trim(true).Trim(false);
+    if (value.Contains(":"))
+        value = value.AfterFirst(':');
+    value.Replace(".", "");
+    value.Replace(" ", "");
+    long factor = 1;
+    if (value.EndsWith("k") || value.EndsWith("K")) {
+        factor = 1000;
+        value.RemoveLast();
+    }
+    long number = 0;
+    if (!value.ToLong(&number) || number <= 0)
+        return false;
+    *scale = static_cast<int>(number * factor);
+    return *scale >= 1000;
+}
+
 wxString KeyOf(const wxString &line)
 {
     wxString key = line.BeforeFirst(':');
@@ -95,6 +115,8 @@ NoteFrontMatter SplitFrontMatter(const wxString &text)
                     result.hasPlace = ParseLatLon(value, &result.lat, &result.lon);
                 else if (key == "straal" || key == "radius")
                     ParseRadius(value, &result.radius);
+                else if (key == "schaal" || key == "scamin")
+                    ParseScale(value, &result.scamin);
             }
             return result;
         }
@@ -170,6 +192,7 @@ std::vector<NotePlace> ReadNotePlaces(const std::vector<wxString> &paths)
         place.lat = front.lat;
         place.lon = front.lon;
         place.radius = front.radius;
+        place.scamin = front.scamin;
         place.title = wxFileName(path).GetName();
 
         // The "# Title" and the first line of text after it.

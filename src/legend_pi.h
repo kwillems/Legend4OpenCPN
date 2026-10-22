@@ -576,11 +576,16 @@ private:
     wxString m_pending_note_title;
     wxString m_pending_note_text;
     wxString m_pending_note_path;
-    std::vector<size_t> m_note_rows;     // rows of the heading "Notities hier"
+    std::vector<size_t> m_note_rows;     // rows of the heading "Notities"
     void RefreshNotePlaces();
     double SeaMiles(double lat1, double lon1, double lat2, double lon2) const;
     void OpenNote(const wxString &path);
-    int NotePlaceAt(const wxPoint &pixel, double tolerancePx) const;
+    int NotePlaceAt(const wxPoint &pixel, double tolerancePx);
+    double CurrentDisplayedScale();
+    bool NoteHiddenAtScale(const NotePlace &place);
+    double m_scale_cache = 0.0;         // displayed scale for the zoom below
+    double m_scale_cache_ppm = -1.0;
+    double m_scale_cache_lat = 0.0;
     bool DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp);
     bool DrawNoteSignsGL(PlugIn_ViewPort *vp);
     void CheckNotePlaces();
