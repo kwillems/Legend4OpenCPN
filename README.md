@@ -1,9 +1,11 @@
 # Legend4OpenCPN
 
 Legend4OpenCPN is een plugin voor [OpenCPN](https://opencpn.org) die naast de
-kaart uitlegt wat je ziet. Hij laat de betekenis zien van de symbolen die in
-beeld zijn, vertelt wat de lichten doen en wat er voor de boeg ligt, en toont
-je eigen legenda's, notities en routebeschrijvingen.
+kaart uitlegt wat je ziet. Hij houdt een legenda bij van precies de boeien,
+bakens, tekens en andere symbolen die op dat moment op je scherm staan, en
+verandert mee als je de kaart verschuift of zoomt. Daarnaast vertelt hij wat
+de lichten doen en wat er voor de boeg ligt, en toont hij je eigen legenda's,
+notities en routebeschrijvingen.
 
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
@@ -19,15 +21,20 @@ je eigen legenda's, notities en routebeschrijvingen.
 
 **Kaartlegenda**
 
-- Alle symbolen in beeld, uit waypoint-lagen (zoals Nautin), o-charts en
-  ENC-kaarten, met hun betekenis in het Nederlands of Engels, volgens de
-  termen van Kaart 1.
+- **Precies wat er nu op je scherm staat:** elke soort boei, baken, topteken,
+  licht, meerpaal en ander symbool in beeld, één rij per soort met het aantal.
+  Verschuif, zoom of draai je de kaart, of zet je een laag aan of uit, dan
+  past de lijst zich vanzelf aan.
+- **Ook als je ver uitzoomt:** symbolen die de kaart op die schaal weglaat,
+  kunnen grijs in de lijst blijven staan, met de schaal waarop ze verschijnen.
+  Zo weet je wat er in het gebied ligt; een klik zoomt erheen.
+- Uit waypoint-lagen (zoals Nautin), o-charts en ENC-kaarten, met hun
+  betekenis in het Nederlands of Engels, volgens de termen van Kaart 1.
 - Klik op een rij en de plugin wijst het symbool aan op de kaart; klik op de
   kaart en de plugin wijst de rij aan. De teller ◎ wijst alle exemplaren
   tegelijk aan.
 - Zelf in te delen onder kopjes, in te klappen en te ordenen, met een
-  zoekveld. Symbolen die de kaart op deze schaal niet tekent, kunnen er grijs
-  bij staan.
+  zoekveld.
 - Eigen betekenissen in één tekstbestand; iconen als PNG of SVG.
 
 **Lichten**
