@@ -1601,6 +1601,9 @@ int legend_pi::Init()
     m_menu_delete_note = action("Notitie verwijderen");
     m_menu_link_place = action("Link naar deze plek in de tekst");
     m_menu_pin_note = action("Notitie hier vastpinnen op de kaart");
+    m_menu_new_note_boat = action("Nieuwe notitie bij de boot");
+    m_menu_link_boat = action("Positie van de boot in de tekst");
+    m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
     m_context_submenu = new wxMenu();
     m_menu_parent = AddCanvasContextMenuItem(
         new wxMenuItem(nullptr, wxID_ANY, "Notitie", wxEmptyString, wxITEM_NORMAL,
@@ -2816,6 +2819,10 @@ void legend_pi::RenameNote()
         return;
     }
 
+    // A note the boat is near stays near under its new name.
+    if (m_notes_near.erase(path) > 0)
+        m_notes_near.insert(target.GetFullPath());
+
     auto scroll = m_markdown_scroll_positions.find(path);
     if (scroll != m_markdown_scroll_positions.end()) {
         m_markdown_scroll_positions[target.GetFullPath()] = scroll->second;
@@ -3004,7 +3011,22 @@ void legend_pi::CreateLegendWindow()
     m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
     m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
     m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
-    m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { NewNote(); });
+    // With a GPS fix the plus offers a note pinned where the boat is.
+    m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        if (!BoatPositionKnown()) {
+            NewNote();
+            return;
+        }
+        enum { kPlain = 1, kBoat };
+        wxMenu menu;
+        menu.Append(kPlain, "Nieuwe notitie");
+        menu.Append(kBoat, "Nieuwe notitie bij de boot");
+        const int choice = m_new_button->GetPopupMenuSelectionFromUser(menu);
+        if (choice == kPlain)
+            NewNote();
+        else if (choice == kBoat)
+            NewNoteAtBoat();
+    });
 
     // Buttons that put Markdown into the note, for those who do not know
     // it by heart and on a tablet, where # and * are hard to reach. They
@@ -3063,15 +3085,25 @@ void legend_pi::CreateLegendWindow()
     placeButton->Bind(wxEVT_BUTTON, [this, placeButton](wxCommandEvent &) {
         if (!m_viewport_valid)
             return;
-        enum { kLink = 1, kBelongs };
+        enum { kLink = 1, kBelongs, kBoatLink, kBoatPin };
         wxMenu menu;
         menu.Append(kLink, "Link naar het midden van de kaart in de tekst");
         menu.Append(kBelongs, "Notitie vastpinnen op het midden van de kaart");
+        menu.AppendSeparator();
+        menu.Append(kBoatLink, "Positie van de boot in de tekst");
+        menu.Append(kBoatPin, "Notitie vastpinnen op de positie van de boot");
+        const bool boat = BoatPositionKnown();
+        menu.Enable(kBoatLink, boat);
+        menu.Enable(kBoatPin, boat);
         const int choice = placeButton->GetPopupMenuSelectionFromUser(menu);
         if (choice == kLink)
             InsertPlace(m_viewport.clat, m_viewport.clon);
         else if (choice == kBelongs)
             SetNotePlace(m_viewport.clat, m_viewport.clon);
+        else if (choice == kBoatLink)
+            InsertBoatPosition();
+        else if (choice == kBoatPin)
+            PinNoteAtBoat();
     });
     m_format_bar->SetSizer(formatSizer);
     m_format_bar->Hide();
@@ -4051,12 +4083,21 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
     }
 
     // In the submenu "Notitie" the word need not be repeated.
+    // With a recent GPS fix also the boat's position, wherever the click was.
+    const bool boat = BoatPositionKnown();
     if (m_editing) {
         m_context_submenu->Append(m_menu_link_place, "Link naar deze plek in de tekst");
         m_context_submenu->Append(m_menu_pin_note, "Hier vastpinnen op de kaart");
+        if (boat) {
+            m_context_submenu->AppendSeparator();
+            m_context_submenu->Append(m_menu_link_boat, "Positie van de boot in de tekst");
+            m_context_submenu->Append(m_menu_pin_boat, "Vastpinnen op de positie van de boot");
+        }
     }
     else {
         m_context_submenu->Append(m_menu_new_note, "Nieuwe notitie hier");
+        if (boat)
+            m_context_submenu->Append(m_menu_new_note_boat, "Nieuwe notitie bij de boot");
     }
     if (!m_menu_note_path.IsEmpty()) {
         m_context_submenu->AppendSeparator();
@@ -4071,7 +4112,21 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
 void legend_pi::OnContextMenuItemCallback(int id)
 {
     // The submenu itself also reports a click: the hidden item does the work.
-    if (id == m_menu_parent || !m_cursor_valid)
+    if (id == m_menu_parent)
+        return;
+    if (id == m_menu_new_note_boat) {
+        NewNoteAtBoat();
+        return;
+    }
+    if (id == m_menu_link_boat) {
+        InsertBoatPosition();
+        return;
+    }
+    if (id == m_menu_pin_boat) {
+        PinNoteAtBoat();
+        return;
+    }
+    if (!m_cursor_valid)
         return;
 
     if (id == m_menu_reveal)
@@ -4088,6 +4143,12 @@ void legend_pi::OnContextMenuItemCallback(int id)
         OpenNote(m_menu_note_path);
     else if (id == m_menu_delete_note && !m_menu_note_path.IsEmpty())
         DeleteNoteFile(m_menu_note_path);
+    else if (id == m_menu_new_note_boat)
+        NewNoteAtBoat();
+    else if (id == m_menu_link_boat)
+        InsertBoatPosition();
+    else if (id == m_menu_pin_boat)
+        PinNoteAtBoat();
 }
 
 bool legend_pi::RevealObjectAt(
@@ -8514,17 +8575,62 @@ void legend_pi::GoToPlace(double lat, double lon)
 
 // A link to a place in the note being edited: the selected text becomes the
 // link, or the position itself is put in. The place is marked on the chart.
-void legend_pi::InsertPlace(double lat, double lon)
+void legend_pi::InsertPlace(double lat, double lon, const wxString &text)
 {
     if (!m_editing || !m_editor)
         return;
     const wxString uri = wxString::Format("geo:%s,%s", wxString::FromCDouble(lat, 5),
                                           wxString::FromCDouble(lon, 5));
-    m_editor->AddLinkWithText(uri, FormatPosition(lat, lon));
+    m_editor->AddLinkWithText(uri, text.IsEmpty() ? FormatPosition(lat, lon) : text);
     ShowMarker(lat, lon);
     if (m_legend_window)
         m_legend_window->Raise();
     m_editor->SetFocus();
+}
+
+// A position fix of the last minute: where the boat is now.
+bool legend_pi::BoatPositionKnown() const
+{
+    return m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000 &&
+           !std::isnan(m_ship_lat) && !std::isnan(m_ship_lon);
+}
+
+// The boat's position in the note being edited, with the time: "52°34,818′N
+// 5°45,072′E (14:32)", as a link to the place, for a log for instance.
+void legend_pi::InsertBoatPosition()
+{
+    if (!BoatPositionKnown()) {
+        ShowNoGpsNotice();
+        return;
+    }
+    InsertPlace(m_ship_lat, m_ship_lon,
+                FormatPosition(m_ship_lat, m_ship_lon) + " (" +
+                    wxDateTime::Now().Format("%H:%M") + ")");
+}
+
+void legend_pi::PinNoteAtBoat()
+{
+    if (!BoatPositionKnown()) {
+        ShowNoGpsNotice();
+        return;
+    }
+    SetNotePlace(m_ship_lat, m_ship_lon);
+}
+
+void legend_pi::NewNoteAtBoat()
+{
+    if (!BoatPositionKnown()) {
+        ShowNoGpsNotice();
+        return;
+    }
+    NewNoteAt(m_ship_lat, m_ship_lon);
+}
+
+void legend_pi::ShowNoGpsNotice()
+{
+    ShowVhfNotice("Geen positie van de boot",
+                  "Er is de laatste minuut geen GPS-positie binnengekomen.", false,
+                  wxColour(186, 117, 23));
 }
 
 // The notes of the Legend folder that belong to a place: read again when
@@ -8803,6 +8909,9 @@ void legend_pi::CheckNotePlaces()
         if (distance > place.radius)
             continue;
         near.insert(place.path);
+        // The note being written is no news.
+        if (m_editing && place.path == m_editing_path)
+            continue;
         if (m_note_places_known && m_notes_near.count(place.path) == 0)
             entered.push_back(&place);
     }
@@ -8885,6 +8994,11 @@ void legend_pi::AskNoteRadius()
 // and the sign on the chart.
 void legend_pi::NotePlaceChanged()
 {
+    // Pinned where the boat already is: it counts as near, so no notice
+    // follows now, only after sailing away and coming back.
+    if (m_note_has_place && BoatPositionKnown() &&
+        SeaMiles(m_ship_lat, m_ship_lon, m_note_lat, m_note_lon) <= m_note_radius)
+        m_notes_near.insert(m_editing_path);
     UpdatePlaceBar();
     m_note_dirty = true;
     if (m_save_status)

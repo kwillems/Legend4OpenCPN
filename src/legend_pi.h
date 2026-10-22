@@ -335,6 +335,9 @@ private:
     int m_menu_delete_note = -1;
     int m_menu_link_place = -1;
     int m_menu_pin_note = -1;
+    int m_menu_new_note_boat = -1;
+    int m_menu_link_boat = -1;
+    int m_menu_pin_boat = -1;
     wxString m_menu_note_path;           // note whose sign was under the mouse
     void PrepareContextMenu(int canvasIndex) override;
     void DeleteNoteFile(const wxString &path);
@@ -353,7 +356,12 @@ private:
     wxString FormatPosition(double lat, double lon) const;
     bool ParseGeoUri(const wxString &uri, double *lat, double *lon) const;
     void GoToPlace(double lat, double lon);
-    void InsertPlace(double lat, double lon);
+    void InsertPlace(double lat, double lon, const wxString &text = wxString());
+    bool BoatPositionKnown() const;
+    void InsertBoatPosition();
+    void PinNoteAtBoat();
+    void NewNoteAtBoat();
+    void ShowNoGpsNotice();
     void InsertImage();
 
     void LoadConfig();

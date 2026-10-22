@@ -80,7 +80,7 @@ notities en routebeschrijvingen.
   onder *Notities* in de legenda en in *Vooruit*, en je krijgt een
   melding als je in de buurt komt.
 - Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
-  vastgepind op die plek.
+  vastgepind op die plek, of onderweg op de positie van de boot.
 - In de tekst een link naar een plek: een klik laat de kaart erheen gaan.
 
 **Weergave**
@@ -435,6 +435,17 @@ standaard die ook andere kaartprogramma's begrijpen.
   kaart*;
 - met de speld-knop: *Notitie vastpinnen op het midden van de kaart*.
 
+**Waar de boot nu is.** Met een GPS-positie van de laatste minuut kan het ook
+op de positie van de boot, waar je ook klikt:
+
+- de plus-knop in het venster vraagt dan *Nieuwe notitie* of *Nieuwe notitie
+  bij de boot*; met een rechtsklik: *Notitie ▸ Nieuwe notitie bij de boot*;
+- tijdens het bewerken, via de speld-knop of *Notitie ▸* in het
+  rechtsklikmenu: *Vastpinnen op de positie van de boot*, of *Positie van de
+  boot in de tekst*. Dat laatste zet de positie met de tijd als link in de
+  notitie, bijvoorbeeld *52°34,818′N 5°45,072′E (14:32)*: handig voor een
+  logboek.
+
 Boven de tekst staat dan *Vastgepind op 52°34,818′N 5°45,072′E · straal
 0,5 NM*. Een klik daarop toont de plek; met **Straal** pas je de afstand voor
 de melding aan, met **Losmaken** maak je de notitie weer los. In de gewone
@@ -454,8 +465,10 @@ Een vastgepinde notitie:
   erheen;
 - staat in **Vooruit** als je koers erlangs gaat;
 - geeft onderweg een **melding** met pieptonen zodra je binnen de straal
-  komt. Een klik op de melding opent de notitie. Uit te zetten met *Melding
-  bij notitie in de buurt*.
+  komt. Een klik op de melding opent de notitie. Een notitie die je net
+  vastpint waar de boot is, of die je aan het bewerken bent, meldt zich niet;
+  pas als je wegvaart en terugkomt. Uit te zetten met *Melding bij notitie in
+  de buurt*.
 
 De plek staat bovenaan het bestand, in het blokje dat ook Obsidian gebruikt:
 
