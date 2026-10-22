@@ -18,6 +18,7 @@
 #include "chart_names.h"
 #include "light_character.h"
 #include "note_editor.h"
+#include "note_places.h"
 #include "vhf_areas.h"
 
 #include <map>
@@ -314,13 +315,45 @@ private:
     void StartEditing();
     void StopEditing();
     void SaveNote();
-    void NewNote();
+    bool NewNote();
+    void NewNoteAt(double lat, double lon);
     void RenameNote();
     void DeleteNote();
     wxString NoteFileName(const wxString &title) const;
     void ShowNoteNamed(const wxString &fullName);
     void UpdateNoteButtons();
     void InsertLink();
+    // The chart's right-click menu: "Toon in legenda", "Marifoon hier", and
+    // "Notitie" with a submenu whose actions hidden items carry (see Init).
+    int m_menu_parent = -1;
+    wxMenu *m_context_submenu = nullptr;
+    std::vector<int> m_menu_actions;
+    int m_menu_reveal = -1;
+    int m_menu_vhf = -1;
+    int m_menu_new_note = -1;
+    int m_menu_open_note = -1;
+    int m_menu_delete_note = -1;
+    int m_menu_link_place = -1;
+    int m_menu_pin_note = -1;
+    wxString m_menu_note_path;           // note whose sign was under the mouse
+    void PrepareContextMenu(int canvasIndex) override;
+    void DeleteNoteFile(const wxString &path);
+    wxPanel *m_place_bar = nullptr;      // "Hoort bij ..." while editing
+    wxStaticText *m_place_text = nullptr;
+    wxString m_note_block;               // settings block of the note being edited
+    mutable std::set<wxString> m_pin_images; // pins in the memory file system
+    bool m_note_has_place = false;
+    double m_note_lat = 0.0;
+    double m_note_lon = 0.0;
+    double m_note_radius = 0.5;
+    void SetNotePlace(double lat, double lon);
+    void AskNoteRadius();
+    void NotePlaceChanged();
+    void UpdatePlaceBar();
+    wxString FormatPosition(double lat, double lon) const;
+    bool ParseGeoUri(const wxString &uri, double *lat, double *lon) const;
+    void GoToPlace(double lat, double lon);
+    void InsertPlace(double lat, double lon);
     void InsertImage();
 
     void LoadConfig();
@@ -423,7 +456,6 @@ private:
     int m_plib_state_hash = 0;          // OpenCPN's vector display settings
     bool m_log_next_viewport = false;   // diagnostics after a zoom
 
-    int m_context_menu_id = -1;
     double m_cursor_lat = 0.0;
     double m_cursor_lon = 0.0;
     bool m_cursor_valid = false;
@@ -512,7 +544,6 @@ private:
     wxTimer m_vhf_highlight_timer;
     bool m_vhf_keep_lit = false;        // setting: lit until the next click
     bool m_vhf_notice_on = true;        // setting: notice on a new area
-    int m_vhf_menu_id = -1;             // "Marifoon hier" in the chart menu
     std::set<wxString> m_vhf_areas_here; // areas the boat is in
     bool m_vhf_areas_known = false;     // m_vhf_areas_here is from a fix
     wxFrame *m_vhf_notice = nullptr;
@@ -528,7 +559,32 @@ private:
     void ShowVhfHere(double lat, double lon);
     bool VhfLayerShown() const;
     void CheckVhfAreaChange();
-    void ShowVhfNotice(const wxString &title, const wxString &text, bool sound);
+    void ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
+                       const wxColour &titleColour = wxColour(220, 40, 40),
+                       std::function<void()> action = std::function<void()>());
+    std::function<void()> m_notice_action; // what a click on the notice opens
+
+    // Notes that belong to a place: a sign on the chart, a heading in the
+    // legend, and a notice nearby.
+    std::vector<NotePlace> m_note_places;
+    int m_note_selected = -1;            // clicked sign: its radius shows
+    int m_note_hover = -1;               // sign under the mouse
+    std::set<wxString> m_notes_near;     // notes the boat is within the radius of
+    bool m_note_places_known = false;
+    bool m_note_notice_on = true;        // setting
+    wxTimer m_note_notice_timer;         // waits for a VHF notice to go
+    wxString m_pending_note_title;
+    wxString m_pending_note_text;
+    wxString m_pending_note_path;
+    std::vector<size_t> m_note_rows;     // rows of the heading "Notities hier"
+    void RefreshNotePlaces();
+    double SeaMiles(double lat1, double lon1, double lat2, double lon2) const;
+    void OpenNote(const wxString &path);
+    int NotePlaceAt(const wxPoint &pixel, double tolerancePx) const;
+    bool DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp);
+    bool DrawNoteSignsGL(PlugIn_ViewPort *vp);
+    void CheckNotePlaces();
+    void ShowPendingNoteNotice();
     bool HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx);
     bool HighlightVhfAreas(const wxString &icon,
                            const std::vector<std::pair<double, double>> &positions);
@@ -562,6 +618,14 @@ private:
         VhfArea area;
     };
     std::vector<AheadVhf> m_ahead_vhf;  // VHF areas the course enters
+    struct AheadNote
+    {
+        double minutes = 0.0;
+        double cross = 0.0;
+        wxString title;
+        wxString path;
+    };
+    std::vector<AheadNote> m_ahead_notes; // notes whose place lies ahead
     std::vector<VhfArea> m_vhf_rows;    // areas of the Marifoon block
     wxString m_ahead_key;         // what ComputeAhead() found last
     wxString m_ahead_drawn_key;   // what the list shows

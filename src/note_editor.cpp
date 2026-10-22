@@ -543,8 +543,13 @@ NoteEditor::NoteEditor(wxWindow *parent, wxWindowID id)
     Bind(wxEVT_RICHTEXT_PROPERTIES_CHANGED, changed);
     Bind(wxEVT_RICHTEXT_RETURN, &NoteEditor::OnReturn, this);
     Bind(wxEVT_LEFT_DOWN, &NoteEditor::OnLeftDown, this);
-    // A link is not followed while writing.
-    Bind(wxEVT_TEXT_URL, [](wxTextUrlEvent &) {});
+    // A web link is not followed while writing; a place goes to the chart.
+    Bind(wxEVT_TEXT_URL, [this](wxTextUrlEvent &event) {
+        wxRichTextAttr attr;
+        if (GetStyle(event.GetURLStart(), attr) && attr.HasURL() &&
+            attr.GetURL().StartsWith("geo:") && m_place)
+            m_place(attr.GetURL());
+    });
 }
 
 void NoteEditor::Changed()
@@ -623,6 +628,22 @@ wxRichTextAttr NoteEditor::KindAttr(const wxString &kind, int level, bool checke
 void NoteEditor::ApplyKind(long from, long to, const wxString &kind, int level, bool checked,
                            int number)
 {
+    // An empty paragraph (a new line after Enter) cannot be styled through a
+    // range; its attributes are set on the paragraph itself.
+    if (to <= from) {
+        if (wxRichTextParagraph *para = GetBuffer().GetParagraphAtPosition(from)) {
+            para->SetAttributes(KindAttr(kind, level, checked, number));
+            para->Invalidate(wxRICHTEXT_ALL);
+            GetBuffer().Invalidate(wxRichTextRange(from, from));
+            if (!m_loading) {
+                LayoutContent();
+                Refresh();
+                Changed();
+            }
+            return;
+        }
+    }
+
     SetStyleEx(wxRichTextRange(from, std::max(from, to)), KindAttr(kind, level, checked, number),
                wxRICHTEXT_SETSTYLE_PARAGRAPHS_ONLY | wxRICHTEXT_SETSTYLE_RESET |
                    (m_loading ? 0 : wxRICHTEXT_SETSTYLE_WITH_UNDO));
@@ -671,6 +692,8 @@ void NoteEditor::LoadMarkdown(const wxString &markdown, const wxString &baseDire
     m_loading = true;
     Freeze();
     Clear();
+    // Nothing of the last note carries over, such as bold at its end.
+    SetDefaultStyle(wxRichTextAttr());
     BeginSuppressUndo();
 
     const std::vector<Para> paras = ParseMarkdown(markdown);
@@ -701,15 +724,13 @@ void NoteEditor::LoadMarkdown(const wxString &markdown, const wxString &baseDire
                 continue;
             }
 
+            // Every mark said outright, also when off, so no style of the
+            // text before runs on.
             wxRichTextAttr attr;
-            if (run.bold)
-                attr.SetFontWeight(wxFONTWEIGHT_BOLD);
-            if (run.italic)
-                attr.SetFontStyle(wxFONTSTYLE_ITALIC);
-            if (run.strike) {
-                attr.SetTextEffects(wxTEXT_ATTR_EFFECT_STRIKETHROUGH);
-                attr.SetTextEffectFlags(wxTEXT_ATTR_EFFECT_STRIKETHROUGH);
-            }
+            attr.SetFontWeight(run.bold ? wxFONTWEIGHT_BOLD : wxFONTWEIGHT_NORMAL);
+            attr.SetFontStyle(run.italic ? wxFONTSTYLE_ITALIC : wxFONTSTYLE_NORMAL);
+            attr.SetTextEffects(run.strike ? wxTEXT_ATTR_EFFECT_STRIKETHROUGH : 0);
+            attr.SetTextEffectFlags(wxTEXT_ATTR_EFFECT_STRIKETHROUGH);
             if (run.code) {
                 attr.SetCharacterStyleName(kCodeSpan);
                 attr.SetFontFaceName(m_mono_face);
@@ -737,6 +758,7 @@ void NoteEditor::LoadMarkdown(const wxString &markdown, const wxString &baseDire
 
     EndSuppressUndo();
     SetInsertionPoint(0);
+    SetDefaultStyle(wxRichTextAttr());
     Thaw();
     DiscardEdits();
     m_loading = false;
@@ -1026,6 +1048,22 @@ void NoteEditor::AddLink(const wxString &address)
     SetFocus();
 }
 
+void NoteEditor::AddLinkWithText(const wxString &address, const wxString &text)
+{
+    if (HasSelection()) {
+        AddLink(address);
+        return;
+    }
+    wxRichTextAttr attr;
+    attr.SetURL(address);
+    attr.SetFontUnderlined(true);
+    attr.SetTextColour(m_link_colour);
+    BeginStyle(attr);
+    WriteText(text);
+    EndStyle();
+    SetFocus();
+}
+
 bool NoteEditor::InsertNoteImage(const wxString &source, const wxString &alt)
 {
     const wxImage image = LoadImageFor(source);
@@ -1042,36 +1080,53 @@ bool NoteEditor::InsertNoteImage(const wxString &source, const wxString &alt)
 // ends the list; a new task is not yet ticked off.
 void NoteEditor::OnReturn(wxRichTextEvent &event)
 {
-    const long position = event.GetPosition();
-    CallAfter([this, position]() {
-        wxRichTextParagraphLayoutBox &buffer = GetBuffer();
-        wxRichTextParagraph *now = buffer.GetParagraphAtPosition(position);
-        wxRichTextParagraph *before = position > 0 ? buffer.GetParagraphAtPosition(position - 1)
-                                                   : nullptr;
-        if (!now || !before || now == before)
-            return;
-        const wxString kind = before->GetAttributes().GetParagraphStyleName();
-        const long nowStart = now->GetRange().GetStart();
-        const long nowEnd = now->GetRange().GetEnd();
+    event.Skip();
+    CallAfter([this]() { AfterNewParagraph(); });
+}
 
-        if (kind.StartsWith(kHeading)) {
+// The paragraph with the cursor was just made with Enter: it copied the
+// kind of the one before. After a heading it is normal text; an empty list
+// item before it ends the list; a new task is not yet ticked off.
+void NoteEditor::AfterNewParagraph()
+{
+    wxRichTextParagraphLayoutBox &buffer = GetBuffer();
+    // The caret position is one less than the position of the character
+    // after the caret: the new paragraph starts at caret + 1.
+    wxRichTextParagraph *now = buffer.GetParagraphAtPosition(GetCaretPosition() + 1);
+    if (!now)
+        return;
+    wxRichTextObjectList::compatibility_iterator node = buffer.GetChildren().Find(now);
+    if (!node || !node->GetPrevious())
+        return;
+    wxRichTextParagraph *before = wxDynamicCast(node->GetPrevious()->GetData(), wxRichTextParagraph);
+    if (!before)
+        return;
+
+    const wxString kind = before->GetAttributes().GetParagraphStyleName();
+    const long nowStart = now->GetRange().GetStart();
+    const long nowEnd = now->GetRange().GetEnd();
+    const long caret = GetCaretPosition();
+
+    if (kind.StartsWith(kHeading)) {
+        ApplyKind(nowStart, nowEnd, kNormal);
+    }
+    else if (IsListKind(kind)) {
+        wxString text = before->GetTextForRange(before->GetRange());
+        text.Trim(true).Trim(false);
+        if (text.IsEmpty()) {
+            ApplyKind(before->GetRange().GetStart(), before->GetRange().GetEnd(), kNormal);
             ApplyKind(nowStart, nowEnd, kNormal);
         }
-        else if (IsListKind(kind)) {
-            wxString text = before->GetTextForRange(before->GetRange());
-            text.Trim(true).Trim(false);
-            if (text.IsEmpty()) {
-                ApplyKind(before->GetRange().GetStart(), before->GetRange().GetEnd(), kNormal);
-                ApplyKind(nowStart, nowEnd, kNormal);
-            }
-            else if (kind == kTask) {
-                const int level = std::max(
-                    1, static_cast<int>((before->GetAttributes().GetLeftIndent() + kListIndent / 2) / kListIndent));
-                ApplyKind(nowStart, nowEnd, kTask, level, false);
-            }
+        else if (kind == kTask) {
+            const int level = std::max(
+                1, static_cast<int>((before->GetAttributes().GetLeftIndent() + kListIndent / 2) /
+                                    kListIndent));
+            ApplyKind(nowStart, nowEnd, kTask, level, false);
         }
-    });
-    event.Skip();
+    }
+    // Typing goes on in the style of the paragraph now.
+    SetCaretPosition(caret);
+    SetDefaultStyleToCursorStyle();
 }
 
 // A click on the box of a task ticks it off, or on again.
@@ -1234,6 +1289,20 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokePath(bin);
         stroke(0.44, 0.43, 0.45, 0.74);
         stroke(0.56, 0.43, 0.55, 0.74);
+    }
+    else if (name == "place") {
+        // A map pin: a round head with a point below and a hole in it.
+        gc->SetBrush(wxBrush(colour));
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        wxGraphicsPath pin = gc->CreatePath();
+        const double cx = 0.5 * s;
+        const double cy = 0.4 * s;
+        const double r = 0.27 * s;
+        pin.MoveToPoint(cx, 0.9 * s);
+        pin.AddArc(cx, cy, r, 3.14159265358979323846 * 0.75, 3.14159265358979323846 * 0.25, true);
+        pin.CloseSubpath();
+        pin.AddCircle(cx, cy, r * 0.42);
+        gc->FillPath(pin, wxODDEVEN_RULE);
     }
     else if (name == "image") {
         gc->SetBrush(*wxTRANSPARENT_BRUSH);

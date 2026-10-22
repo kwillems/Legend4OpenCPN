@@ -35,6 +35,9 @@ public:
     // Called after every change made by the user, not after loading.
     void SetChangedHandler(std::function<void()> handler) { m_changed = handler; }
 
+    // Called with the address of a clicked "geo:" link: a place on the chart.
+    void SetPlaceHandler(std::function<void(const wxString &)> handler) { m_place = handler; }
+
     // Colours of the text, links and background (dusk and night).
     void SetColours(const wxColour &background, const wxColour &text, const wxColour &link);
 
@@ -47,7 +50,12 @@ public:
     void ToggleNumbered();
     void ToggleTasks();
     void AddLink(const wxString &address);
+    // A link to an address; without a selection `text` is put in as its text.
+    void AddLinkWithText(const wxString &address, const wxString &text);
     bool InsertNoteImage(const wxString &source, const wxString &alt);
+
+    // After Enter: the new paragraph gets the right kind (see the source).
+    void AfterNewParagraph();
 
 private:
     struct Paragraph;
@@ -69,12 +77,13 @@ private:
     wxColour m_muted_colour = wxColour(120, 120, 126);
     bool m_loading = false;
     std::function<void()> m_changed;
+    std::function<void(const wxString &)> m_place;
 };
 
 // Icons for the buttons above the editor, drawn in the given colour on a
 // transparent background, sharp at twice the size: "heading", "bold",
 // "italic", "bullets", "numbers", "tasks", "link", "image", and for the
-// notes themselves "edit", "new", "rename" and "trash".
+// notes themselves "edit", "new", "rename", "trash" and "place" (a map pin).
 wxBitmapBundle NoteToolIcon(const wxString &name, const wxColour &colour);
 
 #endif
