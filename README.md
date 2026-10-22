@@ -39,17 +39,25 @@ je eigen legenda's, notities en routebeschrijvingen.
   beeld tegelijk.
 - **Nachtvoorbeeld:** de kaart donker, alleen de lichten branden, zoals je het
   's nachts vanaf het water ziet.
-- **Licht herkennen:** tik mee met een licht dat je ziet, en de plugin zegt
-  welk licht in beeld het best past.
 
-**Onderweg**
+**Licht herkennen**
 
-- **Marifoon:** het kanaal van het gebied waar je vaart, met wat je moet doen
-  en het telefoonnummer. Een klik op een VHF-icoon laat het hele gebied
-  oplichten; vaar je een nieuw gebied in, dan volgt een melding met
-  pieptonen.
-- **Vooruit:** wat je het komende half uur op koers tegenkomt, met de kant
-  waar het ligt, en het volgende marifoongebied.
+- Zie je een licht en weet je niet welk het is? Tik mee met zijn ritme, op een
+  groot vlak of de spatiebalk, en de plugin noemt de lichten in beeld die het
+  best passen. Een gemiste periode door de deining is geen probleem.
+
+**Vooruit kijken**
+
+- Tijdens het varen: wat je het komende half uur op koers tegenkomt, op
+  volgorde van aankomst, met de kant waar het ligt en zijn licht, en het
+  volgende marifoongebied.
+
+**Marifoon**
+
+- Het kanaal van het gebied waar je vaart, met wat je moet doen en het
+  telefoonnummer.
+- Een klik op een VHF-icoon laat het hele gebied oplichten; vaar je een nieuw
+  gebied in, dan volgt een melding met pieptonen.
 
 **Eigen legenda's en notities**
 
