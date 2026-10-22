@@ -315,18 +315,33 @@ private:
     void StartEditing();
     void StopEditing();
     void SaveNote();
-    void NewNote();
+    bool NewNote();
+    void NewNoteAt(double lat, double lon);
     void RenameNote();
     void DeleteNote();
     wxString NoteFileName(const wxString &title) const;
     void ShowNoteNamed(const wxString &fullName);
     void UpdateNoteButtons();
     void InsertLink();
-    int m_place_menu_id = -1;            // "Plek in notitie" in the chart menu
-    int m_belongs_menu_id = -1;          // "Notitie hoort hier"
+    // The chart's right-click menu: "Toon in legenda", "Marifoon hier", and
+    // "Notitie" with a submenu whose actions hidden items carry (see Init).
+    int m_menu_parent = -1;
+    wxMenu *m_context_submenu = nullptr;
+    std::vector<int> m_menu_actions;
+    int m_menu_reveal = -1;
+    int m_menu_vhf = -1;
+    int m_menu_new_note = -1;
+    int m_menu_open_note = -1;
+    int m_menu_delete_note = -1;
+    int m_menu_link_place = -1;
+    int m_menu_pin_note = -1;
+    wxString m_menu_note_path;           // note whose sign was under the mouse
+    void PrepareContextMenu(int canvasIndex) override;
+    void DeleteNoteFile(const wxString &path);
     wxPanel *m_place_bar = nullptr;      // "Hoort bij ..." while editing
     wxStaticText *m_place_text = nullptr;
     wxString m_note_block;               // settings block of the note being edited
+    mutable std::set<wxString> m_pin_images; // pins in the memory file system
     bool m_note_has_place = false;
     double m_note_lat = 0.0;
     double m_note_lon = 0.0;
@@ -441,7 +456,6 @@ private:
     int m_plib_state_hash = 0;          // OpenCPN's vector display settings
     bool m_log_next_viewport = false;   // diagnostics after a zoom
 
-    int m_context_menu_id = -1;
     double m_cursor_lat = 0.0;
     double m_cursor_lon = 0.0;
     bool m_cursor_valid = false;
@@ -530,7 +544,6 @@ private:
     wxTimer m_vhf_highlight_timer;
     bool m_vhf_keep_lit = false;        // setting: lit until the next click
     bool m_vhf_notice_on = true;        // setting: notice on a new area
-    int m_vhf_menu_id = -1;             // "Marifoon hier" in the chart menu
     std::set<wxString> m_vhf_areas_here; // areas the boat is in
     bool m_vhf_areas_known = false;     // m_vhf_areas_here is from a fix
     wxFrame *m_vhf_notice = nullptr;

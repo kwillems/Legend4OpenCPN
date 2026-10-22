@@ -1558,25 +1558,41 @@ int legend_pi::Init()
     EnsureDirectories();
     LoadConfig();
 
-    // "Toon in legenda" in the chart's right-click menu. OpenCPN keeps the
-    // menu item; it is removed again in DeInit.
-    m_context_menu_id = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")),
-        this);
-    // "Marifoon hier": the VHF areas at the clicked spot light up, with
-    // their channels in a notice.
-    m_vhf_menu_id = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Marifoon hier")), this);
     RefreshNotePlaces();
     m_note_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { ShowPendingNoteNotice(); });
 
-    // "Plek in notitie": only while a note is edited.
-    m_place_menu_id = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Plek in notitie")), this);
-    SetCanvasContextMenuItemViz(m_place_menu_id, false);
-    m_belongs_menu_id = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Notitie hoort hier")), this);
-    SetCanvasContextMenuItemViz(m_belongs_menu_id, false);
+    // In the chart's right-click menu: "Toon in legenda" and "Marifoon
+    // hier", and "Notitie" with a submenu that PrepareContextMenu() fills
+    // each time for the spot and the state.
+    m_menu_reveal = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")), this);
+    m_menu_actions.push_back(m_menu_reveal);
+    m_menu_vhf = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Marifoon hier")), this);
+    m_menu_actions.push_back(m_menu_vhf);
+
+    // OpenCPN tells a plugin of this API version which submenu was used,
+    // not which item in it. So every note action is also an item of its
+    // own, hidden, whose id the submenu item carries: OpenCPN calls back
+    // with that id too (it looks through all items, hidden ones as well).
+    auto action = [this](const char *label) {
+        const int id = AddCanvasContextMenuItem(
+            new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8(label)), this);
+        SetCanvasContextMenuItemViz(id, false);
+        m_menu_actions.push_back(id);
+        return id;
+    };
+    m_menu_new_note = action("Nieuwe notitie hier");
+    m_menu_open_note = action("Notitie openen");
+    m_menu_delete_note = action("Notitie verwijderen");
+    m_menu_link_place = action("Link naar deze plek in de tekst");
+    m_menu_pin_note = action("Notitie hier vastpinnen op de kaart");
+    m_context_submenu = new wxMenu();
+    m_menu_parent = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, "Notitie", wxEmptyString, wxITEM_NORMAL,
+                       m_context_submenu),
+        this);
+    PrepareContextMenu(0);
 
     m_ocharts.SetCacheFile(
         GetConfigDirectory() + wxFileName::GetPathSeparator() +
@@ -1668,6 +1684,7 @@ bool legend_pi::DeInit()
         wxFileSystem::RemoveHandler(g_memoryHandler);
         delete g_memoryHandler;
         g_memoryHandler = nullptr;
+        m_pin_images.clear();
     }
 
     if (m_toolbar_item_id >= 0) {
@@ -1675,26 +1692,20 @@ bool legend_pi::DeInit()
         m_toolbar_item_id = -1;
     }
 
-    if (m_vhf_menu_id >= 0) {
-        RemoveCanvasContextMenuItem(m_vhf_menu_id);
-        m_vhf_menu_id = -1;
-    }
-    if (m_place_menu_id >= 0) {
-        RemoveCanvasContextMenuItem(m_place_menu_id);
-        m_place_menu_id = -1;
-    }
-    if (m_belongs_menu_id >= 0) {
-        RemoveCanvasContextMenuItem(m_belongs_menu_id);
-        m_belongs_menu_id = -1;
-    }
     if (m_vhf_notice) {
         delete m_vhf_notice;
         m_vhf_notice = nullptr;
     }
-    if (m_context_menu_id >= 0) {
-        RemoveCanvasContextMenuItem(m_context_menu_id);
-        m_context_menu_id = -1;
+    // OpenCPN owns the menu items it was given, and the submenu with its
+    // item; only their places in the menu are given up.
+    if (m_menu_parent >= 0) {
+        RemoveCanvasContextMenuItem(m_menu_parent);
+        m_menu_parent = -1;
     }
+    for (int id : m_menu_actions)
+        RemoveCanvasContextMenuItem(id);
+    m_menu_actions.clear();
+    m_context_submenu = nullptr;
 
     return true;
 }
@@ -2099,12 +2110,33 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         if (radius.EndsWith("."))
             radius.RemoveLast();
         radius.Replace(".", ",");
+        // A tinted bar with a pin, the colours of the bar in the editor: it
+        // is about the note, not part of its text.
+        const bool dim = IsDimScheme();
+        const wxColour fill = dim ? palette.stripe : wxColour(250, 238, 218);
+        const wxColour ink = dim ? palette.text : wxColour(99, 56, 6);
+        if (!g_memoryHandler) {
+            g_memoryHandler = new wxMemoryFSHandler;
+            wxFileSystem::AddHandler(g_memoryHandler);
+        }
+        const wxString pin = "legend_pin_" + HtmlColour(ink).Mid(1) + "_" +
+                             HtmlColour(fill).Mid(1) + ".png";
+        if (m_pin_images.insert(pin).second) {
+            const wxBitmapBundle bundle = NoteToolIcon("place", ink);
+            const wxImage small = FlattenImage(bundle.GetBitmap(wxSize(16, 16)).ConvertToImage(), fill);
+            const wxImage large = FlattenImage(bundle.GetBitmap(wxSize(32, 32)).ConvertToImage(), fill);
+            wxMemoryFSHandler::AddFile(pin, small, wxBITMAP_TYPE_PNG);
+            wxMemoryFSHandler::AddFile(pin.Left(pin.length() - 4) + "@2x.png", large,
+                                       wxBITMAP_TYPE_PNG);
+        }
         wxString line;
-        line << "<p><font size=\"-1\" color=\"" << HtmlColour(palette.muted) << "\">"
-             << "Hoort bij <a href=\"geo:" << wxString::FromCDouble(front.lat, 5) << ","
-             << wxString::FromCDouble(front.lon, 5) << "\">"
-             << FormatPosition(front.lat, front.lon) << "</a> &middot; straal " << radius
-             << " NM</font></p>";
+        line << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" bgcolor=\""
+             << HtmlColour(fill) << "\"><tr><td width=\"20\" valign=\"middle\"><img src=\"memory:"
+             << pin << "\"></td><td valign=\"middle\"><font size=\"-1\" color=\"" << HtmlColour(ink)
+             << "\">Deze notitie is vastgepind op de kaart: <a href=\"geo:"
+             << wxString::FromCDouble(front.lat, 5) << "," << wxString::FromCDouble(front.lon, 5)
+             << "\">" << FormatPosition(front.lat, front.lon) << "</a> &middot; straal " << radius
+             << " NM</font></td></tr></table><br>";
         const int bodyTag = html.Find("<body");
         const int bodyEnd = bodyTag == wxNOT_FOUND ? wxNOT_FOUND : html.find('>', bodyTag);
         if (bodyEnd != wxNOT_FOUND)
@@ -2490,10 +2522,6 @@ void legend_pi::UpdateNoteButtons()
     m_format_bar->Show(m_editing);
     m_nav_panel->Show(!m_editing);
     m_edit_footer->Show(m_editing);
-    if (m_place_menu_id >= 0)
-        SetCanvasContextMenuItemViz(m_place_menu_id, m_editing);
-    if (m_belongs_menu_id >= 0)
-        SetCanvasContextMenuItemViz(m_belongs_menu_id, m_editing);
     if (m_place_bar)
         m_place_bar->Show(m_editing && m_note_has_place);
     if (m_legend_choice)
@@ -2579,19 +2607,19 @@ void legend_pi::SaveNote()
 
 // A new note in the Legend folder, named after its title, opened for
 // writing.
-void legend_pi::NewNote()
+bool legend_pi::NewNote()
 {
     if (m_editing)
         StopEditing();
 
     wxTextEntryDialog dialog(m_legend_window, "Titel van de nieuwe notitie:", "Nieuwe notitie");
     if (dialog.ShowModal() != wxID_OK)
-        return;
+        return false;
 
     wxString title = dialog.GetValue();
     title.Trim(true).Trim(false);
     if (title.IsEmpty())
-        return;
+        return false;
 
     const wxString name = NoteFileName(title);
 
@@ -2604,16 +2632,33 @@ void legend_pi::NewNote()
     if (!out.Create(file.GetFullPath()) || !out.Write("# " + title + "\n\n", wxConvUTF8)) {
         wxMessageBox("De notitie kon niet worden aangemaakt in\n" + GetLegendDirectory(),
                      "Nieuwe notitie", wxOK | wxICON_WARNING, m_legend_window);
-        return;
+        return false;
     }
     out.Close();
 
     ShowNoteNamed(file.GetFullName());
     StartEditing();
     if (m_editor) {
+        // A line to write on under the title: text, not another heading.
         m_editor->SetInsertionPointEnd();
         m_editor->Newline();
+        m_editor->AfterNewParagraph();
     }
+    return m_editing;
+}
+
+// "Nieuwe notitie hier" from the chart menu: a new note, pinned at once to
+// the clicked spot, in the legend window, also when that was closed.
+void legend_pi::NewNoteAt(double lat, double lon)
+{
+    CreateLegendWindow();
+    if (!m_legend_window->IsShown()) {
+        RefreshLegendFiles();
+        m_legend_window->Show();
+    }
+    m_legend_window->Raise();
+    if (NewNote())
+        SetNotePlace(lat, lon);
 }
 
 // The selected text becomes a link; without a selection the address itself
@@ -2772,10 +2817,18 @@ void legend_pi::DeleteNote()
 {
     if (m_editing || !IsMarkdownItem(m_current_legend_path))
         return;
+    DeleteNoteFile(m_current_legend_path);
+}
 
-    const wxString path = m_current_legend_path;
+// Moves a note into the folder "Verwijderd" in the Legend folder, after
+// asking; from the legend window or from the chart's menu.
+void legend_pi::DeleteNoteFile(const wxString &path)
+{
     const wxString title = MakeDisplayTitle(path);
-    wxMessageDialog confirm(m_legend_window,
+    wxWindow *parent = m_legend_window && m_legend_window->IsShown()
+                           ? static_cast<wxWindow *>(m_legend_window)
+                           : GetOCPNCanvasWindow();
+    wxMessageDialog confirm(parent,
                             "Notitie \"" + title + "\" verwijderen?\n\nHet bestand gaat naar de map "
                             "\"Verwijderd\" in de Legend-map; daar kun je het terughalen.",
                             "Notitie verwijderen", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
@@ -2788,18 +2841,36 @@ void legend_pi::DeleteNote()
     wxFileName::Mkdir(target.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     for (int n = 2; target.FileExists(); ++n)
         target.SetName(wxString::Format("%s %d", wxFileName(path).GetName(), n));
+    // A note being edited is saved and closed first.
+    if (m_editing && m_editing_path == path)
+        StopEditing();
+
     if (!wxRenameFile(path, target.GetFullPath(), false)) {
         wxMessageBox("De notitie kon niet worden verplaatst.", "Notitie verwijderen",
-                     wxOK | wxICON_WARNING, m_legend_window);
+                     wxOK | wxICON_WARNING, parent);
         return;
     }
 
     m_markdown_scroll_positions.erase(path);
-    m_current_legend_path.Clear();
-    const size_t index = m_legend_index > 0 ? m_legend_index - 1 : 0;
-    ScanLegendFiles();
-    RebuildLegendChoice();
-    ShowLegend(std::min(index, m_legend_files.IsEmpty() ? 0 : m_legend_files.GetCount() - 1));
+    if (m_current_legend_path == path) {
+        m_current_legend_path.Clear();
+        const size_t index = m_legend_index > 0 ? m_legend_index - 1 : 0;
+        ScanLegendFiles();
+        RebuildLegendChoice();
+        ShowLegend(std::min(index, m_legend_files.IsEmpty() ? 0 : m_legend_files.GetCount() - 1));
+    }
+    else {
+        // Another item is shown: only the list of items changes.
+        const wxString shown = m_current_legend_path;
+        ScanLegendFiles();
+        RebuildLegendChoice();
+        size_t index = 0;
+        for (size_t i = 0; i < m_legend_files.GetCount(); ++i)
+            if (m_legend_files[i] == shown)
+                index = i;
+        if (m_legend_window)
+            ShowLegend(index);
+    }
 }
 
 void legend_pi::CreateLegendWindow()
@@ -2971,17 +3042,17 @@ void legend_pi::CreateLegendWindow()
                  [this]() { InsertImage(); });
     wxBitmapButton *placeButton = formatButton(
         "place",
-        "Een plek op de kaart: als link in de tekst, of als de plek waar de notitie "
-        "bij hoort. Een andere plek dan het midden van de kaart: klik met rechts op "
-        "de kaart",
+        "Een plek op de kaart: als link in de tekst, of de hele notitie vastpinnen "
+        "op de kaart. Voor een andere plek dan het midden: klik met rechts op de "
+        "kaart",
         std::function<void()>());
     placeButton->Bind(wxEVT_BUTTON, [this, placeButton](wxCommandEvent &) {
         if (!m_viewport_valid)
             return;
         enum { kLink = 1, kBelongs };
         wxMenu menu;
-        menu.Append(kLink, "Link naar het midden van de kaart");
-        menu.Append(kBelongs, "Notitie hoort bij het midden van de kaart");
+        menu.Append(kLink, "Link naar het midden van de kaart in de tekst");
+        menu.Append(kBelongs, "Notitie vastpinnen op het midden van de kaart");
         const int choice = placeButton->GetPopupMenuSelectionFromUser(menu);
         if (choice == kLink)
             InsertPlace(m_viewport.clat, m_viewport.clon);
@@ -2997,7 +3068,8 @@ void legend_pi::CreateLegendWindow()
         wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
         10);
 
-    // "Hoort bij ...": where the note being edited belongs, with its radius.
+    // "Vastgepind op ...": where the note being edited is pinned, with its
+    // radius.
     m_place_bar = new wxPanel(panel);
     auto *placeSizer = new wxBoxSizer(wxHORIZONTAL);
     m_place_text = new wxStaticText(m_place_bar, wxID_ANY, wxEmptyString);
@@ -3006,7 +3078,7 @@ void legend_pi::CreateLegendWindow()
     radiusButton->SetToolTip("Binnen welke afstand je onderweg een melding krijgt");
     auto *looseButton = new wxButton(m_place_bar, wxID_ANY, "Losmaken", wxDefaultPosition,
                                      wxDefaultSize, wxBU_EXACTFIT);
-    looseButton->SetToolTip("De notitie hoort nergens meer bij");
+    looseButton->SetToolTip("De notitie niet meer op de kaart vastpinnen");
     placeSizer->Add(m_place_text, 1, wxALIGN_CENTER_VERTICAL | wxALL, 6);
     placeSizer->Add(radiusButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
     placeSizer->Add(looseButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
@@ -3923,25 +3995,70 @@ void legend_pi::SetCursorLatLon(double lat, double lon)
     m_cursor_valid = true;
 }
 
-void legend_pi::OnContextMenuItemCallback(int id)
+// Fills the submenu "Notitie" just before the chart's menu opens: what
+// fits the spot (a note's sign under the mouse) and the state (a note
+// being edited).
+void legend_pi::PrepareContextMenu(int canvasIndex)
 {
-    if (id == m_vhf_menu_id && m_cursor_valid) {
-        ShowVhfHere(m_cursor_lat, m_cursor_lon);
-        return;
-    }
-    if (id == m_place_menu_id && m_cursor_valid) {
-        InsertPlace(m_cursor_lat, m_cursor_lon);
-        return;
-    }
-    if (id == m_belongs_menu_id && m_cursor_valid) {
-        SetNotePlace(m_cursor_lat, m_cursor_lon);
-        return;
-    }
-    if (id != m_context_menu_id || !m_cursor_valid)
+    (void)canvasIndex;
+    if (!m_context_submenu)
         return;
 
-    RevealObjectAt(
-        m_cursor_lat, m_cursor_lon, 20.0 * ViewportPixelsPerWindowPixel(), true);
+    while (m_context_submenu->GetMenuItemCount() > 0)
+        m_context_submenu->Destroy(m_context_submenu->FindItemByPosition(0));
+
+    // The note whose sign is under the mouse, if any.
+    m_menu_note_path.Clear();
+    wxString noteTitle;
+    if (m_cursor_valid && m_viewport_valid) {
+        PlugIn_ViewPort vp = m_viewport;
+        wxPoint at;
+        GetCanvasPixLL(&vp, &at, m_cursor_lat, m_cursor_lon);
+        const int note = NotePlaceAt(at, 14.0 * ViewportPixelsPerWindowPixel());
+        if (note >= 0) {
+            m_menu_note_path = m_note_places[note].path;
+            noteTitle = m_note_places[note].title;
+        }
+    }
+
+    // In the submenu "Notitie" the word need not be repeated.
+    if (m_editing) {
+        m_context_submenu->Append(m_menu_link_place, "Link naar deze plek in de tekst");
+        m_context_submenu->Append(m_menu_pin_note, "Hier vastpinnen op de kaart");
+    }
+    else {
+        m_context_submenu->Append(m_menu_new_note, "Nieuwe notitie hier");
+    }
+    if (!m_menu_note_path.IsEmpty()) {
+        m_context_submenu->AppendSeparator();
+        const wxString quoted =
+            wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
+        m_context_submenu->Append(m_menu_open_note, quoted + " openen");
+        m_context_submenu->Append(m_menu_delete_note,
+                                  quoted + wxString::FromUTF8(" verwijderen\u2026"));
+    }
+}
+
+void legend_pi::OnContextMenuItemCallback(int id)
+{
+    // The submenu itself also reports a click: the hidden item does the work.
+    if (id == m_menu_parent || !m_cursor_valid)
+        return;
+
+    if (id == m_menu_reveal)
+        RevealObjectAt(m_cursor_lat, m_cursor_lon, 20.0 * ViewportPixelsPerWindowPixel(), true);
+    else if (id == m_menu_vhf)
+        ShowVhfHere(m_cursor_lat, m_cursor_lon);
+    else if (id == m_menu_new_note)
+        NewNoteAt(m_cursor_lat, m_cursor_lon);
+    else if (id == m_menu_link_place)
+        InsertPlace(m_cursor_lat, m_cursor_lon);
+    else if (id == m_menu_pin_note)
+        SetNotePlace(m_cursor_lat, m_cursor_lon);
+    else if (id == m_menu_open_note && !m_menu_note_path.IsEmpty())
+        OpenNote(m_menu_note_path);
+    else if (id == m_menu_delete_note && !m_menu_note_path.IsEmpty())
+        DeleteNoteFile(m_menu_note_path);
 }
 
 bool legend_pi::RevealObjectAt(
@@ -8687,7 +8804,7 @@ void legend_pi::UpdatePlaceBar()
         if (radius.EndsWith("."))
             radius.RemoveLast();
         radius.Replace(".", ",");
-        m_place_text->SetLabel(wxString::FromUTF8("Hoort bij ") +
+        m_place_text->SetLabel(wxString::FromUTF8("Vastgepind op ") +
                                FormatPosition(m_note_lat, m_note_lon) +
                                wxString::FromUTF8(" \u00b7 straal ") + radius + " NM");
         m_place_text->SetToolTip("Klik om de plek op de kaart te zien");

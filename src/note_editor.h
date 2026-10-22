@@ -54,6 +54,9 @@ public:
     void AddLinkWithText(const wxString &address, const wxString &text);
     bool InsertNoteImage(const wxString &source, const wxString &alt);
 
+    // After Enter: the new paragraph gets the right kind (see the source).
+    void AfterNewParagraph();
+
 private:
     struct Paragraph;
 
