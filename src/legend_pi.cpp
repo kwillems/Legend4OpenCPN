@@ -59,6 +59,7 @@
 
 extern "C" {
 #include "md4c-html.h"
+#include "note_places.h"
 }
 
 #ifdef __WXOSX__
@@ -152,6 +153,8 @@ const wxString kLegendButtonIdPrefix = "legend-button-";
 // Id of a line of the "Vooruit" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
 const wxString kLegendAheadVhfIdPrefix = "legend-aheadvhf-";
+const wxString kLegendAheadNoteIdPrefix = "legend-aheadnote-";
+const wxString kLegendNoteIdPrefix = "legend-note-";
 const wxString kLegendVhfAreaIdPrefix = "legend-vhfarea-";
 
 // The "memory:" file system handler for the icons of the dynamic legend.
@@ -1157,6 +1160,50 @@ wxImage EyeIcon(
 
 // The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
 // drawn rather than taken from a font, so their size is certain.
+// The sign of a note for a row of the legend: a sheet with a folded corner.
+wxImage NoteSignImage(const wxColour &background, int size)
+{
+    wxBitmap bitmap(size, size, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            const double s = size / 24.0;
+            const double x = size / 2.0;
+            const double y = size / 2.0;
+            const double w = 8.0 * s;
+            const double h = 10.0 * s;
+            const double fold = 4.0 * s;
+            wxGraphicsPath sheet = gc->CreatePath();
+            sheet.MoveToPoint(x - w, y - h);
+            sheet.AddLineToPoint(x + w - fold, y - h);
+            sheet.AddLineToPoint(x + w, y - h + fold);
+            sheet.AddLineToPoint(x + w, y + h);
+            sheet.AddLineToPoint(x - w, y + h);
+            sheet.CloseSubpath();
+            gc->SetBrush(wxBrush(wxColour(250, 199, 117)));
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(133, 79, 11)).Width(1.2 * s)));
+            gc->DrawPath(sheet);
+            wxGraphicsPath marks = gc->CreatePath();
+            marks.MoveToPoint(x + w - fold, y - h);
+            marks.AddLineToPoint(x + w - fold, y - h + fold);
+            marks.AddLineToPoint(x + w, y - h + fold);
+            for (int line = 0; line < 3; ++line) {
+                const double ly = y - h * 0.25 + line * h * 0.35;
+                marks.MoveToPoint(x - w * 0.6, ly);
+                marks.AddLineToPoint(x + w * 0.6, ly);
+            }
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(133, 79, 11)).Width(1.0 * s)));
+            gc->StrokePath(marks);
+            delete gc;
+        }
+    }
+    return bitmap.ConvertToImage();
+}
+
 // A small VHF sign for a row: the channel in a red-edged rounded square,
 // like the icons of the VHFinfo layer.
 wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int size)
@@ -1520,6 +1567,16 @@ int legend_pi::Init()
     // their channels in a notice.
     m_vhf_menu_id = AddCanvasContextMenuItem(
         new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Marifoon hier")), this);
+    RefreshNotePlaces();
+    m_note_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { ShowPendingNoteNotice(); });
+
+    // "Plek in notitie": only while a note is edited.
+    m_place_menu_id = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Plek in notitie")), this);
+    SetCanvasContextMenuItemViz(m_place_menu_id, false);
+    m_belongs_menu_id = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Notitie hoort hier")), this);
+    SetCanvasContextMenuItemViz(m_belongs_menu_id, false);
 
     m_ocharts.SetCacheFile(
         GetConfigDirectory() + wxFileName::GetPathSeparator() +
@@ -1565,6 +1622,7 @@ bool legend_pi::DeInit()
     m_vhf_highlight_timer.Stop();
     m_vhf_highlight.clear();
     m_vhf_notice_timer.Stop();
+    m_note_notice_timer.Stop();
     m_vhf_sound_timer.Stop();
     m_night_preview = false;
     g_night_preview = false;
@@ -1602,6 +1660,8 @@ bool legend_pi::DeInit()
         m_nav_panel = nullptr;
         m_edit_footer = nullptr;
         m_save_status = nullptr;
+        m_place_bar = nullptr;
+        m_place_text = nullptr;
     }
 
     if (g_memoryHandler) {
@@ -1618,6 +1678,14 @@ bool legend_pi::DeInit()
     if (m_vhf_menu_id >= 0) {
         RemoveCanvasContextMenuItem(m_vhf_menu_id);
         m_vhf_menu_id = -1;
+    }
+    if (m_place_menu_id >= 0) {
+        RemoveCanvasContextMenuItem(m_place_menu_id);
+        m_place_menu_id = -1;
+    }
+    if (m_belongs_menu_id >= 0) {
+        RemoveCanvasContextMenuItem(m_belongs_menu_id);
+        m_belongs_menu_id = -1;
     }
     if (m_vhf_notice) {
         delete m_vhf_notice;
@@ -1718,11 +1786,12 @@ wxString legend_pi::MakeDisplayTitle(const wxString &path) const
     // For Markdown, use the first non-empty H1 as the visible title.
     // If the document does not start with an H1, fall back to the filename.
     if (ext == "md" || ext == "markdown") {
-        wxTextFile markdownFile;
-
-        if (markdownFile.Open(path)) {
-            for (size_t i = 0; i < markdownFile.GetLineCount(); ++i) {
-                wxString line = markdownFile.GetLine(i);
+        wxString text;
+        wxFile markdownFile(path);
+        if (markdownFile.IsOpened() && markdownFile.ReadAll(&text, wxConvUTF8)) {
+            // The block of settings at the top (a note's place) is no title.
+            const wxArrayString lines = wxSplit(SplitFrontMatter(text).body, '\n', '\0');
+            for (wxString line : lines) {
                 line.Trim(true);
                 line.Trim(false);
 
@@ -1734,17 +1803,13 @@ wxString legend_pi::MakeDisplayTitle(const wxString &path) const
                     title.Trim(true);
                     title.Trim(false);
 
-                    if (!title.IsEmpty()) {
-                        markdownFile.Close();
+                    if (!title.IsEmpty())
                         return title;
-                    }
                 }
 
                 // Only the first non-empty line can act as the document title.
                 break;
             }
-
-            markdownFile.Close();
         }
     }
 
@@ -1786,6 +1851,7 @@ void legend_pi::LoadConfig()
     config.Read("ShowLights", &m_show_lights, true);
     config.Read("VhfKeepLit", &m_vhf_keep_lit, false);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
+    config.Read("NoteNotice", &m_note_notice_on, true);
     wxString language;
     config.Read("Language", &language, "nl");
     m_dutch_names = language != "en";
@@ -1828,6 +1894,7 @@ void legend_pi::SaveConfig() const
     config.Write("ShowLights", m_show_lights);
     config.Write("VhfKeepLit", m_vhf_keep_lit);
     config.Write("VhfNotice", m_vhf_notice_on);
+    config.Write("NoteNotice", m_note_notice_on);
     config.Write("Language", m_dutch_names ? "nl" : "en");
 
     config.Flush();
@@ -1903,6 +1970,9 @@ void legend_pi::ScanLegendFiles()
 
     // The dynamic legend is always the first item.
     m_legend_files.Insert(kDynamicGpxId, 0);
+
+    // Notes may have been added, renamed or removed: their places too.
+    RefreshNotePlaces();
 }
 
 void legend_pi::RebuildLegendChoice()
@@ -2013,7 +2083,34 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
         return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
 
-    return RenderMarkdownText(markdown);
+    // The block with the note's place is not shown as text; a line on top
+    // says where the note belongs, as a link that takes the chart there.
+    const NoteFrontMatter front = SplitFrontMatter(wxString::FromUTF8(markdown.c_str()));
+    if (front.block.IsEmpty())
+        return RenderMarkdownText(markdown);
+
+    const wxScopedCharBuffer body = front.body.utf8_str();
+    wxString html = RenderMarkdownText(std::string(body.data(), body.length()));
+    if (front.hasPlace) {
+        const LegendPalette palette = GetLegendPalette();
+        wxString radius = wxString::Format("%.2f", front.radius);
+        while (radius.EndsWith("0"))
+            radius.RemoveLast();
+        if (radius.EndsWith("."))
+            radius.RemoveLast();
+        radius.Replace(".", ",");
+        wxString line;
+        line << "<p><font size=\"-1\" color=\"" << HtmlColour(palette.muted) << "\">"
+             << "Hoort bij <a href=\"geo:" << wxString::FromCDouble(front.lat, 5) << ","
+             << wxString::FromCDouble(front.lon, 5) << "\">"
+             << FormatPosition(front.lat, front.lon) << "</a> &middot; straal " << radius
+             << " NM</font></p>";
+        const int bodyTag = html.Find("<body");
+        const int bodyEnd = bodyTag == wxNOT_FOUND ? wxNOT_FOUND : html.find('>', bodyTag);
+        if (bodyEnd != wxNOT_FOUND)
+            html = html.Left(bodyEnd + 1) + line + html.Mid(bodyEnd + 1);
+    }
+    return html;
 }
 
 // Markdown text (UTF-8) as the page of the viewer.
@@ -2393,6 +2490,12 @@ void legend_pi::UpdateNoteButtons()
     m_format_bar->Show(m_editing);
     m_nav_panel->Show(!m_editing);
     m_edit_footer->Show(m_editing);
+    if (m_place_menu_id >= 0)
+        SetCanvasContextMenuItemViz(m_place_menu_id, m_editing);
+    if (m_belongs_menu_id >= 0)
+        SetCanvasContextMenuItemViz(m_belongs_menu_id, m_editing);
+    if (m_place_bar)
+        m_place_bar->Show(m_editing && m_note_has_place);
     if (m_legend_choice)
         m_legend_choice->Enable(!m_editing);
     m_edit_button->GetParent()->Layout();
@@ -2415,7 +2518,16 @@ void legend_pi::StartEditing()
     m_editing = true;
     m_editing_path = m_current_legend_path;
     m_note_dirty = false;
-    m_editor->LoadMarkdown(text, wxFileName(m_editing_path).GetPath());
+
+    // The block with the note's place is kept apart and shown as a bar.
+    const NoteFrontMatter front = SplitFrontMatter(text);
+    m_note_block = front.block;
+    m_note_has_place = front.hasPlace;
+    m_note_lat = front.lat;
+    m_note_lon = front.lon;
+    m_note_radius = front.radius;
+    UpdatePlaceBar();
+    m_editor->LoadMarkdown(front.body, wxFileName(m_editing_path).GetPath());
     if (m_save_status)
         m_save_status->SetLabel("Wijzigingen worden vanzelf bewaard");
     m_content_book->SetSelection(2);
@@ -2446,11 +2558,15 @@ void legend_pi::SaveNote()
     if (!m_editor || m_editing_path.IsEmpty() || !m_note_dirty)
         return;
 
+    const wxString text =
+        BlockWithPlace(m_note_block, m_note_has_place, m_note_lat, m_note_lon, m_note_radius) +
+        m_editor->ToMarkdown();
     wxTempFile file(m_editing_path);
-    const bool saved =
-        file.IsOpened() && file.Write(m_editor->ToMarkdown(), wxConvUTF8) && file.Commit();
+    const bool saved = file.IsOpened() && file.Write(text, wxConvUTF8) && file.Commit();
     if (saved) {
         m_note_dirty = false;
+        m_note_block = SplitFrontMatter(text).block;
+        RefreshNotePlaces();
         if (m_save_status)
             m_save_status->SetLabel("Bewaard om " + wxDateTime::Now().Format("%H:%M"));
     }
@@ -2615,15 +2731,18 @@ void legend_pi::RenameNote()
         if (file.IsOpened())
             file.ReadAll(&text, wxConvUTF8);
     }
+    // The title is in the body, after the block with the note's place.
+    const NoteFrontMatter front = SplitFrontMatter(text);
+    wxString body = front.body;
     size_t start = 0;
-    while (start < text.length() && (text[start] == '\n' || text[start] == '\r' ||
-                                     text[start] == ' ' || text[start] == '\t'))
+    while (start < body.length() && (body[start] == '\n' || body[start] == '\r' ||
+                                     body[start] == ' ' || body[start] == '\t'))
         ++start;
-    if (text.Mid(start, 2) == "# ") {
-        size_t end = text.find('\n', start);
+    if (body.Mid(start, 2) == "# ") {
+        size_t end = body.find('\n', start);
         if (end == wxString::npos)
-            end = text.length();
-        text = text.Left(start) + "# " + title + text.Mid(end);
+            end = body.length();
+        text = front.block + body.Left(start) + "# " + title + body.Mid(end);
         wxTempFile out(path);
         if (!out.IsOpened() || !out.Write(text, wxConvUTF8) || !out.Commit()) {
             wxMessageBox("De notitie kon niet worden aangepast.", "Notitie hernoemen",
@@ -2850,11 +2969,61 @@ void legend_pi::CreateLegendWindow()
     formatButton("link", "Van de geselecteerde tekst een link maken", [this]() { InsertLink(); });
     formatButton("image", "Een afbeelding uit de Legend-map of daarbuiten",
                  [this]() { InsertImage(); });
+    wxBitmapButton *placeButton = formatButton(
+        "place",
+        "Een plek op de kaart: als link in de tekst, of als de plek waar de notitie "
+        "bij hoort. Een andere plek dan het midden van de kaart: klik met rechts op "
+        "de kaart",
+        std::function<void()>());
+    placeButton->Bind(wxEVT_BUTTON, [this, placeButton](wxCommandEvent &) {
+        if (!m_viewport_valid)
+            return;
+        enum { kLink = 1, kBelongs };
+        wxMenu menu;
+        menu.Append(kLink, "Link naar het midden van de kaart");
+        menu.Append(kBelongs, "Notitie hoort bij het midden van de kaart");
+        const int choice = placeButton->GetPopupMenuSelectionFromUser(menu);
+        if (choice == kLink)
+            InsertPlace(m_viewport.clat, m_viewport.clon);
+        else if (choice == kBelongs)
+            SetNotePlace(m_viewport.clat, m_viewport.clon);
+    });
     m_format_bar->SetSizer(formatSizer);
     m_format_bar->Hide();
 
     mainSizer->Add(
         m_format_bar,
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    // "Hoort bij ...": where the note being edited belongs, with its radius.
+    m_place_bar = new wxPanel(panel);
+    auto *placeSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_place_text = new wxStaticText(m_place_bar, wxID_ANY, wxEmptyString);
+    auto *radiusButton = new wxButton(m_place_bar, wxID_ANY, "Straal", wxDefaultPosition,
+                                      wxDefaultSize, wxBU_EXACTFIT);
+    radiusButton->SetToolTip("Binnen welke afstand je onderweg een melding krijgt");
+    auto *looseButton = new wxButton(m_place_bar, wxID_ANY, "Losmaken", wxDefaultPosition,
+                                     wxDefaultSize, wxBU_EXACTFIT);
+    looseButton->SetToolTip("De notitie hoort nergens meer bij");
+    placeSizer->Add(m_place_text, 1, wxALIGN_CENTER_VERTICAL | wxALL, 6);
+    placeSizer->Add(radiusButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    placeSizer->Add(looseButton, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    m_place_bar->SetSizer(placeSizer);
+    m_place_bar->Hide();
+    m_place_text->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent &) {
+        if (m_note_has_place)
+            GoToPlace(m_note_lat, m_note_lon);
+    });
+    radiusButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { AskNoteRadius(); });
+    looseButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        m_note_has_place = false;
+        NotePlaceChanged();
+    });
+
+    mainSizer->Add(
+        m_place_bar,
         0,
         wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
         10);
@@ -3036,6 +3205,15 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
+            // A place in a note: the chart goes there and marks it.
+            if (href.StartsWith("geo:")) {
+                double lat = 0.0;
+                double lon = 0.0;
+                if (ParseGeoUri(href, &lat, &lon))
+                    m_markdown_view->CallAfter([this, lat, lon]() { GoToPlace(lat, lon); });
+                return;
+            }
+
             if (href.StartsWith("http://") ||
                 href.StartsWith("https://") ||
                 href.StartsWith("mailto:") ||
@@ -3053,7 +3231,7 @@ void legend_pi::CreateLegendWindow()
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
     enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button, AheadVhf,
-                         VhfArea };
+                         VhfArea, AheadNote, Note };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -3080,6 +3258,8 @@ void legend_pi::CreateLegendWindow()
             {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
             {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
             {HitKind::AheadVhf, legendView->IdNumberAt(pos, kLegendAheadVhfIdPrefix)},
+            {HitKind::AheadNote, legendView->IdNumberAt(pos, kLegendAheadNoteIdPrefix)},
+            {HitKind::Note, legendView->IdNumberAt(pos, kLegendNoteIdPrefix)},
             {HitKind::VhfArea, legendView->IdNumberAt(pos, kLegendVhfAreaIdPrefix)},
             {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
@@ -3146,6 +3326,15 @@ void legend_pi::CreateLegendWindow()
                     break;
                 case HitKind::Ahead:
                     ShowAheadItem(static_cast<size_t>(hit.index));
+                    break;
+                case HitKind::AheadNote:
+                    if (static_cast<size_t>(hit.index) < m_ahead_notes.size())
+                        OpenNote(m_ahead_notes[hit.index].path);
+                    break;
+                case HitKind::Note:
+                    if (static_cast<size_t>(hit.index) < m_note_rows.size() &&
+                        m_note_rows[hit.index] < m_note_places.size())
+                        OpenNote(m_note_places[m_note_rows[hit.index]].path);
                     break;
                 case HitKind::AheadVhf:
                     if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
@@ -3251,6 +3440,10 @@ void legend_pi::CreateLegendWindow()
             case HitKind::VhfArea:
                 tip = "Het marifoongebied op de kaart laten oplichten";
                 break;
+            case HitKind::AheadNote:
+            case HitKind::Note:
+                tip = "De notitie openen";
+                break;
             case HitKind::Tap:
                 tip = "Ingedrukt houden zolang het licht brandt (of de spatiebalk)";
                 break;
@@ -3298,6 +3491,12 @@ void legend_pi::CreateLegendWindow()
     // A note while it is edited, as it looks; saved as Markdown a moment
     // after typing stops.
     m_editor = new NoteEditor(m_content_book, wxID_ANY);
+    m_editor->SetPlaceHandler([this](const wxString &uri) {
+        double lat = 0.0;
+        double lon = 0.0;
+        if (ParseGeoUri(uri, &lat, &lon))
+            GoToPlace(lat, lon);
+    });
     m_editor->SetChangedHandler([this]() {
         if (!m_editing)
             return;
@@ -3641,6 +3840,27 @@ double legend_pi::ViewportPixelsPerWindowPixel() const
 // Looks at clicks on the chart; OpenCPN handles every event as usual.
 bool legend_pi::MouseEventHook(wxMouseEvent &event)
 {
+    // Above the sign of a note: its title as a tooltip.
+    if (event.Moving() && m_viewport_valid && !m_note_places.empty()) {
+        const double ratio = ViewportPixelsPerWindowPixel();
+        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
+                         static_cast<int>(std::lround(event.GetY() * ratio)));
+        const int hover = NotePlaceAt(at, 12.0 * ratio);
+        if (hover != m_note_hover) {
+            m_note_hover = hover;
+            wxWindow *canvas = PluginGetFocusCanvas();
+            if (!canvas)
+                canvas = GetOCPNCanvasWindow();
+            if (canvas) {
+                if (hover >= 0)
+                    canvas->SetToolTip("Notitie: " + m_note_places[hover].title);
+                else
+                    canvas->UnsetToolTip();
+            }
+        }
+        return false;
+    }
+
     if (event.LeftDown()) {
         m_mouse_down = event.GetPosition();
         m_mouse_down_valid = true;
@@ -3662,6 +3882,22 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
     const double ratio = ViewportPixelsPerWindowPixel();
     const wxPoint pixel(static_cast<int>(std::lround(up.x * ratio)),
                         static_cast<int>(std::lround(up.y * ratio)));
+
+    // The sign of a note: the note opens and its radius shows.
+    const int note = NotePlaceAt(pixel, 12.0 * ratio);
+    if (note >= 0) {
+        m_note_selected = note;
+        RefreshAllCanvases();
+        const wxString path = m_note_places[note].path;
+        if (wxWindow *canvas = GetOCPNCanvasWindow())
+            canvas->CallAfter([this, path]() { OpenNote(path); });
+        return false;
+    }
+    if (m_note_selected >= 0) {
+        m_note_selected = -1;
+        RefreshAllCanvases();
+    }
+
     HighlightVhfAreaAt(pixel, 14.0 * ratio);
 
     if (!IsDynamicLegendVisible())
@@ -3691,6 +3927,14 @@ void legend_pi::OnContextMenuItemCallback(int id)
 {
     if (id == m_vhf_menu_id && m_cursor_valid) {
         ShowVhfHere(m_cursor_lat, m_cursor_lon);
+        return;
+    }
+    if (id == m_place_menu_id && m_cursor_valid) {
+        InsertPlace(m_cursor_lat, m_cursor_lon);
+        return;
+    }
+    if (id == m_belongs_menu_id && m_cursor_valid) {
+        SetNotePlace(m_cursor_lat, m_cursor_lon);
         return;
     }
     if (id != m_context_menu_id || !m_cursor_valid)
@@ -4610,6 +4854,7 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
         m_collapsed_sections.insert(SectionName(-1));
         m_collapsed_sections.insert("@marifoon");
         m_collapsed_sections.insert("@vooruit");
+        m_collapsed_sections.insert("@notities");
         m_collapsed_sections.insert("@herkennen");
     }
 
@@ -4670,6 +4915,7 @@ void legend_pi::ShowSettingsMenu()
     enum
     {
         kLights = 1000, kHidden, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep, kVhfNotice,
+        kNoteNotice,
         kFold, kReorder
     };
 
@@ -4694,6 +4940,9 @@ void legend_pi::ShowSettingsMenu()
         menu.AppendCheckItem(kVhfNotice, "Melding bij nieuw marifoongebied")
             ->Check(m_vhf_notice_on);
     }
+    if (!m_note_places.empty())
+        menu.AppendCheckItem(kNoteNotice, "Melding bij notitie in de buurt")
+            ->Check(m_note_notice_on);
     if (m_menu_has_headings) {
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
@@ -4732,6 +4981,10 @@ void legend_pi::ShowSettingsMenu()
         break;
     case kVhfNotice:
         m_vhf_notice_on = !m_vhf_notice_on;
+        SaveConfig();
+        break;
+    case kNoteNotice:
+        m_note_notice_on = !m_note_notice_on;
         SaveConfig();
         break;
     case kFold:
@@ -6120,10 +6373,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             };
 
             wxString summary;
-            const bool vhfFirst =
-                !m_ahead_vhf.empty() &&
-                (m_ahead.empty() || m_ahead_vhf.front().minutes < m_ahead.front().minutes);
-            if (vhfFirst)
+            const double inf = 1e9;
+            const double firstObject = m_ahead.empty() ? inf : m_ahead.front().minutes;
+            const double firstVhf = m_ahead_vhf.empty() ? inf : m_ahead_vhf.front().minutes;
+            const double firstNote = m_ahead_notes.empty() ? inf : m_ahead_notes.front().minutes;
+            if (firstNote < inf && firstNote <= firstVhf && firstNote < firstObject)
+                summary = whenMinutes(firstNote) + ": " + (nl ? "notitie " : "note ") +
+                          escape(m_ahead_notes.front().title);
+            else if (firstVhf < inf && firstVhf < firstObject)
                 summary = whenMinutes(m_ahead_vhf.front().minutes) + ": " +
                           vhfText(m_ahead_vhf.front());
             else if (m_ahead.empty())
@@ -6152,10 +6409,40 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                          << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
                          << "</td></tr>";
                 };
+                // A note ahead.
+                auto noteRow = [&](size_t n) {
+                    const AheadNote &note = m_ahead_notes[n];
+                    const wxString id = wxString::Format("%s%zu", kLegendAheadNoteIdPrefix, n);
+                    const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
+                    const wxString image = addImage(
+                        wxString::Format("legend_dyn_%d_aheadnote_%zu.png", m_dynamic_generation, n),
+                        NoteSignImage(rowColour, 24), NoteSignImage(rowColour, 48));
+                    wxString where = std::fabs(note.cross) < 0.02
+                                         ? wxString(nl ? "recht vooruit" : "dead ahead")
+                                         : note.cross > 0.0 ? wxString(nl ? "stuurboord" : "starboard")
+                                                            : wxString(nl ? "bakboord" : "port");
+                    html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
+                         << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
+                         << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
+                         << whenMinutes(note.minutes) << "</b> &middot; " << where << " &middot; "
+                         << (nl ? "notitie " : "note ") << escape(note.title) << "</td></tr>";
+                };
+                size_t nextNote = 0;
                 for (size_t k = 0; k < m_ahead.size(); ++k) {
-                    while (nextVhf < m_ahead_vhf.size() &&
-                           m_ahead_vhf[nextVhf].minutes <= m_ahead[k].minutes)
-                        vhfRow(nextVhf++);
+                    while (true) {
+                        const double v = nextVhf < m_ahead_vhf.size()
+                                             ? m_ahead_vhf[nextVhf].minutes
+                                             : 1e9;
+                        const double n = nextNote < m_ahead_notes.size()
+                                             ? m_ahead_notes[nextNote].minutes
+                                             : 1e9;
+                        if (v <= m_ahead[k].minutes && v <= n)
+                            vhfRow(nextVhf++);
+                        else if (n <= m_ahead[k].minutes)
+                            noteRow(nextNote++);
+                        else
+                            break;
+                    }
                     const AheadItem &item = m_ahead[k];
                     const DynamicGroup &group = m_dynamic_groups[item.group];
                     const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
@@ -6178,9 +6465,77 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         html << " &middot; <b>" << escape(item.light) << "</b>";
                     html << "</td></tr>";
                 }
-                while (nextVhf < m_ahead_vhf.size())
-                    vhfRow(nextVhf++);
+                while (nextVhf < m_ahead_vhf.size() || nextNote < m_ahead_notes.size()) {
+                    const double v = nextVhf < m_ahead_vhf.size() ? m_ahead_vhf[nextVhf].minutes
+                                                                  : 1e9;
+                    const double n = nextNote < m_ahead_notes.size()
+                                         ? m_ahead_notes[nextNote].minutes
+                                         : 1e9;
+                    if (v <= n)
+                        vhfRow(nextVhf++);
+                    else
+                        noteRow(nextNote++);
+                }
                 html << "</table>";
+            }
+        }
+
+        // Notities hier: notes whose place is in view, nearest first.
+        m_note_rows.clear();
+        {
+            const PlugIn_ViewPort &view = m_viewport;
+            const bool fromShip =
+                m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000;
+            const double hereLat = fromShip ? m_ship_lat : view.clat;
+            const double hereLon = fromShip ? m_ship_lon : view.clon;
+            std::vector<std::pair<double, size_t>> inView;
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                const NotePlace &place = m_note_places[i];
+                bool lonIn = false;
+                for (double offset : {0.0, 360.0, -360.0})
+                    lonIn = lonIn || (place.lon + offset >= view.lon_min &&
+                                      place.lon + offset <= view.lon_max);
+                if (place.lat < view.lat_min || place.lat > view.lat_max || !lonIn)
+                    continue;
+                inView.emplace_back(SeaMiles(hereLat, hereLon, place.lat, place.lon), i);
+            }
+            std::sort(inView.begin(), inView.end());
+            auto miles = [](double value) {
+                wxString text = wxString::Format("%.1f NM", value);
+                text.Replace(".", ",");
+                return text;
+            };
+
+            if (!inView.empty()) {
+                const NotePlace &nearest = m_note_places[inView.front().second];
+                wxString summary = escape(nearest.title) + ", " + miles(inView.front().first);
+                if (inView.size() > 1)
+                    summary << wxString::Format(" (+%zu)", inView.size() - 1);
+                if (extraHeading("@notities", nl ? "Notities hier" : "Notes here", summary)) {
+                    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
+                    for (size_t k = 0; k < inView.size(); ++k) {
+                        const NotePlace &place = m_note_places[inView[k].second];
+                        m_note_rows.push_back(inView[k].second);
+                        const wxString id = wxString::Format("%s%zu", kLegendNoteIdPrefix, k);
+                        const wxColour &rowColour = k % 2 == 1 ? stripe : background;
+                        const wxString image = addImage(
+                            wxString::Format("legend_dyn_%d_note_%zu.png", m_dynamic_generation, k),
+                            NoteSignImage(rowColour, 24), NoteSignImage(rowColour, 48));
+                        html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
+                             << "\" width=\"34\" align=\"center\" valign=\"top\"><img src=\"memory:"
+                             << image << "\"></td><td id=\"" << id << "\">" << escape(place.title)
+                             << "<br><font size=\"-1\" color=\"" << hex(muted) << "\">"
+                             << miles(inView[k].first);
+                        if (!place.snippet.IsEmpty()) {
+                            wxString snippet = place.snippet;
+                            if (snippet.length() > 70)
+                                snippet = snippet.Left(68) + wxString::FromUTF8("\u2026");
+                            html << " &middot; " << escape(snippet);
+                        }
+                        html << "</font></td></tr>";
+                    }
+                    html << "</table>";
+                }
             }
         }
 
@@ -7146,7 +7501,7 @@ bool legend_pi::RenderOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.empty()) ||
+         m_vhf_highlight.empty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -7157,7 +7512,9 @@ bool legend_pi::RenderOverlayMultiCanvas(
     if (m_night_preview)
         DrawNightShade(dc, vp);
     const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlight(dc, vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview || drewVhf;
+    const bool drewNotes = DrawNoteSigns(dc, vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview || drewVhf ||
+                         drewNotes;
     const bool drewLight = (m_light_active && DrawLightMarkers(dc, vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -7217,7 +7574,7 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.empty()) ||
+         m_vhf_highlight.empty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -7228,7 +7585,9 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     if (m_night_preview)
         DrawNightShadeGL(vp);
     const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlightGL(vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview || drewVhf;
+    const bool drewNotes = DrawNoteSignsGL(vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview || drewVhf ||
+                         drewNotes;
     const bool drewLight = (m_light_active && DrawLightMarkersGL(vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -7711,6 +8070,7 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
 
     // Also while the legend is closed.
     CheckVhfAreaChange();
+    CheckNotePlaces();
 
     if (!IsDynamicLegendVisible() || m_loading || m_showing_loading_page ||
         m_reorder_mode)
@@ -7847,6 +8207,35 @@ void legend_pi::ComputeAhead()
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
     }
 
+    // Notes whose place lies in the same fan, up to three.
+    m_ahead_notes.clear();
+    for (const NotePlace &place : m_note_places) {
+        const double dy = (place.lat - m_ship_lat) * 60.0;
+        double dlon = place.lon - m_ship_lon;
+        while (dlon > 180.0)
+            dlon -= 360.0;
+        while (dlon < -180.0)
+            dlon += 360.0;
+        const double dx = dlon * 60.0 * cosLat;
+        const double along = dx * std::sin(course) + dy * std::cos(course);
+        const double cross = dx * std::cos(course) - dy * std::sin(course);
+        if (along < 0.01 || along > range ||
+            std::fabs(cross) > std::max(0.12, along * widen) + place.radius)
+            continue;
+        AheadNote note;
+        note.minutes = along / m_ship_sog * 60.0;
+        note.cross = cross;
+        note.title = place.title;
+        note.path = place.path;
+        m_ahead_notes.push_back(note);
+    }
+    std::sort(m_ahead_notes.begin(), m_ahead_notes.end(),
+              [](const AheadNote &a, const AheadNote &b) { return a.minutes < b.minutes; });
+    if (m_ahead_notes.size() > 3)
+        m_ahead_notes.resize(3);
+    for (const AheadNote &note : m_ahead_notes)
+        key << "note:" << note.path << '/' << static_cast<int>(note.minutes) << ';';
+
     // The VHF areas the course enters in the same half hour, up to two:
     // points along the course line, a few hundred metres apart.
     m_ahead_vhf.clear();
@@ -7876,6 +8265,439 @@ void legend_pi::ComputeAhead()
         }
     }
     m_ahead_key = key.IsEmpty() ? wxString("nothing") : key;
+}
+
+// "52°34,818′N 5°45,072′E": degrees and minutes, as on a chart.
+wxString legend_pi::FormatPosition(double lat, double lon) const
+{
+    auto part = [this](double value, char positive, char negative) {
+        const char hemisphere = value >= 0 ? positive : negative;
+        value = std::fabs(value);
+        int degrees = static_cast<int>(value);
+        double minutes = (value - degrees) * 60.0;
+        if (minutes >= 59.9995) {
+            minutes = 0.0;
+            ++degrees;
+        }
+        wxString text = wxString::Format("%d", degrees) + wxString::FromUTF8("\u00b0") +
+                        wxString::Format("%06.3f", minutes) + wxString::FromUTF8("\u2032") +
+                        wxString(hemisphere);
+        if (m_dutch_names)
+            text.Replace(".", ",");
+        return text;
+    };
+    return part(lat, 'N', 'S') + " " + part(lon, 'E', 'W');
+}
+
+// "geo:52.58030,5.75120" (RFC 5870), with optional altitude and
+// parameters, which are left alone.
+bool legend_pi::ParseGeoUri(const wxString &uri, double *lat, double *lon) const
+{
+    const wxString body = uri.Mid(4).BeforeFirst(';');
+    const wxArrayString parts = wxSplit(body, ',', '\0');
+    if (parts.GetCount() < 2)
+        return false;
+    wxString a = parts[0];
+    wxString b = parts[1];
+    a.Trim(true).Trim(false);
+    b.Trim(true).Trim(false);
+    return a.ToCDouble(lat) && b.ToCDouble(lon) && std::fabs(*lat) <= 90.0 &&
+           std::fabs(*lon) <= 180.0;
+}
+
+// The chart goes to a place of a note, unless it is well in view already,
+// and marks it.
+void legend_pi::GoToPlace(double lat, double lon)
+{
+    bool inView = false;
+    if (m_viewport_valid) {
+        wxPoint pixel;
+        GetCanvasPixLL(&m_viewport, &pixel, lat, lon);
+        const int marginX = m_viewport.pix_width / 8;
+        const int marginY = m_viewport.pix_height / 8;
+        inView = pixel.x >= marginX && pixel.x <= m_viewport.pix_width - marginX &&
+                 pixel.y >= marginY && pixel.y <= m_viewport.pix_height - marginY;
+    }
+    if (!inView) {
+        const double scale = m_viewport_valid && m_viewport.view_scale_ppm > 0.0
+                                 ? m_viewport.view_scale_ppm
+                                 : 0.1;
+        JumpTo(lat, lon, scale);
+    }
+    ShowMarker(lat, lon);
+}
+
+// A link to a place in the note being edited: the selected text becomes the
+// link, or the position itself is put in. The place is marked on the chart.
+void legend_pi::InsertPlace(double lat, double lon)
+{
+    if (!m_editing || !m_editor)
+        return;
+    const wxString uri = wxString::Format("geo:%s,%s", wxString::FromCDouble(lat, 5),
+                                          wxString::FromCDouble(lon, 5));
+    m_editor->AddLinkWithText(uri, FormatPosition(lat, lon));
+    ShowMarker(lat, lon);
+    if (m_legend_window)
+        m_legend_window->Raise();
+    m_editor->SetFocus();
+}
+
+// The notes of the Legend folder that belong to a place: read again when
+// the folder changes and after a note is saved.
+void legend_pi::RefreshNotePlaces()
+{
+    std::vector<wxString> paths;
+    wxDir dir(GetLegendDirectory());
+    if (dir.IsOpened()) {
+        wxString name;
+        bool found = dir.GetFirst(&name, wxEmptyString, wxDIR_FILES);
+        while (found) {
+            const wxString ext = wxFileName(name).GetExt().Lower();
+            if (ext == "md" || ext == "markdown")
+                paths.push_back(GetLegendDirectory() + wxFileName::GetPathSeparator() + name);
+            found = dir.GetNext(&name);
+        }
+    }
+    m_note_places = ReadNotePlaces(paths);
+    m_note_selected = -1;
+    m_note_hover = -1;
+    RefreshAllCanvases();
+}
+
+// Sea miles between two positions, flat: the distances here are short.
+double legend_pi::SeaMiles(double lat1, double lon1, double lat2, double lon2) const
+{
+    const double kPi = 3.14159265358979323846;
+    const double dy = (lat2 - lat1) * 60.0;
+    double dlon = lon2 - lon1;
+    while (dlon > 180.0)
+        dlon -= 360.0;
+    while (dlon < -180.0)
+        dlon += 360.0;
+    const double dx = dlon * 60.0 * std::cos((lat1 + lat2) / 2.0 * kPi / 180.0);
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+// Opens a note in the legend window, from the chart or a notice.
+void legend_pi::OpenNote(const wxString &path)
+{
+    CreateLegendWindow();
+    if (m_editing)
+        StopEditing();
+    if (!m_legend_window->IsShown()) {
+        RefreshLegendFiles();
+        m_legend_window->Show();
+    }
+    ShowNoteNamed(wxFileName(path).GetFullName());
+    m_legend_window->Raise();
+}
+
+// The sign of a note on the chart under a click, or -1.
+int legend_pi::NotePlaceAt(const wxPoint &pixel, double tolerancePx) const
+{
+    if (!m_viewport_valid)
+        return -1;
+    PlugIn_ViewPort vp = m_viewport;
+    int best = -1;
+    double bestDistance = tolerancePx * tolerancePx;
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        wxPoint at;
+        GetCanvasPixLL(&vp, &at, m_note_places[i].lat, m_note_places[i].lon);
+        const double dx = at.x - pixel.x;
+        const double dy = at.y - pixel.y;
+        if (dx * dx + dy * dy <= bestDistance) {
+            bestDistance = dx * dx + dy * dy;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+namespace {
+
+// Paper yellow with a brown edge, like the notes of the sketch; softer in
+// dusk and night.
+void NoteSignColours(wxColour *fill, wxColour *edge)
+{
+    const double dim = IsDimScheme() ? 0.55 : 1.0;
+    *fill = wxColour(static_cast<unsigned char>(250 * dim), static_cast<unsigned char>(199 * dim),
+                     static_cast<unsigned char>(117 * dim));
+    *edge = wxColour(static_cast<unsigned char>(133 * dim), static_cast<unsigned char>(79 * dim),
+                     static_cast<unsigned char>(11 * dim));
+}
+
+} // namespace
+
+// A small sheet of paper with a folded corner at the place of each note in
+// view, and the radius of a clicked one as a dashed circle.
+bool legend_pi::DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    if (m_note_places.empty())
+        return false;
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (!gc)
+        return false;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+    wxColour fill;
+    wxColour edge;
+    NoteSignColours(&fill, &edge);
+    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
+    bool drew = false;
+
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        const NotePlace &place = m_note_places[i];
+        wxPoint at;
+        GetCanvasPixLL(vp, &at, place.lat, place.lon);
+        if (at.x < -20 || at.y < -20 || at.x > vp->pix_width + 20 || at.y > vp->pix_height + 20)
+            continue;
+        const double x = at.x;
+        const double y = at.y;
+
+        if (static_cast<int>(i) == m_note_selected) {
+            wxPoint north;
+            GetCanvasPixLL(vp, &north, place.lat + place.radius / 60.0, place.lon);
+            const double r = std::fabs(north.y - at.y);
+            gc->SetBrush(*wxTRANSPARENT_BRUSH);
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(edge).Width(1.5 * s).Style(wxPENSTYLE_SHORT_DASH)));
+            gc->DrawEllipse(x - r, y - r, 2 * r, 2 * r);
+        }
+
+        const double w = 9.0 * s;
+        const double h = 11.0 * s;
+        const double fold = 4.0 * s;
+        wxGraphicsPath sheet = gc->CreatePath();
+        sheet.MoveToPoint(x - w, y - h);
+        sheet.AddLineToPoint(x + w - fold, y - h);
+        sheet.AddLineToPoint(x + w, y - h + fold);
+        sheet.AddLineToPoint(x + w, y + h);
+        sheet.AddLineToPoint(x - w, y + h);
+        sheet.CloseSubpath();
+        gc->SetBrush(wxBrush(fill));
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(edge).Width(1.3 * s).Join(wxJOIN_ROUND)));
+        gc->DrawPath(sheet);
+        wxGraphicsPath marks = gc->CreatePath();
+        marks.MoveToPoint(x + w - fold, y - h);
+        marks.AddLineToPoint(x + w - fold, y - h + fold);
+        marks.AddLineToPoint(x + w, y - h + fold);
+        for (int line = 0; line < 3; ++line) {
+            const double ly = y - h * 0.25 + line * h * 0.35;
+            marks.MoveToPoint(x - w * 0.6, ly);
+            marks.AddLineToPoint(x + w * 0.6, ly);
+        }
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(edge).Width(1.0 * s)));
+        gc->StrokePath(marks);
+        drew = true;
+    }
+    return drew;
+}
+
+bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
+{
+    if (m_note_places.empty())
+        return false;
+    wxColour fill;
+    wxColour edge;
+    NoteSignColours(&fill, &edge);
+    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
+    const double kPi = 3.14159265358979323846;
+    bool drew = false;
+
+    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+                 GL_HINT_BIT);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        const NotePlace &place = m_note_places[i];
+        wxPoint at;
+        GetCanvasPixLL(vp, &at, place.lat, place.lon);
+        if (at.x < -20 || at.y < -20 || at.x > vp->pix_width + 20 || at.y > vp->pix_height + 20)
+            continue;
+        const double x = at.x;
+        const double y = at.y;
+
+        if (static_cast<int>(i) == m_note_selected) {
+            wxPoint north;
+            GetCanvasPixLL(vp, &north, place.lat + place.radius / 60.0, place.lon);
+            const double r = std::fabs(north.y - at.y);
+            glColor4ub(edge.Red(), edge.Green(), edge.Blue(), 230);
+            glLineWidth(static_cast<float>(1.5 * s));
+            glBegin(GL_LINES);
+            const int segments = 72;
+            for (int k = 0; k < segments; k += 2) {
+                const double a1 = 2.0 * kPi * k / segments;
+                const double a2 = 2.0 * kPi * (k + 1) / segments;
+                glVertex2d(x + r * std::cos(a1), y + r * std::sin(a1));
+                glVertex2d(x + r * std::cos(a2), y + r * std::sin(a2));
+            }
+            glEnd();
+        }
+
+        const double w = 9.0 * s;
+        const double h = 11.0 * s;
+        const double fold = 4.0 * s;
+        const double sheet[5][2] = {{x - w, y - h}, {x + w - fold, y - h}, {x + w, y - h + fold},
+                                    {x + w, y + h}, {x - w, y + h}};
+        glColor4ub(fill.Red(), fill.Green(), fill.Blue(), 245);
+        glBegin(GL_POLYGON);
+        for (const auto &p : sheet)
+            glVertex2d(p[0], p[1]);
+        glEnd();
+        glColor4ub(edge.Red(), edge.Green(), edge.Blue(), 255);
+        glLineWidth(static_cast<float>(1.3 * s));
+        glBegin(GL_LINE_LOOP);
+        for (const auto &p : sheet)
+            glVertex2d(p[0], p[1]);
+        glEnd();
+        glLineWidth(static_cast<float>(1.0 * s));
+        glBegin(GL_LINES);
+        glVertex2d(x + w - fold, y - h);
+        glVertex2d(x + w - fold, y - h + fold);
+        glVertex2d(x + w - fold, y - h + fold);
+        glVertex2d(x + w, y - h + fold);
+        for (int line = 0; line < 3; ++line) {
+            const double ly = y - h * 0.25 + line * h * 0.35;
+            glVertex2d(x - w * 0.6, ly);
+            glVertex2d(x + w * 0.6, ly);
+        }
+        glEnd();
+        drew = true;
+    }
+
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
+    glPopAttrib();
+    return drew;
+}
+
+// With every fix: a notice when the boat comes within the radius of a
+// note it was not near before. A notice about a VHF area goes first; a
+// note waits until that one is gone.
+void legend_pi::CheckNotePlaces()
+{
+    std::set<wxString> near;
+    std::vector<const NotePlace *> entered;
+    for (const NotePlace &place : m_note_places) {
+        const double distance = SeaMiles(m_ship_lat, m_ship_lon, place.lat, place.lon);
+        if (distance > place.radius)
+            continue;
+        near.insert(place.path);
+        if (m_note_places_known && m_notes_near.count(place.path) == 0)
+            entered.push_back(&place);
+    }
+    m_notes_near = near;
+    m_note_places_known = true;
+
+    if (entered.empty() || !m_note_notice_on)
+        return;
+
+    const NotePlace &place = *entered.front();
+    wxString distance = wxString::Format(
+        "%.1f", SeaMiles(m_ship_lat, m_ship_lon, place.lat, place.lon));
+    distance.Replace(".", ",");
+    m_pending_note_title = "Notitie in de buurt";
+    m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance +
+                          " NM\nKlik om de notitie te openen";
+    m_pending_note_path = place.path;
+    if (m_vhf_notice && m_vhf_notice->IsShown())
+        m_note_notice_timer.StartOnce(12500);
+    else
+        ShowPendingNoteNotice();
+}
+
+void legend_pi::ShowPendingNoteNotice()
+{
+    if (m_pending_note_path.IsEmpty())
+        return;
+    const wxString path = m_pending_note_path;
+    m_pending_note_path.Clear();
+    ShowVhfNotice(m_pending_note_title, m_pending_note_text, true, wxColour(186, 117, 23),
+                  [this, path]() { OpenNote(path); });
+}
+
+// The note being edited belongs to this place; the radius stays, or is
+// half a sea mile for a note that had no place yet.
+void legend_pi::SetNotePlace(double lat, double lon)
+{
+    if (!m_editing)
+        return;
+    if (!m_note_has_place)
+        m_note_radius = 0.5;
+    m_note_has_place = true;
+    m_note_lat = lat;
+    m_note_lon = lon;
+    NotePlaceChanged();
+    ShowMarker(lat, lon);
+    if (m_legend_window)
+        m_legend_window->Raise();
+}
+
+void legend_pi::AskNoteRadius()
+{
+    wxString value = wxString::Format("%.2f", m_note_radius);
+    while (value.EndsWith("0"))
+        value.RemoveLast();
+    if (value.EndsWith("."))
+        value.RemoveLast();
+    value.Replace(".", ",");
+    wxTextEntryDialog dialog(m_legend_window,
+                             "Straal in zeemijl: binnen deze afstand krijg je onderweg een "
+                             "melding van deze notitie.",
+                             "Straal", value);
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+    wxString text = dialog.GetValue();
+    text.Trim(true).Trim(false);
+    text.Replace(",", ".");
+    text = text.BeforeFirst(' ');
+    double radius = 0.0;
+    if (!text.ToCDouble(&radius) || radius <= 0.0 || radius >= 100.0) {
+        wxMessageBox("Vul een straal in zeemijl in, bijvoorbeeld 0,5.", "Straal",
+                     wxOK | wxICON_INFORMATION, m_legend_window);
+        return;
+    }
+    m_note_radius = radius;
+    NotePlaceChanged();
+}
+
+// After a change of the place of the note being edited: the bar, saving,
+// and the sign on the chart.
+void legend_pi::NotePlaceChanged()
+{
+    UpdatePlaceBar();
+    m_note_dirty = true;
+    if (m_save_status)
+        m_save_status->SetLabel(wxString::FromUTF8("Nog niet bewaard\u2026"));
+    m_save_timer.StartOnce(500);
+    UpdateNoteButtons();
+}
+
+void legend_pi::UpdatePlaceBar()
+{
+    if (!m_place_bar || !m_place_text)
+        return;
+    if (m_note_has_place) {
+        wxString radius = wxString::Format("%.2f", m_note_radius);
+        while (radius.EndsWith("0"))
+            radius.RemoveLast();
+        if (radius.EndsWith("."))
+            radius.RemoveLast();
+        radius.Replace(".", ",");
+        m_place_text->SetLabel(wxString::FromUTF8("Hoort bij ") +
+                               FormatPosition(m_note_lat, m_note_lon) +
+                               wxString::FromUTF8(" \u00b7 straal ") + radius + " NM");
+        m_place_text->SetToolTip("Klik om de plek op de kaart te zien");
+    }
+    const LegendPalette palette = GetLegendPalette();
+    const bool dim = IsDimScheme();
+    m_place_bar->SetBackgroundColour(dim ? palette.stripe : wxColour(250, 238, 218));
+    m_place_text->SetForegroundColour(dim ? palette.text : wxColour(99, 56, 6));
+    m_place_bar->Show(m_editing && m_note_has_place);
+    m_place_bar->GetParent()->Layout();
 }
 
 // What a button of "Licht herkennen" does: "reset", "stop" or
@@ -8223,8 +9045,10 @@ bool legend_pi::PlayVhfSound()
 
 // A small window at the top of the chart that goes away on its own after a
 // while, or with a click.
-void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool sound)
+void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
+                              const wxColour &titleColour, std::function<void()> action)
 {
+    m_notice_action = action;
     wxWindow *canvas = GetOCPNCanvasWindow();
     if (!canvas)
         return;
@@ -8245,9 +9069,15 @@ void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool 
         sizer->Add(m_vhf_notice_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
         sizer->Add(m_vhf_notice_text, 0, wxALL, 12);
         panel->SetSizer(sizer);
+        // A click closes it, and opens what it is about, if anything.
         auto close = [this](wxMouseEvent &) {
             if (m_vhf_notice)
                 m_vhf_notice->Hide();
+            if (m_notice_action) {
+                std::function<void()> action = m_notice_action;
+                m_notice_action = std::function<void()>();
+                action();
+            }
         };
         panel->Bind(wxEVT_LEFT_DOWN, close);
         m_vhf_notice_title->Bind(wxEVT_LEFT_DOWN, close);
@@ -8261,7 +9091,7 @@ void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool 
     const LegendPalette palette = GetLegendPalette();
     wxWindow *panel = m_vhf_notice->GetChildren().GetFirst()->GetData();
     panel->SetBackgroundColour(palette.background);
-    m_vhf_notice_title->SetForegroundColour(wxColour(220, 40, 40));
+    m_vhf_notice_title->SetForegroundColour(titleColour);
     m_vhf_notice_text->SetForegroundColour(palette.text);
     m_vhf_notice_title->SetLabel(title);
     m_vhf_notice_text->SetLabel(text);

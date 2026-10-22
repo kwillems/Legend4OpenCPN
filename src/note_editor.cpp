@@ -543,8 +543,13 @@ NoteEditor::NoteEditor(wxWindow *parent, wxWindowID id)
     Bind(wxEVT_RICHTEXT_PROPERTIES_CHANGED, changed);
     Bind(wxEVT_RICHTEXT_RETURN, &NoteEditor::OnReturn, this);
     Bind(wxEVT_LEFT_DOWN, &NoteEditor::OnLeftDown, this);
-    // A link is not followed while writing.
-    Bind(wxEVT_TEXT_URL, [](wxTextUrlEvent &) {});
+    // A web link is not followed while writing; a place goes to the chart.
+    Bind(wxEVT_TEXT_URL, [this](wxTextUrlEvent &event) {
+        wxRichTextAttr attr;
+        if (GetStyle(event.GetURLStart(), attr) && attr.HasURL() &&
+            attr.GetURL().StartsWith("geo:") && m_place)
+            m_place(attr.GetURL());
+    });
 }
 
 void NoteEditor::Changed()
@@ -1026,6 +1031,22 @@ void NoteEditor::AddLink(const wxString &address)
     SetFocus();
 }
 
+void NoteEditor::AddLinkWithText(const wxString &address, const wxString &text)
+{
+    if (HasSelection()) {
+        AddLink(address);
+        return;
+    }
+    wxRichTextAttr attr;
+    attr.SetURL(address);
+    attr.SetFontUnderlined(true);
+    attr.SetTextColour(m_link_colour);
+    BeginStyle(attr);
+    WriteText(text);
+    EndStyle();
+    SetFocus();
+}
+
 bool NoteEditor::InsertNoteImage(const wxString &source, const wxString &alt)
 {
     const wxImage image = LoadImageFor(source);
@@ -1234,6 +1255,20 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokePath(bin);
         stroke(0.44, 0.43, 0.45, 0.74);
         stroke(0.56, 0.43, 0.55, 0.74);
+    }
+    else if (name == "place") {
+        // A map pin: a round head with a point below and a hole in it.
+        gc->SetBrush(wxBrush(colour));
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        wxGraphicsPath pin = gc->CreatePath();
+        const double cx = 0.5 * s;
+        const double cy = 0.4 * s;
+        const double r = 0.27 * s;
+        pin.MoveToPoint(cx, 0.9 * s);
+        pin.AddArc(cx, cy, r, 3.14159265358979323846 * 0.75, 3.14159265358979323846 * 0.25, true);
+        pin.CloseSubpath();
+        pin.AddCircle(cx, cy, r * 0.42);
+        gc->FillPath(pin, wxODDEVEN_RULE);
     }
     else if (name == "image") {
         gc->SetBrush(*wxTRANSPARENT_BRUSH);
