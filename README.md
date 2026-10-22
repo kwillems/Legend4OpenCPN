@@ -66,10 +66,15 @@ je eigen legenda's, notities en routebeschrijvingen.
 - Notities schrijven en bewerken in het venster zelf, zoals in een
   tekstverwerker: koppen, vet, lijsten, afvinklijsten, links en afbeeldingen.
   Op schijf blijft het gewone Markdown.
-- Notities op de kaart: een link naar een plek in de tekst, of de hele
-  notitie vastgepind op een plek, met een blaadje op de kaart en een melding
-  als je in de buurt komt. Een nieuwe notitie maak je ook met een rechtsklik
-  op de kaart.
+
+**Notities op de kaart**
+
+- Pin een notitie vast op een plek: die staat als geel blaadje op de kaart,
+  onder *Notities hier* in de legenda en in *Vooruit*, en je krijgt een
+  melding als je in de buurt komt.
+- Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
+  vastgepind op die plek.
+- In de tekst een link naar een plek: een klik laat de kaart erheen gaan.
 
 **Weergave**
 
