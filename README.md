@@ -66,6 +66,10 @@ je eigen legenda's, notities en routebeschrijvingen.
 - Notities schrijven en bewerken in het venster zelf, zoals in een
   tekstverwerker: koppen, vet, lijsten, afvinklijsten, links en afbeeldingen.
   Op schijf blijft het gewone Markdown.
+- Notities op de kaart: een link naar een plek in de tekst, of de hele
+  notitie vastgepind op een plek, met een blaadje op de kaart en een melding
+  als je in de buurt komt. Een nieuwe notitie maak je ook met een rechtsklik
+  op de kaart.
 
 **Weergave**
 
@@ -144,6 +148,7 @@ In het menu Instellingen:
 | Licht herkennen | Een licht herkennen aan zijn ritme |
 | Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
 | Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
+| Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -269,6 +274,8 @@ minstens een halve knoop.
 - Tot twee marifoongebieden waar de koers in gaat, op hun plek in de tijd,
   bijvoorbeeld *over 12 min · marifoongebied kanaal 22 · Houtribsluizen ·
   melden*. Een klik laat het gebied oplichten.
+- Tot drie vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
+  stuurboord · notitie Ondiepte bij de Ketelbrug*. Een klik opent de notitie.
 - De plugin kijkt in een waaier vóór de boot die verder weg breder wordt, tot
   zo ver als je in een half uur komt (hooguit 8 zeemijl).
 - Ingeklapt noemt het kopje nog het eerstvolgende object.
@@ -382,7 +389,8 @@ Markdown-tekens. Bovenin staat een rij knoppen:
 - een lijst met bolletjes, een genummerde lijst of een afvinklijst; klik op
   een hokje om het af te vinken;
 - een link van de geselecteerde tekst, en een afbeelding. Een afbeelding van
-  buiten de Legend-map wordt eerst naar `images/` gekopieerd.
+  buiten de Legend-map wordt eerst naar `images/` gekopieerd;
+- de **speld** voor een plek op de kaart (zie *Notities op de kaart*).
 
 Enter na een kop geeft weer gewone tekst, Enter op een lege lijstregel
 beëindigt de lijst en `Shift+Enter` begint een nieuwe regel binnen dezelfde
@@ -393,6 +401,59 @@ gewone weergave.
 Op schijf blijft een notitie gewone Markdown. Een tabel zie je tijdens het
 bewerken als Markdown-tekst in een vaste letter; zo kun je hem bewerken en
 blijft hij precies bewaard.
+
+### Notities op de kaart
+
+Een notitie kan op twee manieren met de kaart verbonden zijn.
+
+**Een link naar een plek in de tekst.** Klik je er in de notitie op, dan gaat
+de kaart erheen en wijst de plek aan. Zo'n link maak je met de speld-knop
+(*Link naar het midden van de kaart in de tekst*), of met een rechtsklik op de
+kaart: *Notitie ▸ Link naar deze plek in de tekst*. Is er tekst geselecteerd,
+dan wordt die de link; anders komen de coördinaten in de tekst. In het
+bestand staat zo'n link als `[Ketelbrug](geo:52.58030,5.75120)`, een
+standaard die ook andere kaartprogramma's begrijpen.
+
+**De hele notitie vastgepind op een plek.** Dat kan op drie manieren:
+
+- met een rechtsklik op de kaart: *Notitie ▸ Nieuwe notitie hier*. Je geeft
+  een titel, en de nieuwe notitie opent meteen vastgepind op die plek, ook als
+  het legendavenster dicht was;
+- tijdens het bewerken met een rechtsklik: *Notitie ▸ Hier vastpinnen op de
+  kaart*;
+- met de speld-knop: *Notitie vastpinnen op het midden van de kaart*.
+
+Boven de tekst staat dan *Vastgepind op 52°34,818′N 5°45,072′E · straal
+0,5 NM*. Een klik daarop toont de plek; met **Straal** pas je de afstand voor
+de melding aan, met **Losmaken** maak je de notitie weer los. In de gewone
+weergave staat hetzelfde in een gekleurd balkje boven de notitie.
+
+Een vastgepinde notitie:
+
+- staat als een **geel blaadje** op de kaart. Met de muis erboven zie je de
+  titel; een klik opent de notitie en toont de straal als stippellijn. Een
+  rechtsklik op het blaadje geeft *Notitie ▸ "…" openen* en *"…"
+  verwijderen*;
+- staat onder het kopje **Notities hier** in de legenda zolang de plek in beeld
+  is, de dichtstbijzijnde eerst, met de afstand en de eerste regel tekst;
+- staat in **Vooruit** als je koers erlangs gaat;
+- geeft onderweg een **melding** met pieptonen zodra je binnen de straal
+  komt. Een klik op de melding opent de notitie. Uit te zetten met *Melding
+  bij notitie in de buurt*.
+
+De plek staat bovenaan het bestand, in het blokje dat ook Obsidian gebruikt:
+
+```markdown
+---
+location: [52.58030, 5.75120]
+straal: 0.5
+---
+# Ondiepte bij de Ketelbrug
+```
+
+`location` schrijft de Obsidian-plugin *Map View* ook zo, dus de notitie
+verschijnt daar eveneens op de kaart. `straal` is in zeemijl. Andere regels
+die je in het blokje zet, zoals `tags`, blijven bewaard.
 
 ## Weergave
 
@@ -513,6 +574,7 @@ Legend4OpenCPN/
 │   ├── chart_names.cpp/.h      # namen van kaartobjecten (NL/EN)
 │   ├── light_character.cpp/.h  # lichtkarakters: lezen, woorden, ritme, herkennen
 │   ├── note_editor.cpp/.h      # notities bewerken: Markdown in en uit
+│   ├── note_places.cpp/.h      # notities met een plek: het blokje bovenaan
 │   └── vhf_areas.cpp/.h        # marifoongebieden uit de lagen
 ├── third_party/md4c/        # Markdown-verwerking (submodule)
 ├── opencpn-libs/            # OpenCPN-plugin-API (submodule)
@@ -528,7 +590,6 @@ Ideeën voor volgende versies:
 - bruggen markeren waar de boot niet onder past;
 - het bereik van een licht laten zien in het nachtvoorbeeld;
 - betekenissen bewerken in het venster zelf;
-- notities die bij een plek horen en verschijnen als die in beeld is;
 - een instelbare Legend-map;
 - builds voor Windows en Linux, en een Engelse vertaling van de bediening.
 
