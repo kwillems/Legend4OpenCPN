@@ -151,6 +151,8 @@ const wxString kLegendButtonIdPrefix = "legend-button-";
 
 // Id of a line of the "Vooruit" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
+const wxString kLegendAheadVhfIdPrefix = "legend-aheadvhf-";
+const wxString kLegendVhfAreaIdPrefix = "legend-vhfarea-";
 
 // The "memory:" file system handler for the icons of the dynamic legend.
 // Its code is compiled into this plugin, so it must be removed again in
@@ -1155,6 +1157,33 @@ wxImage EyeIcon(
 
 // The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
 // drawn rather than taken from a font, so their size is certain.
+// A small VHF sign for a row: the channel in a red-edged rounded square,
+// like the icons of the VHFinfo layer.
+wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int size)
+{
+    wxBitmap bitmap(size, size, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            const double s = size;
+            gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(wxColour(220, 40, 40)).Width(s * 0.08)));
+            gc->SetBrush(wxBrush(wxColour(255, 235, 235)));
+            gc->DrawRoundedRectangle(s * 0.08, s * 0.14, s * 0.84, s * 0.72, s * 0.14);
+            wxFont font(wxFontInfo(s * (channel.length() > 2 ? 0.3 : 0.4)).Bold());
+            gc->SetFont(font, wxColour(160, 20, 20));
+            double w = 0, h = 0, descent = 0, leading = 0;
+            gc->GetTextExtent(channel, &w, &h, &descent, &leading);
+            gc->DrawText(channel, (s - w) / 2, (s - h) / 2);
+            delete gc;
+        }
+    }
+    return bitmap.ConvertToImage();
+}
+
 wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size)
 {
     wxBitmap bitmap(size, size, 24);
@@ -1422,6 +1451,20 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnAllLightsTimer(); });
 
+    m_vhf_highlight_timer.Bind(
+        wxEVT_TIMER,
+        [this](wxTimerEvent &) { OnVhfHighlightTimer(); });
+
+    // Tries again until OpenCPN takes the next beep.
+    m_vhf_sound_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+        if (m_vhf_beeps_left <= 0) {
+            m_vhf_sound_timer.Stop();
+            return;
+        }
+        if (PlayVhfSound())
+            --m_vhf_beeps_left;
+    });
+
     m_tap_clock_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) { UpdateTapClock(); });
@@ -1473,6 +1516,10 @@ int legend_pi::Init()
     m_context_menu_id = AddCanvasContextMenuItem(
         new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")),
         this);
+    // "Marifoon hier": the VHF areas at the clicked spot light up, with
+    // their channels in a notice.
+    m_vhf_menu_id = AddCanvasContextMenuItem(
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Marifoon hier")), this);
 
     m_ocharts.SetCacheFile(
         GetConfigDirectory() + wxFileName::GetPathSeparator() +
@@ -1515,6 +1562,10 @@ bool legend_pi::DeInit()
     m_light_active = false;
     m_all_lights_timer.Stop();
     m_all_lights_on = false;
+    m_vhf_highlight_timer.Stop();
+    m_vhf_highlight.clear();
+    m_vhf_notice_timer.Stop();
+    m_vhf_sound_timer.Stop();
     m_night_preview = false;
     g_night_preview = false;
     m_tap_clock_timer.Stop();
@@ -1564,6 +1615,14 @@ bool legend_pi::DeInit()
         m_toolbar_item_id = -1;
     }
 
+    if (m_vhf_menu_id >= 0) {
+        RemoveCanvasContextMenuItem(m_vhf_menu_id);
+        m_vhf_menu_id = -1;
+    }
+    if (m_vhf_notice) {
+        delete m_vhf_notice;
+        m_vhf_notice = nullptr;
+    }
     if (m_context_menu_id >= 0) {
         RemoveCanvasContextMenuItem(m_context_menu_id);
         m_context_menu_id = -1;
@@ -1725,6 +1784,8 @@ void legend_pi::LoadConfig()
 
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
     config.Read("ShowLights", &m_show_lights, true);
+    config.Read("VhfKeepLit", &m_vhf_keep_lit, false);
+    config.Read("VhfNotice", &m_vhf_notice_on, true);
     wxString language;
     config.Read("Language", &language, "nl");
     m_dutch_names = language != "en";
@@ -1765,6 +1826,8 @@ void legend_pi::SaveConfig() const
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
     config.Write("ShowLights", m_show_lights);
+    config.Write("VhfKeepLit", m_vhf_keep_lit);
+    config.Write("VhfNotice", m_vhf_notice_on);
     config.Write("Language", m_dutch_names ? "nl" : "en");
 
     config.Flush();
@@ -2989,7 +3052,8 @@ void legend_pi::CreateLegendWindow()
     // select text does not.
     // Headings work the same way and fold their group in or out; in the
     // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button, AheadVhf,
+                         VhfArea };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -3015,6 +3079,8 @@ void legend_pi::CreateLegendWindow()
             {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
             {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
             {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
+            {HitKind::AheadVhf, legendView->IdNumberAt(pos, kLegendAheadVhfIdPrefix)},
+            {HitKind::VhfArea, legendView->IdNumberAt(pos, kLegendVhfAreaIdPrefix)},
             {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
             {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
             {HitKind::Row, legendView->RowAt(pos)},
@@ -3080,6 +3146,21 @@ void legend_pi::CreateLegendWindow()
                     break;
                 case HitKind::Ahead:
                     ShowAheadItem(static_cast<size_t>(hit.index));
+                    break;
+                case HitKind::AheadVhf:
+                    if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
+                        const AheadVhf &next = m_ahead_vhf[hit.index];
+                        ShowVhfHighlight(VhfAreasWithParts(next.lat, next.lon));
+                    }
+                    break;
+                case HitKind::VhfArea:
+                    if (static_cast<size_t>(hit.index) < m_vhf_rows.size()) {
+                        std::vector<VhfArea> parts;
+                        for (const VhfArea &part : m_vhf_areas.All())
+                            if (part.description == m_vhf_rows[hit.index].description)
+                                parts.push_back(part);
+                        ShowVhfHighlight(parts);
+                    }
                     break;
                 case HitKind::Match:
                     if (static_cast<size_t>(hit.index) < m_identify_matches.size())
@@ -3165,6 +3246,10 @@ void legend_pi::CreateLegendWindow()
                 break;
             case HitKind::Ahead:
                 tip = "Op de kaart aanwijzen";
+                break;
+            case HitKind::AheadVhf:
+            case HitKind::VhfArea:
+                tip = "Het marifoongebied op de kaart laten oplichten";
                 break;
             case HitKind::Tap:
                 tip = "Ingedrukt houden zolang het licht brandt (of de spatiebalk)";
@@ -3571,10 +3656,17 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
     if (std::abs(up.x - m_mouse_down.x) > 4 || std::abs(up.y - m_mouse_down.y) > 4)
         return false;
 
-    if (!IsDynamicLegendVisible() || !m_viewport_valid)
+    if (!m_viewport_valid)
         return false;
 
     const double ratio = ViewportPixelsPerWindowPixel();
+    const wxPoint pixel(static_cast<int>(std::lround(up.x * ratio)),
+                        static_cast<int>(std::lround(up.y * ratio)));
+    HighlightVhfAreaAt(pixel, 14.0 * ratio);
+
+    if (!IsDynamicLegendVisible())
+        return false;
+
     PlugIn_ViewPort vp = m_viewport;
     double lat = 0.0;
     double lon = 0.0;
@@ -3597,6 +3689,10 @@ void legend_pi::SetCursorLatLon(double lat, double lon)
 
 void legend_pi::OnContextMenuItemCallback(int id)
 {
+    if (id == m_vhf_menu_id && m_cursor_valid) {
+        ShowVhfHere(m_cursor_lat, m_cursor_lon);
+        return;
+    }
     if (id != m_context_menu_id || !m_cursor_valid)
         return;
 
@@ -4573,7 +4669,8 @@ void legend_pi::ShowSettingsMenu()
 
     enum
     {
-        kLights = 1000, kHidden, kEnglish, kAllLights, kNight, kIdentify, kFold, kReorder
+        kLights = 1000, kHidden, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep, kVhfNotice,
+        kFold, kReorder
     };
 
     wxMenu menu;
@@ -4590,6 +4687,13 @@ void legend_pi::ShowSettingsMenu()
         menu.AppendCheckItem(kNight, "Nachtvoorbeeld")->Check(m_night_preview);
     if (m_show_lights && (m_menu_has_lights || m_identify_on))
         menu.AppendCheckItem(kIdentify, "Licht herkennen")->Check(m_identify_on);
+    EnsureVhfAreas();
+    if (!m_vhf_areas.IsEmpty()) {
+        menu.AppendSeparator();
+        menu.AppendCheckItem(kVhfKeep, "Marifoongebied blijft oplichten")->Check(m_vhf_keep_lit);
+        menu.AppendCheckItem(kVhfNotice, "Melding bij nieuw marifoongebied")
+            ->Check(m_vhf_notice_on);
+    }
     if (m_menu_has_headings) {
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
@@ -4613,6 +4717,22 @@ void legend_pi::ShowSettingsMenu()
         break;
     case kIdentify:
         SetIdentify(!m_identify_on);
+        break;
+    case kVhfKeep:
+        m_vhf_keep_lit = !m_vhf_keep_lit;
+        SaveConfig();
+        // A lit area now stays, or starts to fade.
+        if (!m_vhf_highlight.empty()) {
+            m_vhf_highlight_started = wxGetUTCTimeMillis();
+            if (m_vhf_keep_lit)
+                m_vhf_highlight_timer.Stop();
+            else
+                m_vhf_highlight_timer.Start(50);
+        }
+        break;
+    case kVhfNotice:
+        m_vhf_notice_on = !m_vhf_notice_on;
+        SaveConfig();
         break;
     case kFold:
         RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");
@@ -5932,11 +6052,14 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             if (extraHeading("@marifoon", nl ? "Marifoon" : "VHF", summary) &&
                 !areas.empty()) {
                 html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
+                m_vhf_rows.clear();
                 for (size_t k = 0; k < areas.size(); ++k) {
                     const VhfArea *area = areas[k];
+                    m_vhf_rows.push_back(*area);
                     const wxString who = area->callName.IsEmpty() ? area->name : area->callName;
                     html << "<tr bgcolor=\"" << hex(k % 2 == 1 ? stripe : background)
-                         << "\"><td><b>" << (nl ? "kanaal " : "channel ")
+                         << "\"><td id=\"" << kLegendVhfAreaIdPrefix << k << "\"><b>"
+                         << (nl ? "kanaal " : "channel ")
                          << escape(area->channel) << "</b>";
                     if (!who.IsEmpty())
                         html << " &middot; " << escape(who);
@@ -5979,8 +6102,31 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 return escape(group.lightCharacter ? group.lightText : group.label);
             };
 
+            auto whenMinutes = [nl](double minutes) {
+                if (minutes < 1.0)
+                    return wxString(nl ? "nu" : "now");
+                return wxString::Format(nl ? "over %d min" : "in %d min",
+                                        static_cast<int>(std::lround(minutes)));
+            };
+            auto vhfText = [&](const AheadVhf &next) {
+                const VhfArea &area = next.area;
+                wxString text = (nl ? "kanaal " : "channel ") + escape(area.channel);
+                const wxString who = area.callName.IsEmpty() ? area.name : area.callName;
+                if (!who.IsEmpty())
+                    text << " &middot; " << escape(who);
+                if (!area.usage.IsEmpty())
+                    text << " &middot; " << escape(VhfUsageWord(area.usage, nl));
+                return text;
+            };
+
             wxString summary;
-            if (m_ahead.empty())
+            const bool vhfFirst =
+                !m_ahead_vhf.empty() &&
+                (m_ahead.empty() || m_ahead_vhf.front().minutes < m_ahead.front().minutes);
+            if (vhfFirst)
+                summary = whenMinutes(m_ahead_vhf.front().minutes) + ": " +
+                          vhfText(m_ahead_vhf.front());
+            else if (m_ahead.empty())
                 summary = nl ? "niets in de komende 30 minuten" : "nothing in the next 30 minutes";
             else
                 summary = when(m_ahead.front()) + ", " + side(m_ahead.front()) + ": " +
@@ -5988,11 +6134,32 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             if (extraHeading("@vooruit", nl ? "Vooruit" : "Ahead", summary)) {
                 html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
+                size_t row = 0;
+                size_t nextVhf = 0;
+                // A VHF area ahead, in its place in time.
+                auto vhfRow = [&](size_t v) {
+                    const AheadVhf &next = m_ahead_vhf[v];
+                    const wxString id = wxString::Format("%s%zu", kLegendAheadVhfIdPrefix, v);
+                    const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
+                    const wxString image = addImage(
+                        wxString::Format("legend_dyn_%d_aheadvhf_%zu.png", m_dynamic_generation, v),
+                        VhfBadgeImage(next.area.channel, rowColour, 24),
+                        VhfBadgeImage(next.area.channel, rowColour, 48));
+                    html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
+                         << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
+                         << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
+                         << whenMinutes(next.minutes) << "</b> &middot; "
+                         << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
+                         << "</td></tr>";
+                };
                 for (size_t k = 0; k < m_ahead.size(); ++k) {
+                    while (nextVhf < m_ahead_vhf.size() &&
+                           m_ahead_vhf[nextVhf].minutes <= m_ahead[k].minutes)
+                        vhfRow(nextVhf++);
                     const AheadItem &item = m_ahead[k];
                     const DynamicGroup &group = m_dynamic_groups[item.group];
                     const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
-                    const wxColour &rowColour = k % 2 == 1 ? stripe : background;
+                    const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
 
                     html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
                          << "\" width=\"34\" align=\"center\" valign=\"middle\">";
@@ -6011,6 +6178,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                         html << " &middot; <b>" << escape(item.light) << "</b>";
                     html << "</td></tr>";
                 }
+                while (nextVhf < m_ahead_vhf.size())
+                    vhfRow(nextVhf++);
                 html << "</table>";
             }
         }
@@ -6703,6 +6872,10 @@ void legend_pi::GoToDynamicGroup(size_t index)
     else
         ShowMarker(position.first, position.second);
 
+    // A VHF post: its whole area lights up as well.
+    if (!group.chartSymbol)
+        HighlightVhfAreas(group.iconName.IsEmpty() ? group.key : group.iconName, {position});
+
     RenderDynamicLegend(true);
 }
 
@@ -6780,6 +6953,10 @@ void legend_pi::MarkAllOfDynamicGroup(size_t index)
         ShowLightMarkers(light, group.positions);
     else
         ShowMarkers(group.positions);
+
+    if (!group.chartSymbol)
+        HighlightVhfAreas(group.iconName.IsEmpty() ? group.key : group.iconName,
+                          group.positions);
 
     RenderDynamicLegend(true);
 }
@@ -6968,7 +7145,9 @@ bool legend_pi::RenderOverlayMultiCanvas(
 {
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview) || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
+         m_vhf_highlight.empty()) ||
+        !vp)
         return false;
 
     // Draw once per frame.
@@ -6977,7 +7156,8 @@ bool legend_pi::RenderOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShade(dc, vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview;
+    const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlight(dc, vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview || drewVhf;
     const bool drewLight = (m_light_active && DrawLightMarkers(dc, vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -7036,7 +7216,9 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)pcontext;
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview) || !vp)
+    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
+         m_vhf_highlight.empty()) ||
+        !vp)
         return false;
 
     // Draw once per frame.
@@ -7045,7 +7227,8 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShadeGL(vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview;
+    const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlightGL(vp);
+    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview || drewVhf;
     const bool drewLight = (m_light_active && DrawLightMarkersGL(vp)) || drewAll;
     if (!m_marker_active)
         return drewLight;
@@ -7526,6 +7709,9 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
     m_ship_sog = pfix.Sog;
     m_ship_time = wxGetUTCTimeMillis();
 
+    // Also while the legend is closed.
+    CheckVhfAreaChange();
+
     if (!IsDynamicLegendVisible() || m_loading || m_showing_loading_page ||
         m_reorder_mode)
         return;
@@ -7659,6 +7845,35 @@ void legend_pi::ComputeAhead()
     for (const AheadItem &item : m_ahead) {
         key << m_dynamic_groups[item.group].key << '@' << item.position << '/'
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
+    }
+
+    // The VHF areas the course enters in the same half hour, up to two:
+    // points along the course line, a few hundred metres apart.
+    m_ahead_vhf.clear();
+    EnsureVhfAreas();
+    if (!m_vhf_areas.IsEmpty() && VhfLayerShown()) {
+        std::set<wxString> seen;
+        for (const VhfArea *area : m_vhf_areas.At(m_ship_lat, m_ship_lon))
+            seen.insert(area->name + "|" + area->description);
+        const int steps = 120;
+        for (int step = 1; step <= steps && m_ahead_vhf.size() < 2; ++step) {
+            const double along = range * step / steps;
+            const double lat = m_ship_lat + along * std::cos(course) / 60.0;
+            const double lon = m_ship_lon + along * std::sin(course) / (60.0 * cosLat);
+            for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
+                if (!seen.insert(area->name + "|" + area->description).second)
+                    continue;
+                AheadVhf next;
+                next.minutes = along / m_ship_sog * 60.0;
+                next.lat = lat;
+                next.lon = lon;
+                next.area = *area;
+                m_ahead_vhf.push_back(next);
+                key << "vhf:" << area->name << '/' << static_cast<int>(next.minutes) << ';';
+                if (m_ahead_vhf.size() >= 2)
+                    break;
+            }
+        }
     }
     m_ahead_key = key.IsEmpty() ? wxString("nothing") : key;
 }
@@ -7807,17 +8022,388 @@ void legend_pi::ShowAheadItem(size_t index)
     RenderDynamicLegend(true);
 }
 
-std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
+void legend_pi::EnsureVhfAreas()
 {
-    if (!m_vhf_loaded) {
-        m_vhf_loaded = true;
-        wxString *privateDir = GetpPrivateApplicationDataLocation();
-        if (privateDir && !privateDir->IsEmpty()) {
-            const size_t count = m_vhf_areas.Load(
-                *privateDir + wxFileName::GetPathSeparator() + "layers");
-            wxLogMessage("Legend: %zu VHF areas from the layers", count);
+    if (m_vhf_loaded)
+        return;
+    m_vhf_loaded = true;
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (privateDir && !privateDir->IsEmpty()) {
+        const size_t count =
+            m_vhf_areas.Load(*privateDir + wxFileName::GetPathSeparator() + "layers");
+        wxLogMessage("Legend: %zu VHF areas from the layers", count);
+    }
+}
+
+// A click on the chart: on the icon of a VHF post, its whole area lights up
+// for a few seconds; elsewhere, a lit area goes out.
+bool legend_pi::HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx)
+{
+    EnsureVhfAreas();
+    if (m_vhf_areas.IsEmpty() || !m_viewport_valid)
+        return false;
+
+    PlugIn_ViewPort vp = m_viewport;
+    const CachedWaypoint *hit = nullptr;
+    double best = tolerancePx * tolerancePx;
+    for (const CachedWaypoint &wp : m_waypoint_cache) {
+        if (!wp.visible || m_vhf_areas.Icons().count(wp.icon) == 0)
+            continue;
+        wxPoint at;
+        GetCanvasPixLL(&vp, &at, wp.lat, wp.lon);
+        const double dx = at.x - pixel.x;
+        const double dy = at.y - pixel.y;
+        if (dx * dx + dy * dy <= best) {
+            best = dx * dx + dy * dy;
+            hit = &wp;
         }
     }
+
+    if (!hit) {
+        if (!m_vhf_highlight.empty())
+            StopVhfHighlight();
+        return false;
+    }
+
+    return HighlightVhfAreas(hit->icon, {std::make_pair(hit->lat, hit->lon)});
+}
+
+// Lights up the areas of VHF icons at these positions: from a click on the
+// chart, on a row of the legend, or on its counter for all of them.
+bool legend_pi::HighlightVhfAreas(const wxString &icon,
+                                  const std::vector<std::pair<double, double>> &positions)
+{
+    EnsureVhfAreas();
+    if (m_vhf_areas.Icons().count(icon) == 0)
+        return false;
+
+    // "vhf_unknown_78": the channel is the last part of the icon name.
+    const wxString channel = icon.AfterLast('_');
+    std::set<const VhfArea *> taken;
+    std::vector<VhfArea> lit;
+    for (const auto &position : positions) {
+        for (const VhfArea *part :
+             m_vhf_areas.AreaOfWaypoint(position.first, position.second, channel)) {
+            if (taken.insert(part).second)
+                lit.push_back(*part);
+        }
+    }
+    if (lit.empty())
+        return false;
+
+    ShowVhfHighlight(lit);
+    return true;
+}
+
+// Lights up these areas: for six seconds, or until the next click on the
+// chart when the setting says so.
+void legend_pi::ShowVhfHighlight(const std::vector<VhfArea> &areas)
+{
+    m_vhf_highlight = areas;
+    m_vhf_highlight_started = wxGetUTCTimeMillis();
+    m_vhf_highlight_alpha = 1.0;
+    if (m_vhf_keep_lit)
+        m_vhf_highlight_timer.Stop();
+    else
+        m_vhf_highlight_timer.Start(50);
+    RefreshAllCanvases();
+}
+
+// The areas at a spot, with every other part of each of them.
+std::vector<VhfArea> legend_pi::VhfAreasWithParts(double lat, double lon)
+{
+    std::vector<VhfArea> result;
+    std::set<wxString> taken;
+    for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
+        for (const VhfArea &part : m_vhf_areas.All()) {
+            if (part.description == area->description &&
+                taken.insert(part.name + "|" + part.description + "|" +
+                             wxString::Format("%zu", part.polygon.size()) +
+                             wxString::Format("%.6f", part.latMin))
+                    .second)
+                result.push_back(part);
+        }
+    }
+    return result;
+}
+
+// One line about an area: "kanaal 18 · Ketelbrug · verkeerspost · melden".
+wxString legend_pi::VhfAreaLine(const VhfArea &area) const
+{
+    const bool nl = m_dutch_names;
+    wxString line = (nl ? "kanaal " : "channel ") + area.channel;
+    const wxString who = area.callName.IsEmpty() ? area.name : area.callName;
+    if (!who.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << who;
+    if (!area.type.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << VhfTypeWord(area.type, nl);
+    if (!area.usage.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << VhfUsageWord(area.usage, nl);
+    return line;
+}
+
+// "Marifoon hier" from the chart's menu.
+void legend_pi::ShowVhfHere(double lat, double lon)
+{
+    EnsureVhfAreas();
+    const std::vector<VhfArea> parts = VhfAreasWithParts(lat, lon);
+    wxString text;
+    std::set<wxString> said;
+    for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
+        const wxString line = VhfAreaLine(*area);
+        if (said.insert(line).second)
+            text << (text.IsEmpty() ? "" : "\n") << line;
+    }
+    if (m_vhf_areas.IsEmpty())
+        text = "Geen marifoongebieden geladen (laag VHFinfo Nederland).";
+    else if (text.IsEmpty())
+        text = "Hier geldt geen marifoongebied uit VHFinfo Nederland.";
+    ShowVhfNotice("Marifoon hier", text, false);
+    if (!parts.empty())
+        ShowVhfHighlight(parts);
+}
+
+// Whether the layer with the VHF areas is shown in OpenCPN: one of its
+// waypoints is visible.
+bool legend_pi::VhfLayerShown() const
+{
+    for (const CachedWaypoint &wp : m_waypoint_cache) {
+        if (wp.visible && m_vhf_areas.Icons().count(wp.icon) > 0)
+            return true;
+    }
+    return false;
+}
+
+// With every position fix: has the boat sailed into a VHF area it was not
+// in before? Then that area lights up, with a notice and a sound.
+void legend_pi::CheckVhfAreaChange()
+{
+    EnsureVhfAreas();
+    if (m_vhf_areas.IsEmpty() || m_waypoint_cache.empty())
+        return;
+
+    std::set<wxString> now;
+    std::vector<const VhfArea *> entered;
+    const bool shown = VhfLayerShown();
+    if (shown) {
+        for (const VhfArea *area : m_vhf_areas.At(m_ship_lat, m_ship_lon)) {
+            const wxString key = area->name + "|" + area->description;
+            if (!now.insert(key).second)
+                continue;
+            if (m_vhf_areas_known && m_vhf_areas_here.count(key) == 0)
+                entered.push_back(area);
+        }
+    }
+    m_vhf_areas_here = now;
+    m_vhf_areas_known = shown;
+
+    if (entered.empty() || !m_vhf_notice_on)
+        return;
+
+    wxString text;
+    for (const VhfArea *area : entered)
+        text << (text.IsEmpty() ? "" : "\n") << VhfAreaLine(*area);
+    ShowVhfNotice("Nieuw marifoongebied", text, true);
+    ShowVhfHighlight(VhfAreasWithParts(m_ship_lat, m_ship_lon));
+}
+
+// False while OpenCPN is still busy with the previous sound: on macOS it
+// plays one at a time, through a system command that takes a moment.
+bool legend_pi::PlayVhfSound()
+{
+    wxString *shared = GetpSharedDataLocation();
+    if (!shared)
+        return true;
+    wxString file = *shared + "sounds" + wxFileName::GetPathSeparator() + "beep1.wav";
+    if (!wxFileExists(file))
+        return true;
+    wxLogNull quiet; // a refused try is not worth a warning in the log
+    return PlugInPlaySoundEx(file, -1);
+}
+
+// A small window at the top of the chart that goes away on its own after a
+// while, or with a click.
+void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool sound)
+{
+    wxWindow *canvas = GetOCPNCanvasWindow();
+    if (!canvas)
+        return;
+
+    if (!m_vhf_notice) {
+        m_vhf_notice = new wxFrame(canvas, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                   wxDefaultSize,
+                                   wxFRAME_TOOL_WINDOW | wxFRAME_FLOAT_ON_PARENT |
+                                       wxFRAME_NO_TASKBAR | wxBORDER_SIMPLE);
+        auto *panel = new wxPanel(m_vhf_notice);
+        auto *sizer = new wxBoxSizer(wxVERTICAL);
+        m_vhf_notice_title = new wxStaticText(panel, wxID_ANY, wxEmptyString);
+        wxFont bold = m_vhf_notice_title->GetFont();
+        bold.SetWeight(wxFONTWEIGHT_BOLD);
+        bold.SetPointSize(bold.GetPointSize() + 1);
+        m_vhf_notice_title->SetFont(bold);
+        m_vhf_notice_text = new wxStaticText(panel, wxID_ANY, wxEmptyString);
+        sizer->Add(m_vhf_notice_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
+        sizer->Add(m_vhf_notice_text, 0, wxALL, 12);
+        panel->SetSizer(sizer);
+        auto close = [this](wxMouseEvent &) {
+            if (m_vhf_notice)
+                m_vhf_notice->Hide();
+        };
+        panel->Bind(wxEVT_LEFT_DOWN, close);
+        m_vhf_notice_title->Bind(wxEVT_LEFT_DOWN, close);
+        m_vhf_notice_text->Bind(wxEVT_LEFT_DOWN, close);
+        m_vhf_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+            if (m_vhf_notice)
+                m_vhf_notice->Hide();
+        });
+    }
+
+    const LegendPalette palette = GetLegendPalette();
+    wxWindow *panel = m_vhf_notice->GetChildren().GetFirst()->GetData();
+    panel->SetBackgroundColour(palette.background);
+    m_vhf_notice_title->SetForegroundColour(wxColour(220, 40, 40));
+    m_vhf_notice_text->SetForegroundColour(palette.text);
+    m_vhf_notice_title->SetLabel(title);
+    m_vhf_notice_text->SetLabel(text);
+    panel->GetSizer()->Fit(panel);
+    m_vhf_notice->SetClientSize(panel->GetBestSize());
+    panel->SetSize(m_vhf_notice->GetClientSize());
+
+    // At the top of the chart, in the middle.
+    const wxRect area = canvas->GetScreenRect();
+    const wxSize size = m_vhf_notice->GetSize();
+    m_vhf_notice->Move(area.x + (area.width - size.x) / 2, area.y + 16);
+    m_vhf_notice->ShowWithoutActivating();
+    m_vhf_notice->Raise();
+    m_vhf_notice_timer.StartOnce(12000);
+
+    // OpenCPN's short beep six times, so it is heard in the cockpit.
+    if (sound) {
+        m_vhf_beeps_left = 6;
+        if (PlayVhfSound())
+            --m_vhf_beeps_left;
+        m_vhf_sound_timer.Start(250);
+    }
+}
+
+void legend_pi::StopVhfHighlight()
+{
+    m_vhf_highlight_timer.Stop();
+    m_vhf_highlight.clear();
+    RefreshAllCanvases();
+}
+
+// Lit for six seconds, then fading out in one and a half.
+void legend_pi::OnVhfHighlightTimer()
+{
+    if (m_vhf_keep_lit) {
+        m_vhf_highlight_timer.Stop();
+        return;
+    }
+    const double elapsed =
+        (wxGetUTCTimeMillis() - m_vhf_highlight_started).ToDouble() / 1000.0;
+    const double hold = 6.0;
+    const double fade = 1.5;
+    if (elapsed >= hold + fade) {
+        StopVhfHighlight();
+        return;
+    }
+    const double alpha = elapsed <= hold ? 1.0 : 1.0 - (elapsed - hold) / fade;
+    if (std::fabs(alpha - m_vhf_highlight_alpha) > 0.02 || alpha == 1.0) {
+        const bool changed = alpha != m_vhf_highlight_alpha;
+        m_vhf_highlight_alpha = alpha;
+        if (changed)
+            RefreshAllCanvases();
+    }
+}
+
+namespace {
+
+// Light red, as the selected area on the map of vhfinfo.org (fill #ff6666
+// at 42 %, a red edge); softer in dusk and night.
+void VhfHighlightColours(double alpha, wxColour *fill, wxColour *line)
+{
+    const double dim = IsDimScheme() ? 0.6 : 1.0;
+    *fill = wxColour(255, 102, 102, static_cast<unsigned char>(107 * alpha * dim));
+    *line = wxColour(255, 0, 0, static_cast<unsigned char>(200 * alpha * dim));
+}
+
+} // namespace
+
+bool legend_pi::DrawVhfHighlight(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (!gc)
+        return false;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+
+    wxColour fill;
+    wxColour line;
+    VhfHighlightColours(m_vhf_highlight_alpha, &fill, &line);
+    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
+
+    for (const VhfArea &area : m_vhf_highlight) {
+        wxGraphicsPath path = gc->CreatePath();
+        for (size_t i = 0; i < area.polygon.size(); ++i) {
+            wxPoint at;
+            GetCanvasPixLL(vp, &at, area.polygon[i].first, area.polygon[i].second);
+            if (i == 0)
+                path.MoveToPoint(at.x, at.y);
+            else
+                path.AddLineToPoint(at.x, at.y);
+        }
+        path.CloseSubpath();
+        gc->SetBrush(wxBrush(fill));
+        gc->FillPath(path, wxODDEVEN_RULE);
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(2.0 * s).Join(wxJOIN_ROUND)));
+        gc->StrokePath(path);
+    }
+    return true;
+}
+
+bool legend_pi::DrawVhfHighlightGL(PlugIn_ViewPort *vp)
+{
+    wxColour fill;
+    wxColour line;
+    VhfHighlightColours(m_vhf_highlight_alpha, &fill, &line);
+    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
+
+    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+                 GL_HINT_BIT);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    for (const VhfArea &area : m_vhf_highlight) {
+        std::vector<wxPoint> points(area.polygon.size());
+        for (size_t i = 0; i < area.polygon.size(); ++i)
+            GetCanvasPixLL(vp, &points[i], area.polygon[i].first, area.polygon[i].second);
+
+        glColor4ub(fill.Red(), fill.Green(), fill.Blue(), fill.Alpha());
+        glBegin(GL_TRIANGLES);
+        for (int index : area.triangles)
+            glVertex2d(points[index].x, points[index].y);
+        glEnd();
+
+        glColor4ub(line.Red(), line.Green(), line.Blue(), line.Alpha());
+        glLineWidth(static_cast<float>(2.0 * s));
+        glBegin(GL_LINE_LOOP);
+        for (size_t i = 0; i + 1 < points.size(); ++i)
+            glVertex2d(points[i].x, points[i].y);
+        glEnd();
+    }
+
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
+    glPopAttrib();
+    return true;
+}
+
+std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
+{
+    EnsureVhfAreas();
 
     // Shown only while a layer with these areas is shown in OpenCPN: one
     // of its waypoints is visible.

@@ -57,6 +57,72 @@ int TypeRank(const wxString &type)
     return 4;
 }
 
+// The polygon cut into triangles by clipping ears, so it can be filled in
+// OpenGL, which fills only convex shapes. Areas are small, so latitude and
+// longitude serve as flat coordinates.
+std::vector<int> Triangulate(const std::vector<std::pair<double, double>> &polygon)
+{
+    std::vector<int> triangles;
+    // The outline is closed: the last point repeats the first.
+    const int count = static_cast<int>(polygon.size()) - 1;
+    if (count < 3)
+        return triangles;
+
+    auto x = [&polygon](int i) { return polygon[i].second; };
+    auto y = [&polygon](int i) { return polygon[i].first; };
+    auto cross = [&](int a, int b, int c) {
+        return (x(b) - x(a)) * (y(c) - y(a)) - (y(b) - y(a)) * (x(c) - x(a));
+    };
+
+    double area = 0.0;
+    for (int i = 0; i < count; ++i) {
+        const int j = (i + 1) % count;
+        area += x(i) * y(j) - x(j) * y(i);
+    }
+    std::vector<int> left;
+    for (int i = 0; i < count; ++i)
+        left.push_back(area > 0 ? i : count - 1 - i); // counter-clockwise
+
+    auto inside = [&](int p, int a, int b, int c) {
+        return cross(a, b, p) >= 0 && cross(b, c, p) >= 0 && cross(c, a, p) >= 0;
+    };
+
+    int guard = 0;
+    while (left.size() > 3 && guard < count * count) {
+        ++guard;
+        bool clipped = false;
+        const int n = static_cast<int>(left.size());
+        for (int k = 0; k < n; ++k) {
+            const int a = left[(k + n - 1) % n];
+            const int b = left[k];
+            const int c = left[(k + 1) % n];
+            if (cross(a, b, c) <= 0)
+                continue; // not convex here
+            bool ear = true;
+            for (int m = 0; m < n && ear; ++m) {
+                const int p = left[m];
+                if (p != a && p != b && p != c && inside(p, a, b, c))
+                    ear = false;
+            }
+            if (!ear)
+                continue;
+            triangles.insert(triangles.end(), {a, b, c});
+            left.erase(left.begin() + k);
+            clipped = true;
+            break;
+        }
+        // An outline that crosses itself has no ears left: a fan for the rest.
+        if (!clipped) {
+            for (size_t k = 1; k + 1 < left.size(); ++k)
+                triangles.insert(triangles.end(), {left[0], left[k], left[k + 1]});
+            left.clear();
+        }
+    }
+    if (left.size() == 3)
+        triangles.insert(triangles.end(), {left[0], left[1], left[2]});
+    return triangles;
+}
+
 } // namespace
 
 bool VhfArea::Contains(double lat, double lon) const
@@ -119,6 +185,7 @@ size_t VhfAreas::Load(const wxString &layersDir)
             area.type = DescriptionValue(description, "Type").Lower();
             area.usage = DescriptionValue(description, "Gebruik").Lower();
             area.phone = DescriptionValue(description, "Telefoon");
+            area.description = description;
 
             for (const wxXmlNode *segment = node->GetChildren(); segment;
                  segment = segment->GetNext()) {
@@ -147,6 +214,7 @@ size_t VhfAreas::Load(const wxString &layersDir)
                 area.lonMin = std::min(area.lonMin, p.second);
                 area.lonMax = std::max(area.lonMax, p.second);
             }
+            area.triangles = Triangulate(area.polygon);
             found.push_back(area);
         }
 
@@ -170,6 +238,35 @@ std::vector<const VhfArea *> VhfAreas::At(double lat, double lon) const
         return TypeRank(a->type) < TypeRank(b->type);
     });
     return here;
+}
+
+std::vector<const VhfArea *> VhfAreas::AreaOfWaypoint(double lat, double lon,
+                                                       const wxString &channel) const
+{
+    std::vector<const VhfArea *> parts;
+    const VhfArea *own = nullptr;
+    for (const VhfArea &area : m_areas) {
+        if (area.channel == channel && area.Contains(lat, lon)) {
+            own = &area;
+            break;
+        }
+    }
+    // An icon whose name gives no channel: the area it lies in.
+    if (!own) {
+        for (const VhfArea &area : m_areas) {
+            if (area.Contains(lat, lon)) {
+                own = &area;
+                break;
+            }
+        }
+    }
+    if (!own)
+        return parts;
+    for (const VhfArea &area : m_areas) {
+        if (&area == own || area.description == own->description)
+            parts.push_back(&area);
+    }
+    return parts;
 }
 
 wxString VhfTypeWord(const wxString &type, bool dutch)

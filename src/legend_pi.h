@@ -503,6 +503,39 @@ private:
     // the middle of the chart without a recent position fix.
     VhfAreas m_vhf_areas;
     bool m_vhf_loaded = false;
+    void EnsureVhfAreas();
+
+    // The area of a clicked VHF icon, lit on the chart for a few seconds.
+    std::vector<VhfArea> m_vhf_highlight; // copies: a reload frees the areas
+    wxLongLong m_vhf_highlight_started = 0;
+    double m_vhf_highlight_alpha = 1.0;
+    wxTimer m_vhf_highlight_timer;
+    bool m_vhf_keep_lit = false;        // setting: lit until the next click
+    bool m_vhf_notice_on = true;        // setting: notice on a new area
+    int m_vhf_menu_id = -1;             // "Marifoon hier" in the chart menu
+    std::set<wxString> m_vhf_areas_here; // areas the boat is in
+    bool m_vhf_areas_known = false;     // m_vhf_areas_here is from a fix
+    wxFrame *m_vhf_notice = nullptr;
+    wxStaticText *m_vhf_notice_title = nullptr;
+    wxStaticText *m_vhf_notice_text = nullptr;
+    wxTimer m_vhf_notice_timer;
+    wxTimer m_vhf_sound_timer;          // the next beep
+    int m_vhf_beeps_left = 0;
+    bool PlayVhfSound();
+    void ShowVhfHighlight(const std::vector<VhfArea> &areas);
+    std::vector<VhfArea> VhfAreasWithParts(double lat, double lon);
+    wxString VhfAreaLine(const VhfArea &area) const;
+    void ShowVhfHere(double lat, double lon);
+    bool VhfLayerShown() const;
+    void CheckVhfAreaChange();
+    void ShowVhfNotice(const wxString &title, const wxString &text, bool sound);
+    bool HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx);
+    bool HighlightVhfAreas(const wxString &icon,
+                           const std::vector<std::pair<double, double>> &positions);
+    void StopVhfHighlight();
+    void OnVhfHighlightTimer();
+    bool DrawVhfHighlight(wxDC &dc, PlugIn_ViewPort *vp);
+    bool DrawVhfHighlightGL(PlugIn_ViewPort *vp);
     double m_ship_lat = 0.0;
     double m_ship_lon = 0.0;
     wxLongLong m_ship_time = 0;   // UTC milliseconds of the last fix, 0 = none
@@ -521,6 +554,15 @@ private:
         wxString light;          // its light character, if any
     };
     std::vector<AheadItem> m_ahead;
+    struct AheadVhf
+    {
+        double minutes = 0.0;
+        double lat = 0.0;   // a point on the course inside the area
+        double lon = 0.0;
+        VhfArea area;
+    };
+    std::vector<AheadVhf> m_ahead_vhf;  // VHF areas the course enters
+    std::vector<VhfArea> m_vhf_rows;    // areas of the Marifoon block
     wxString m_ahead_key;         // what ComputeAhead() found last
     wxString m_ahead_drawn_key;   // what the list shows
     wxLongLong m_ahead_rendered = 0;
