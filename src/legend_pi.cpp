@@ -3405,8 +3405,23 @@ void legend_pi::CreateLegendWindow()
                     break;
                 case HitKind::Note:
                     if (static_cast<size_t>(hit.index) < m_note_rows.size() &&
-                        m_note_rows[hit.index] < m_note_places.size())
-                        OpenNote(m_note_places[m_note_rows[hit.index]].path);
+                        m_note_rows[hit.index] < m_note_places.size()) {
+                        const size_t index = m_note_rows[hit.index];
+                        const NotePlace place = m_note_places[index];
+                        // Hidden at this scale: zoom in to just past its limit
+                        // and show its sign, as for a hidden buoy.
+                        if (NoteHiddenAtScale(place)) {
+                            const double zoom = ViewScaleForLimit(place.scamin);
+                            if (zoom > 0.0)
+                                JumpTo(place.lat, place.lon, zoom);
+                            m_note_selected = static_cast<int>(index);
+                            ShowMarker(place.lat, place.lon);
+                            RefreshAllCanvases();
+                        }
+                        else {
+                            OpenNote(place.path);
+                        }
+                    }
                     break;
                 case HitKind::AheadVhf:
                     if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
@@ -6597,7 +6612,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             }
         }
 
-        // Notities hier: notes whose place is in view, nearest first.
+        // Notities: notes whose place is in view, nearest first.
         m_note_rows.clear();
         {
             const PlugIn_ViewPort &view = m_viewport;
@@ -6605,7 +6620,10 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                 m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000;
             const double hereLat = fromShip ? m_ship_lat : view.clat;
             const double hereLon = fromShip ? m_ship_lon : view.clon;
+            // Notes beyond their scale limit are left out, or shown in grey
+            // with the setting for symbols hidden at this scale.
             std::vector<std::pair<double, size_t>> inView;
+            size_t shownCount = 0;
             for (size_t i = 0; i < m_note_places.size(); ++i) {
                 const NotePlace &place = m_note_places[i];
                 bool lonIn = false;
@@ -6614,7 +6632,15 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                                       place.lon + offset <= view.lon_max);
                 if (place.lat < view.lat_min || place.lat > view.lat_max || !lonIn)
                     continue;
-                inView.emplace_back(SeaMiles(hereLat, hereLon, place.lat, place.lon), i);
+                const bool hidden = NoteHiddenAtScale(place);
+                if (hidden && !m_show_hidden_at_scale)
+                    continue;
+                if (!hidden)
+                    ++shownCount;
+                // Hidden ones after the shown ones.
+                inView.emplace_back(SeaMiles(hereLat, hereLon, place.lat, place.lon) +
+                                        (hidden ? 1e6 : 0.0),
+                                    i);
             }
             std::sort(inView.begin(), inView.end());
             auto miles = [](double value) {
@@ -6625,24 +6651,52 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 
             if (!inView.empty()) {
                 const NotePlace &nearest = m_note_places[inView.front().second];
-                wxString summary = escape(nearest.title) + ", " + miles(inView.front().first);
-                if (inView.size() > 1)
-                    summary << wxString::Format(" (+%zu)", inView.size() - 1);
-                if (extraHeading("@notities", nl ? "Notities hier" : "Notes here", summary)) {
+                wxString summary;
+                if (shownCount > 0) {
+                    summary = escape(nearest.title) + ", " + miles(inView.front().first);
+                    if (shownCount > 1)
+                        summary << wxString::Format(" (+%zu)", shownCount - 1);
+                }
+                else {
+                    summary = wxString::Format(nl ? "%zu op deze schaal verborgen"
+                                                  : "%zu hidden at this scale",
+                                               inView.size());
+                }
+                if (extraHeading("@notities", nl ? "Notities" : "Notes", summary)) {
                     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
                     for (size_t k = 0; k < inView.size(); ++k) {
                         const NotePlace &place = m_note_places[inView[k].second];
+                        const bool hidden = NoteHiddenAtScale(place);
+                        const double distance = inView[k].first - (hidden ? 1e6 : 0.0);
                         m_note_rows.push_back(inView[k].second);
                         const wxString id = wxString::Format("%s%zu", kLegendNoteIdPrefix, k);
                         const wxColour &rowColour = k % 2 == 1 ? stripe : background;
+                        wxImage sign = NoteSignImage(rowColour, 24);
+                        wxImage sign2 = NoteSignImage(rowColour, 48);
+                        if (hidden) {
+                            sign = FadeImage(sign, rowColour, 0.55);
+                            sign2 = FadeImage(sign2, rowColour, 0.55);
+                        }
                         const wxString image = addImage(
                             wxString::Format("legend_dyn_%d_note_%zu.png", m_dynamic_generation, k),
-                            NoteSignImage(rowColour, 24), NoteSignImage(rowColour, 48));
+                            sign, sign2);
+                        wxString title = escape(place.title);
+                        if (hidden) {
+                            // Not drawn at this scale: grey, a closed eye and the
+                            // scale at which it appears; a click zooms in.
+                            const wxString eye = addImage(
+                                wxString::Format("legend_dyn_%d_noteeye_%zu.png",
+                                                 m_dynamic_generation, k),
+                                EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
+                            title = "<font color=\"" + hex(muted) + "\">" + title +
+                                    "</font>&nbsp; <img src=\"memory:" + eye + "\"> <font size=\"-1\" color=\"" +
+                                    hex(muted) + "\">" + FormatScaleShort(place.scamin) + "</font>";
+                        }
                         html << "<tr bgcolor=\"" << hex(rowColour) << "\"><td id=\"" << id
                              << "\" width=\"34\" align=\"center\" valign=\"top\"><img src=\"memory:"
-                             << image << "\"></td><td id=\"" << id << "\">" << escape(place.title)
+                             << image << "\"></td><td id=\"" << id << "\">" << title
                              << "<br><font size=\"-1\" color=\"" << hex(muted) << "\">"
-                             << miles(inView[k].first);
+                             << miles(distance);
                         if (!place.snippet.IsEmpty()) {
                             wxString snippet = place.snippet;
                             if (snippet.length() > 70)
@@ -8495,6 +8549,31 @@ double legend_pi::SeaMiles(double lat1, double lon1, double lat2, double lon2) c
     return std::sqrt(dx * dx + dy * dy);
 }
 
+// The scale of the status bar, as the chart uses it for scale limits; worked
+// out again only when the zoom changes.
+double legend_pi::CurrentDisplayedScale()
+{
+    if (!m_viewport_valid)
+        return 0.0;
+    if (m_viewport.view_scale_ppm != m_scale_cache_ppm ||
+        m_viewport.clat != m_scale_cache_lat) {
+        m_scale_cache_ppm = m_viewport.view_scale_ppm;
+        m_scale_cache_lat = m_viewport.clat;
+        m_scale_cache = DisplayedScale(m_viewport);
+        if (m_scale_cache <= 0.0)
+            m_scale_cache = m_viewport.chart_scale;
+    }
+    return m_scale_cache;
+}
+
+// Beyond its scale limit a note's sign is not drawn, like the buoys of a
+// layer.
+bool legend_pi::NoteHiddenAtScale(const NotePlace &place)
+{
+    const double scale = CurrentDisplayedScale();
+    return scale > 0.0 && scale > place.scamin;
+}
+
 // Opens a note in the legend window, from the chart or a notice.
 void legend_pi::OpenNote(const wxString &path)
 {
@@ -8510,7 +8589,7 @@ void legend_pi::OpenNote(const wxString &path)
 }
 
 // The sign of a note on the chart under a click, or -1.
-int legend_pi::NotePlaceAt(const wxPoint &pixel, double tolerancePx) const
+int legend_pi::NotePlaceAt(const wxPoint &pixel, double tolerancePx)
 {
     if (!m_viewport_valid)
         return -1;
@@ -8518,6 +8597,8 @@ int legend_pi::NotePlaceAt(const wxPoint &pixel, double tolerancePx) const
     int best = -1;
     double bestDistance = tolerancePx * tolerancePx;
     for (size_t i = 0; i < m_note_places.size(); ++i) {
+        if (NoteHiddenAtScale(m_note_places[i]))
+            continue;
         wxPoint at;
         GetCanvasPixLL(&vp, &at, m_note_places[i].lat, m_note_places[i].lon);
         const double dx = at.x - pixel.x;
@@ -8563,6 +8644,8 @@ bool legend_pi::DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp)
 
     for (size_t i = 0; i < m_note_places.size(); ++i) {
         const NotePlace &place = m_note_places[i];
+        if (NoteHiddenAtScale(place))
+            continue;
         wxPoint at;
         GetCanvasPixLL(vp, &at, place.lat, place.lon);
         if (at.x < -20 || at.y < -20 || at.x > vp->pix_width + 20 || at.y > vp->pix_height + 20)
@@ -8630,6 +8713,8 @@ bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
 
     for (size_t i = 0; i < m_note_places.size(); ++i) {
         const NotePlace &place = m_note_places[i];
+        if (NoteHiddenAtScale(place))
+            continue;
         wxPoint at;
         GetCanvasPixLL(vp, &at, place.lat, place.lon);
         if (at.x < -20 || at.y < -20 || at.x > vp->pix_width + 20 || at.y > vp->pix_height + 20)

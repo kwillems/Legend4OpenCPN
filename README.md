@@ -77,7 +77,7 @@ notities en routebeschrijvingen.
 **Notities op de kaart**
 
 - Pin een notitie vast op een plek: die staat als geel blaadje op de kaart,
-  onder *Notities hier* in de legenda en in *Vooruit*, en je krijgt een
+  onder *Notities* in de legenda en in *Vooruit*, en je krijgt een
   melding als je in de buurt komt.
 - Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
   vastgepind op die plek.
@@ -445,9 +445,13 @@ Een vastgepinde notitie:
 - staat als een **geel blaadje** op de kaart. Met de muis erboven zie je de
   titel; een klik opent de notitie en toont de straal als stippellijn. Een
   rechtsklik op het blaadje geeft *Notitie ▸ "…" openen* en *"…"
-  verwijderen*;
-- staat onder het kopje **Notities hier** in de legenda zolang de plek in beeld
-  is, de dichtstbijzijnde eerst, met de afstand en de eerste regel tekst;
+  verwijderen*. Net als tonnen en bakens verdwijnt het blaadje als je verder
+  uitzoomt dan 1:200 000;
+- staat onder het kopje **Notities** in de legenda zolang de plek in beeld
+  is, de dichtstbijzijnde eerst, met de afstand en de eerste regel tekst. Met
+  *Ook op deze schaal verborgen tonen* blijft een notitie voorbij zijn
+  schaalgrens er grijs staan, met een dicht oogje en de schaal; een klik zoomt
+  erheen;
 - staat in **Vooruit** als je koers erlangs gaat;
 - geeft onderweg een **melding** met pieptonen zodra je binnen de straal
   komt. Een klik op de melding opent de notitie. Uit te zetten met *Melding
@@ -464,8 +468,9 @@ straal: 0.5
 ```
 
 `location` schrijft de Obsidian-plugin *Map View* ook zo, dus de notitie
-verschijnt daar eveneens op de kaart. `straal` is in zeemijl. Andere regels
-die je in het blokje zet, zoals `tags`, blijven bewaard.
+verschijnt daar eveneens op de kaart. `straal` is in zeemijl. Met een regel
+`schaal: 1:50000` geef je een notitie een andere schaalgrens dan 1:200 000.
+Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
 
 ## Weergave
 

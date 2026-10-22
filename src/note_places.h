@@ -25,7 +25,10 @@
 //
 // "location" is the way the Obsidian plugin Map View writes it, so the note
 // shows on that map too; "plek" is read as well. The radius is in sea
-// miles. Other lines of the block are kept as they are.
+// miles. An optional "schaal: 1:50000" is the scale beyond which the sign
+// on the chart is not drawn, as buoys of the layers have; without it the
+// limit of most buoys and beacons, 1:200 000. Other lines of the block are
+// kept as they are.
 struct NoteFrontMatter
 {
     wxString block;       // the whole block with both "---" lines, or empty
@@ -34,6 +37,7 @@ struct NoteFrontMatter
     double lat = 0.0;
     double lon = 0.0;
     double radius = 0.5;  // sea miles
+    int scamin = 200000;  // shown on the chart up to this scale
 };
 
 NoteFrontMatter SplitFrontMatter(const wxString &text);
@@ -52,6 +56,7 @@ struct NotePlace
     double lat = 0.0;
     double lon = 0.0;
     double radius = 0.5;
+    int scamin = 200000;
 };
 
 // The notes with a place among these Markdown files.
