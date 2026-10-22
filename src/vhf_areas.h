@@ -31,7 +31,9 @@ struct VhfArea
     wxString channel;   // VHF-kanaal
     wxString usage;     // listen, report, announce
     wxString phone;     // Telefoon
-    std::vector<std::pair<double, double>> polygon; // lat, lon
+    wxString description; // the whole description; the parts of one area share it
+    std::vector<std::pair<double, double>> polygon; // lat, lon, closed
+    std::vector<int> triangles; // the polygon cut into triangles, three indexes each
     double latMin = 0.0, latMax = 0.0, lonMin = 0.0, lonMax = 0.0;
 
     bool Contains(double lat, double lon) const;
@@ -45,6 +47,7 @@ public:
     size_t Load(const wxString &layersDir);
 
     bool IsEmpty() const { return m_areas.empty(); }
+    const std::vector<VhfArea> &All() const { return m_areas; }
 
     // The areas a position lies in: traffic posts first, then locks,
     // bridges, marinas and general areas.
@@ -53,6 +56,12 @@ public:
     // Waypoint icons of the layers the areas come from, to tell whether
     // such a layer is shown in OpenCPN.
     const std::set<wxString> &Icons() const { return m_icons; }
+
+    // The area of a waypoint of the layer: the one it lies in with its
+    // channel, together with the other parts of that area (an area can be
+    // drawn as several outlines with the same description).
+    std::vector<const VhfArea *> AreaOfWaypoint(double lat, double lon,
+                                               const wxString &channel) const;
 
 private:
     std::vector<VhfArea> m_areas;
