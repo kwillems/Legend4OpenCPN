@@ -17,21 +17,52 @@ je eigen legenda's, notities en routebeschrijvingen.
 
 ## In het kort
 
-- **Kaartlegenda:** alle symbolen in beeld, uit waypoint-lagen en uit de
-  vectorkaarten, met hun betekenis in het Nederlands of Engels. Klik op een
-  rij en de plugin wijst het symbool aan op de kaart; klik op de kaart en de
-  plugin wijst de rij aan.
-- **Lichten:** elk lichtkarakter in gewone woorden, met zijn ritme. Lichten
-  kunnen op de kaart gaan branden, één of allemaal tegelijk, ook als
-  nachtvoorbeeld op een donkere kaart.
+**Kaartlegenda**
+
+- Alle symbolen in beeld, uit waypoint-lagen (zoals Nautin), o-charts en
+  ENC-kaarten, met hun betekenis in het Nederlands of Engels, volgens de
+  termen van Kaart 1.
+- Klik op een rij en de plugin wijst het symbool aan op de kaart; klik op de
+  kaart en de plugin wijst de rij aan. De teller ◎ wijst alle exemplaren
+  tegelijk aan.
+- Zelf in te delen onder kopjes, in te klappen en te ordenen, met een
+  zoekveld. Symbolen die de kaart op deze schaal niet tekent, kunnen er grijs
+  bij staan.
+- Eigen betekenissen in één tekstbestand; iconen als PNG of SVG.
+
+**Lichten**
+
+- Elk lichtkarakter in gewone woorden met een tekening van zijn ritme,
+  onder de ton of het baken waar het licht op staat; sectorlichten met hun
+  sectoren in woorden.
+- Een licht laten branden op de kaart, in zijn eigen ritme, of alle lichten in
+  beeld tegelijk.
+- **Nachtvoorbeeld:** de kaart donker, alleen de lichten branden, zoals je het
+  's nachts vanaf het water ziet.
 - **Licht herkennen:** tik mee met een licht dat je ziet, en de plugin zegt
   welk licht in beeld het best past.
-- **Onderweg:** het marifoonkanaal van het gebied waar je vaart, met een
-  melding als je een nieuw gebied binnenvaart, en wat je het komende half uur
-  op koers tegenkomt. Een marifoongebied licht op de kaart op met een klik.
-- **Eigen legenda's en notities:** PNG-afbeeldingen en Markdown-bestanden uit
-  een vaste map, om doorheen te bladeren. Notities schrijf en bewerk je in het
-  venster zelf, zoals in een tekstverwerker.
+
+**Onderweg**
+
+- **Marifoon:** het kanaal van het gebied waar je vaart, met wat je moet doen
+  en het telefoonnummer. Een klik op een VHF-icoon laat het hele gebied
+  oplichten; vaar je een nieuw gebied in, dan volgt een melding met
+  pieptonen.
+- **Vooruit:** wat je het komende half uur op koers tegenkomt, met de kant
+  waar het ligt, en het volgende marifoongebied.
+
+**Eigen legenda's en notities**
+
+- PNG-afbeeldingen en Markdown-bestanden uit een vaste map, om doorheen te
+  bladeren.
+- Notities schrijven en bewerken in het venster zelf, zoals in een
+  tekstverwerker: koppen, vet, lijsten, afvinklijsten, links en afbeeldingen.
+  Op schijf blijft het gewone Markdown.
+
+**Weergave**
+
+- Volgt de kleurenschema's dag, schemer en nacht van OpenCPN, scherp op een
+  Retina-scherm.
 
 ## Installeren
 
