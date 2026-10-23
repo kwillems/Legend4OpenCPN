@@ -74,6 +74,14 @@ set(SRC
 
 set(PKG_API_LIB api-18)
 
+# Minimum version which should be loaded. Ignored if api < 22.
+# Allows plugins using functions from 1.22+ API to be loaded by
+# hosts only supporting 1.21; plugins then needs to check if host
+# supports 1.22+ before using such functions.
+# If undefined, plugin will only be loaded by host supporting the
+# included api.
+## set(MIN_API_VERSION 1.21)
+
 macro(late_init)
     include_directories(
         ${CMAKE_SOURCE_DIR}/third_party/md4c/src
@@ -81,4 +89,10 @@ macro(late_init)
 endmacro()
 
 macro(add_plugin_libraries)
+    # The note editor uses wxRichTextCtrl, which is not among the
+    # template's wxWidgets components (cmake/PluginLibs.cmake).
+    if (NOT QT_ANDROID)
+        find_package(wxWidgets REQUIRED richtext)
+        target_link_libraries(${PACKAGE_NAME} ${wxWidgets_LIBRARIES})
+    endif ()
 endmacro()

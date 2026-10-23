@@ -11,7 +11,9 @@
 # the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 
+
 set -xe
+here=$(cd $(dirname $0); pwd -P)
 
 # Load local environment if it exists i. e., this is a local build
 if [ -f ~/.config/local-build.rc ]; then source ~/.config/local-build.rc; fi
@@ -31,27 +33,27 @@ exec > >(tee $builddir/build.log) 2>&1;
 sudo apt -qq update || apt update
 sudo apt-get -qq install devscripts equivs software-properties-common
 
-sudo mk-build-deps -ir build-deps/control
-sudo apt-get -q --allow-unauthenticated install -f
+mk-build-deps --root-cmd=sudo -ir build-deps/control
+rm -f *changes  *buildinfo
 
-if [ -n "$BUILD_GTK3" ]; then
-    sudo update-alternatives --set wx-config \
-        /usr/lib/*-linux-*/wx/config/gtk3-unicode-3.0
+if [ -n "$TARGET_TUPLE" ]; then
+  TARGET_OPT="-DOCPN_TARGET_TUPLE=$TARGET_TUPLE";
 fi
 
 sudo apt install -q \
     python3-pip python3-setuptools python3-dev python3-wheel \
     build-essential libssl-dev libffi-dev
 
+python3 -m pip install -q --user "urllib3<2.0.0"   # See #520
 python3 -m pip install --user --upgrade -q setuptools wheel pip
 python3 -m pip install --user -q cloudsmith-cli cryptography cmake
 
 cd $builddir
 
-cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+cmake "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE:-RelWithDbgInfo}" $TARGET_OPT ..
 make VERBOSE=1 tarball
 ldd app/*/lib/opencpn/*.so
 if [ -d /ci-source ]; then
     sudo chown --reference=/ci-source -R . ../cache || :
 fi
-sudo chmod --reference=.. .
+if [ -z "$CI" ]; then sudo chmod --reference=.. .; fi

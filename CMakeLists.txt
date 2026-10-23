@@ -39,10 +39,19 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR}/include)
 
 add_subdirectory("opencpn-libs/${PKG_API_LIB}")
 target_link_libraries(${CMAKE_PROJECT_NAME} ocpn::api)
+if (NOT "${MIN_API_VERSION}" STREQUAL "")
+  if ("${API_VERSION}" VERSION_GREATER "1.21")
+    set(API_VERSION ${MIN_API_VERSION})
+  endif ()
+endif ()
 
 set(VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(VERSION_PATCH ${PROJECT_VERSION_PATCH})
+if (PROJECT_VERSION_TWEAK STREQUAL "")
+  set(PROJECT_VERSION_TWEAK 0)
+endif ()
+
 
 set(PACKAGE_NAME ${CMAKE_PROJECT_NAME})
 
@@ -52,6 +61,11 @@ string(REGEX REPLACE "\([0-9]\)\.\([0-9]\).*" "ov\\1\\2"
 
 if (COMMAND late_init)
   late_init()
+endif ()
+
+# Optional IDE setup, typically target_include_directories() etc.
+if (EXISTS ide_setup.cmake)
+  include(ide_setup.cmake)
 endif ()
 
 # Configure the flatpak manifest
@@ -75,6 +89,9 @@ endif ()
 if (NOT ${BUILD_TYPE} STREQUAL "flatpak")
   # Build package as required (flatpak already dealt with).
   #
+  if (APPLE)
+    include(MacosWxwidgets)
+  endif ()
   include(PluginInstall)
   if (QT_ANDROID)
     include(AndroidLibs)
@@ -88,11 +105,10 @@ if (NOT ${BUILD_TYPE} STREQUAL "flatpak")
   if (COMMAND add_plugin_libraries)
     add_plugin_libraries()
   endif ()
-
 endif ()
 
 configure_file(
-  ${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/include//config.h
+  ${CMAKE_SOURCE_DIR}/config.h.in ${CMAKE_BINARY_DIR}/include/config.h
   @ONLY
 )
 
