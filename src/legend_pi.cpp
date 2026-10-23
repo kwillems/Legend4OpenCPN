@@ -1687,6 +1687,7 @@ bool legend_pi::DeInit()
         m_new_button = nullptr;
         m_rename_button = nullptr;
         m_delete_button = nullptr;
+        m_save_button = nullptr;
         m_format_bar = nullptr;
         m_format_icons.clear();
         m_editor = nullptr;
@@ -2523,7 +2524,7 @@ bool legend_pi::IsMarkdownItem(const wxString &path) const
 }
 
 // Outside editing: the pencil for a note and the plus. While editing: the
-// buttons that format the text, and Klaar.
+// buttons that format the text, and Opslaan.
 void legend_pi::UpdateNoteButtons()
 {
     if (!m_edit_button || !m_new_button || !m_format_bar || !m_nav_panel || !m_edit_footer)
@@ -2536,6 +2537,8 @@ void legend_pi::UpdateNoteButtons()
     if (m_delete_button)
         m_delete_button->Show(note);
     m_new_button->Show(!m_editing);
+    if (m_save_button)
+        m_save_button->Show(m_editing);
     m_format_bar->Show(m_editing);
     m_nav_panel->Show(!m_editing);
     m_edit_footer->Show(m_editing);
@@ -2983,7 +2986,8 @@ void legend_pi::CreateLegendWindow()
     m_header_book->Hide();
 
     // The header row: the choice of item, with buttons for notes: edit,
-    // rename, delete (into the folder "Verwijderd") and a new one.
+    // rename, delete (into the folder "Verwijderd") and a new one; while
+    // editing, Opslaan.
     auto *headerRow = new wxBoxSizer(wxHORIZONTAL);
     headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
 
@@ -3001,6 +3005,11 @@ void legend_pi::CreateLegendWindow()
     m_rename_button = noteButton("rename", "Deze notitie een andere naam geven");
     m_delete_button = noteButton("trash", "Deze notitie verwijderen (naar de map Verwijderd)");
     m_new_button = noteButton("new", "Nieuwe notitie");
+    m_save_button = new wxButton(panel, wxID_ANY, "Opslaan", wxDefaultPosition, wxDefaultSize,
+                                 wxBU_EXACTFIT);
+    m_save_button->SetToolTip("Opslaan en klaar met bewerken (Esc)");
+    m_save_button->Hide();
+    headerRow->Add(m_save_button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
 
     mainSizer->Add(
         headerRow,
@@ -3011,6 +3020,7 @@ void legend_pi::CreateLegendWindow()
     m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
     m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
     m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
+    m_save_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StopEditing(); });
     // With a GPS fix the plus offers a note pinned where the boat is.
     m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
         if (!BoatPositionKnown()) {
@@ -3687,18 +3697,13 @@ void legend_pi::CreateLegendWindow()
         wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
         10);
 
-    // While a note is edited: whether it has been saved, and Klaar.
+    // While a note is edited: whether it has been saved.
     m_edit_footer = new wxPanel(panel);
     auto *footerSizer = new wxBoxSizer(wxHORIZONTAL);
     m_save_status = new wxStaticText(m_edit_footer, wxID_ANY, "Bewaard");
-    auto *doneButton = new wxButton(m_edit_footer, wxID_ANY, "Klaar");
-    doneButton->SetMinSize(wxSize(110, 36));
-    doneButton->SetToolTip("Klaar met bewerken (Esc)");
     footerSizer->Add(m_save_status, 1, wxALIGN_CENTER_VERTICAL);
-    footerSizer->Add(doneButton, 0, wxALIGN_CENTER_VERTICAL);
     m_edit_footer->SetSizer(footerSizer);
     m_edit_footer->Hide();
-    doneButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StopEditing(); });
 
     mainSizer->Add(
         m_edit_footer,
@@ -8649,8 +8654,17 @@ void legend_pi::RefreshNotePlaces()
             found = dir.GetNext(&name);
         }
     }
+    // The clicked sign keeps its radius: opening its note reads the folder
+    // again right after the click.
+    wxString selected;
+    if (m_note_selected >= 0 && static_cast<size_t>(m_note_selected) < m_note_places.size())
+        selected = m_note_places[m_note_selected].path;
     m_note_places = ReadNotePlaces(paths);
     m_note_selected = -1;
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        if (!selected.IsEmpty() && m_note_places[i].path == selected)
+            m_note_selected = static_cast<int>(i);
+    }
     m_note_hover = -1;
     RefreshAllCanvases();
 }

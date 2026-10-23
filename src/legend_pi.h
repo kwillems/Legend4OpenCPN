@@ -391,11 +391,12 @@ private:
     wxButton *m_new_button = nullptr;     // plus: a new note
     wxButton *m_rename_button = nullptr;  // another name for this note
     wxButton *m_delete_button = nullptr;  // into the folder "Verwijderd"
+    wxButton *m_save_button = nullptr;    // while editing: save and stop
     wxPanel *m_format_bar = nullptr;      // buttons that format the note
     std::vector<std::pair<wxBitmapButton *, wxString>> m_format_icons; // and their icons
     NoteEditor *m_editor = nullptr;
     wxPanel *m_nav_panel = nullptr;       // Vorige / Volgende
-    wxPanel *m_edit_footer = nullptr;     // Bewaard / Klaar
+    wxPanel *m_edit_footer = nullptr;     // Bewaard om ...
     wxStaticText *m_save_status = nullptr;
     bool m_editing = false;
     bool m_note_dirty = false;
