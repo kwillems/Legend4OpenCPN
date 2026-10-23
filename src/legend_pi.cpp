@@ -8649,8 +8649,17 @@ void legend_pi::RefreshNotePlaces()
             found = dir.GetNext(&name);
         }
     }
+    // The clicked sign keeps its radius: opening its note reads the folder
+    // again right after the click.
+    wxString selected;
+    if (m_note_selected >= 0 && static_cast<size_t>(m_note_selected) < m_note_places.size())
+        selected = m_note_places[m_note_selected].path;
     m_note_places = ReadNotePlaces(paths);
     m_note_selected = -1;
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        if (!selected.IsEmpty() && m_note_places[i].path == selected)
+            m_note_selected = static_cast<int>(i);
+    }
     m_note_hover = -1;
     RefreshAllCanvases();
 }
