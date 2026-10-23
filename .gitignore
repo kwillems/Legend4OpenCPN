@@ -14,3 +14,7 @@ plugins
 *.bak
 buildwin/*.7z
 *.user
+
+# Legend4OpenCPN
+Thumbs.db
+*.tar.gz
