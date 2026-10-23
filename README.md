@@ -63,7 +63,7 @@ notities en routebeschrijvingen.
 
 - Het kanaal van het gebied waar je vaart, met wat je moet doen en het
   telefoonnummer.
-- Een klik op een VHF-icoon laat het hele gebied oplichten; vaar je een nieuw
+- Een klik op een VHF-icoon of rechtsklikken op de kaart laat het hele gebied oplichten; vaar je een nieuw
   gebied in, dan volgt een melding met pieptonen.
 
 **Eigen legenda's en notities**
@@ -616,16 +616,11 @@ Legend4OpenCPN/
 
 Ideeën voor volgende versies:
 
-- dezelfde boei uit een laag en uit de kaart als één rij;
 - bruggen markeren waar de boot niet onder past;
 - het bereik van een licht laten zien in het nachtvoorbeeld;
 - betekenissen bewerken in het venster zelf;
 - een instelbare Legend-map;
 - builds voor Windows en Linux, en een Engelse vertaling van de bediening.
-
-Het idee op langere termijn: kaartmakers en andere aanbieders kunnen een
-legenda of uitleg meeleveren, en gebruikers voegen op dezelfde manier hun
-eigen notities en routebeschrijvingen toe.
 
 ## Licentie
 
