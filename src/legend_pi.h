@@ -154,6 +154,7 @@ private:
     void ToggleLegendWindow();
 
     void ScanLegendFiles();
+    void ConvertLooseImages();
     void RebuildLegendChoice();
     void RefreshLegendFiles();
     void ShowLegend(size_t index);
