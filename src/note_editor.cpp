@@ -433,12 +433,18 @@ std::vector<Para> ParseMarkdown(const wxString &markdown)
 // ---------------------------------------------------------------------------
 // Paragraphs back to Markdown.
 
-// Characters with a meaning in Markdown get a backslash.
+// Characters with a meaning in Markdown get a backslash; not an underscore
+// inside a word, as in "image_cropped", which Markdown leaves alone.
 wxString Escape(const wxString &text)
 {
     wxString out;
-    for (wxUniChar c : text) {
-        if (c == '\\' || c == '*' || c == '_' || c == '`' || c == '[' || c == ']')
+    const size_t length = text.length();
+    for (size_t i = 0; i < length; ++i) {
+        const wxUniChar c = text[i];
+        const bool inWord = c == '_' && i > 0 && i + 1 < length && wxIsalnum(text[i - 1]) &&
+                            wxIsalnum(text[i + 1]);
+        if (!inWord &&
+            (c == '\\' || c == '*' || c == '_' || c == '`' || c == '[' || c == ']'))
             out << '\\';
         out << c;
     }

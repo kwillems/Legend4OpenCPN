@@ -1828,7 +1828,16 @@ wxString legend_pi::MakeDisplayTitle(const wxString &path) const
                     continue;
 
                 if (line.StartsWith("# ") && !line.StartsWith("##")) {
-                    wxString title = line.Mid(2);
+                    // Without the backslashes Markdown puts before signs
+                    // such as _ and *.
+                    const wxString heading = line.Mid(2);
+                    wxString title;
+                    for (size_t i = 0; i < heading.length(); ++i) {
+                        if (heading[i] == '\\' && i + 1 < heading.length() &&
+                            wxIspunct(heading[i + 1]))
+                            ++i;
+                        title << heading[i];
+                    }
                     title.Trim(true);
                     title.Trim(false);
 
