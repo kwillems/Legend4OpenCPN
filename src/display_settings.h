@@ -10,6 +10,7 @@
 #ifndef _DISPLAY_SETTINGS_H_
 #define _DISPLAY_SETTINGS_H_
 
+#include <cstdint>  // ocpn_plugin.h (api-18) uses uint64_t without it
 #include "ocpn_plugin.h"
 
 #include <map>

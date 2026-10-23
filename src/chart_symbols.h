@@ -10,6 +10,7 @@
 #ifndef _CHART_SYMBOLS_H_
 #define _CHART_SYMBOLS_H_
 
+#include <cstdint>  // ocpn_plugin.h (api-18) uses uint64_t without it
 #include "ocpn_plugin.h"
 
 #include <map>
