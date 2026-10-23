@@ -45,6 +45,14 @@ set(PKG_INFO_URL "https://github.com/kwillems/Legend4OpenCPN")
 # Sources
 # ---------------------------------------------------------------------------
 
+# The template's CI scripts only fetch the opencpn-libs submodule.
+if (NOT EXISTS "${CMAKE_SOURCE_DIR}/third_party/md4c/src/md4c.c")
+    execute_process(
+        COMMAND git submodule update --init third_party/md4c
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif ()
+
 set(SRC
     src/legend_pi.h
     src/legend_pi.cpp
