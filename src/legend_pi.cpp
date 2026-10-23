@@ -1969,8 +1969,68 @@ void legend_pi::SaveWindowState()
     m_window_height = size.GetHeight();
 }
 
+// A loose PNG in the Legend folder becomes a note: the picture moves into
+// the images folder and a note of the same name shows it. An image a note
+// already shows stays where it is.
+void legend_pi::ConvertLooseImages()
+{
+    const wxString legendDir = GetLegendDirectory();
+    wxDir dir(legendDir);
+    if (!dir.IsOpened())
+        return;
+
+    wxArrayString images;
+    wxString notes;
+    wxString filename;
+    bool found = dir.GetFirst(&filename, wxEmptyString, wxDIR_FILES);
+    while (found) {
+        const wxFileName file(legendDir, filename);
+        const wxString ext = file.GetExt().Lower();
+        if (ext == "png") {
+            images.Add(filename);
+        }
+        else if (ext == "md" || ext == "markdown") {
+            wxString text;
+            wxFile note(file.GetFullPath());
+            if (note.IsOpened() && note.ReadAll(&text, wxConvUTF8))
+                notes << text << "\n";
+        }
+        found = dir.GetNext(&filename);
+    }
+
+    for (const wxString &name : images) {
+        wxString escaped = name;
+        escaped.Replace(" ", "%20");
+        if (notes.Contains(name) || notes.Contains(escaped))
+            continue;
+
+        const wxFileName source(legendDir, name);
+        wxFileName image(legendDir + wxFileName::GetPathSeparator() + "images", name);
+        wxFileName::Mkdir(image.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+        for (int n = 2; image.FileExists(); ++n)
+            image.SetName(wxString::Format("%s %d", source.GetName(), n));
+        wxFileName note(legendDir, source.GetName() + ".md");
+        for (int n = 2; note.FileExists(); ++n)
+            note.SetName(wxString::Format("%s %d", source.GetName(), n));
+
+        if (!wxRenameFile(source.GetFullPath(), image.GetFullPath(), false))
+            continue;
+        wxFileName relative(image);
+        relative.MakeRelativeTo(legendDir);
+        wxString path = relative.GetFullPath(wxPATH_UNIX);
+        if (path.Contains(" "))
+            path = "<" + path + ">";
+        const wxString text =
+            "# " + note.GetName() + "\n\n![" + source.GetName() + "](" + path + ")\n";
+        wxTempFile file(note.GetFullPath());
+        if (!file.IsOpened() || !file.Write(text, wxConvUTF8) || !file.Commit())
+            wxRenameFile(image.GetFullPath(), source.GetFullPath(), false);
+    }
+}
+
 void legend_pi::ScanLegendFiles()
 {
+    ConvertLooseImages();
     m_legend_files.Clear();
 
     wxString legend_dir = GetLegendDirectory();
@@ -1984,7 +2044,7 @@ void legend_pi::ScanLegendFiles()
             wxFileName file(filename);
             wxString ext = file.GetExt().Lower();
 
-            if (ext == "png" || ext == "md" || ext == "markdown") {
+            if (ext == "md" || ext == "markdown") {
                 m_legend_files.Add(
                     legend_dir +
                     wxFileName::GetPathSeparator() +
