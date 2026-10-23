@@ -234,6 +234,22 @@ public:
         long style)
         : wxHtmlWindow(parent, id, pos, size, style)
     {
+        // A note's pictures that fit no longer, or fit again, after the
+        // window changed size: the page is built again.
+        Bind(wxEVT_SIZE, [this](wxSizeEvent &event) {
+            event.Skip();
+            if (m_markdownHtml.empty() || FitDecisions() == m_fitted)
+                return;
+            CallAfter([this]() {
+                if (m_markdownHtml.empty())
+                    return;
+                int x = 0;
+                int y = 0;
+                GetViewStart(&x, &y);
+                SetPage(FittedMarkdown());
+                Scroll(x, y);
+            });
+        });
     }
 
     void SetMarkdownPage(
@@ -242,13 +258,16 @@ public:
     {
         wxFileName markdownFile(markdownPath);
         m_baseDirectory = markdownFile.GetPath();
-        SetPage(html);
+        m_markdownHtml = html;
+        SetPage(FittedMarkdown());
     }
 
     void SetDynamicPage(const wxString &html)
     {
         // The dynamic page only uses memory: images, no relative paths.
         m_baseDirectory.Clear();
+        m_markdownHtml.Clear();
+        m_fitted.clear();
         SetPage(html);
     }
 
@@ -326,8 +345,24 @@ protected:
         const wxString &url,
         wxString *redirect) const override
     {
-        if (type != wxHTML_URL_IMAGE || m_baseDirectory.IsEmpty())
+        if (type != wxHTML_URL_IMAGE)
             return wxHTML_OPEN;
+
+        const wxString imagePath = LocalImagePath(url);
+        if (imagePath.IsEmpty())
+            return wxHTML_OPEN;
+
+        *redirect = wxFileSystem::FileNameToURL(wxFileName(imagePath));
+        return wxHTML_REDIRECT;
+    }
+
+private:
+    // The file of a picture in a note, or empty for remote and
+    // already-qualified ones.
+    wxString LocalImagePath(const wxString &url) const
+    {
+        if (m_baseDirectory.IsEmpty())
+            return wxEmptyString;
 
         // Leave remote and already-qualified resources alone.
         if (url.StartsWith("http://") ||
@@ -335,7 +370,7 @@ protected:
             url.StartsWith("file:") ||
             url.StartsWith("memory:") ||
             url.StartsWith("data:")) {
-            return wxHTML_OPEN;
+            return wxEmptyString;
         }
 
         wxString imagePath = url;
@@ -359,12 +394,76 @@ protected:
             imageFile.MakeAbsolute(m_baseDirectory);
 
         imageFile.Normalize(wxPATH_NORM_DOTS | wxPATH_NORM_ABSOLUTE);
-
-        *redirect = wxFileSystem::FileNameToURL(imageFile);
-        return wxHTML_REDIRECT;
+        return imageFile.GetFullPath();
     }
 
-private:
+    // The <img> tags of the note's page, each with the file it shows.
+    struct ImageTag {
+        size_t end;  // just past "<img"
+        wxString path;
+    };
+
+    std::vector<ImageTag> ImageTags() const
+    {
+        std::vector<ImageTag> tags;
+        size_t at = 0;
+        while ((at = m_markdownHtml.find("<img ", at)) != wxString::npos) {
+            const size_t close = m_markdownHtml.find('>', at);
+            if (close == wxString::npos)
+                break;
+            const wxString tag = m_markdownHtml.Mid(at, close - at);
+            at += 4;
+            const int src = tag.Find("src=\"");
+            if (src == wxNOT_FOUND || tag.Contains(" width="))
+                continue;
+            wxString url = tag.Mid(src + 5).BeforeFirst('"');
+            url.Replace("&amp;", "&");
+            tags.push_back({at, LocalImagePath(url)});
+        }
+        return tags;
+    }
+
+    // Width of a picture in pixels, read once.
+    int ImageWidth(const wxString &path) const
+    {
+        auto known = m_imageWidths.find(path);
+        if (known != m_imageWidths.end())
+            return known->second;
+        wxImage image;
+        int width = 0;
+        {
+            wxLogNull quiet;
+            if (!path.IsEmpty() && image.LoadFile(path))
+                width = image.GetWidth();
+        }
+        m_imageWidths[path] = width;
+        return width;
+    }
+
+    // For each picture of the note: wider than the window, so shrunk to fit.
+    std::vector<bool> FitDecisions() const
+    {
+        const int room = GetClientSize().GetWidth() - 2 * 12 - 16;
+        std::vector<bool> fit;
+        for (const ImageTag &tag : ImageTags())
+            fit.push_back(room > 0 && ImageWidth(tag.path) > room);
+        return fit;
+    }
+
+    // The note's page with its wide pictures as wide as the window; smaller
+    // ones keep their size.
+    wxString FittedMarkdown()
+    {
+        m_fitted = FitDecisions();
+        const std::vector<ImageTag> tags = ImageTags();
+        wxString html = m_markdownHtml;
+        for (size_t i = tags.size(); i-- > 0;) {
+            if (m_fitted[i])
+                html.insert(tags[i].end, " width=\"100%\"");
+        }
+        return html;
+    }
+
     int HitAt(const wxPoint &windowPos, const wxString &prefix) const
     {
         const wxHtmlCell *root = GetInternalRepresentation();
@@ -427,6 +526,9 @@ private:
     }
 
     wxString m_baseDirectory;
+    wxString m_markdownHtml;           // the note's page before fitting
+    std::vector<bool> m_fitted;        // its pictures shrunk to fit
+    mutable std::map<wxString, int> m_imageWidths;
     bool m_overRow = false;
 };
 
