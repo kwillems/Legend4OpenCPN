@@ -5455,7 +5455,7 @@ bool legend_pi::OpenChartCellsFirst(std::function<void()> then)
     m_cells_opened = 0;
     m_after_cells = then;
     if (IsDynamicLegendVisible())
-        RenderProgressPage("Kaartbladen worden gelezen", 0, m_cells_to_open.size());
+        RenderProgressPage("Kaarten worden gelezen", 0, m_cells_to_open.size());
     m_cell_timer.StartOnce(10);
     return true;
 }
@@ -5471,7 +5471,7 @@ void legend_pi::OpenNextChartCell()
     }
     if (m_cells_opened < m_cells_to_open.size()) {
         if (IsDynamicLegendVisible())
-            RenderProgressPage("Kaartbladen worden gelezen", m_cells_opened,
+            RenderProgressPage("Kaarten worden gelezen", m_cells_opened,
                                m_cells_to_open.size());
         m_cell_timer.StartOnce(10);
         return;
