@@ -1701,6 +1701,7 @@ int legend_pi::Init()
     m_menu_new_note = action("Nieuwe notitie hier");
     m_menu_open_note = action("Notitie openen");
     m_menu_delete_note = action("Notitie verwijderen");
+    m_menu_undo_move = action("Notitie terugzetten op de oude plek");
     m_menu_link_place = action("Link naar deze plek in de tekst");
     m_menu_pin_note = action("Notitie hier vastpinnen op de kaart");
     m_menu_new_note_boat = action("Nieuwe notitie bij de boot");
@@ -4170,6 +4171,93 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
         return false;
     }
 
+    // A sign held down: a click opens its note, a drag moves it. The mouse
+    // stays here, so the chart neither pans nor centres meanwhile.
+    if (event.LeftDown() && m_viewport_valid) {
+        const double ratio = ViewportPixelsPerWindowPixel();
+        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
+                         static_cast<int>(std::lround(event.GetY() * ratio)));
+        const int note = NotePlaceAt(at, 12.0 * ratio);
+        if (note >= 0) {
+            m_note_drag = note;
+            m_note_drag_path = m_note_places[note].path;
+            m_note_drag_start = event.GetPosition();
+            m_note_drag_moved = false;
+            m_note_drag_from_lat = m_note_places[note].lat;
+            m_note_drag_from_lon = m_note_places[note].lon;
+            m_mouse_down_valid = false;
+            return true;
+        }
+    }
+
+    if (m_note_drag >= 0) {
+        // The places were read again meanwhile: find the sign by its note.
+        if (static_cast<size_t>(m_note_drag) >= m_note_places.size() ||
+            m_note_places[m_note_drag].path != m_note_drag_path) {
+            m_note_drag = -1;
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                if (m_note_places[i].path == m_note_drag_path)
+                    m_note_drag = static_cast<int>(i);
+            }
+            if (m_note_drag < 0)
+                return false;
+        }
+
+        if (event.Dragging() && event.LeftIsDown()) {
+            const wxPoint now = event.GetPosition();
+            if (std::abs(now.x - m_note_drag_start.x) > 4 ||
+                std::abs(now.y - m_note_drag_start.y) > 4)
+                m_note_drag_moved = true;
+            if (m_note_drag_moved) {
+                const double ratio = ViewportPixelsPerWindowPixel();
+                PlugIn_ViewPort vp = m_viewport;
+                double lat = 0.0;
+                double lon = 0.0;
+                GetCanvasLLPix(&vp,
+                               wxPoint(static_cast<int>(std::lround(now.x * ratio)),
+                                       static_cast<int>(std::lround(now.y * ratio))),
+                               &lat, &lon);
+                m_note_places[m_note_drag].lat = lat;
+                m_note_places[m_note_drag].lon = lon;
+                m_note_selected = m_note_drag;
+                RefreshAllCanvases();
+            }
+            return true;
+        }
+
+        if (event.LeftUp()) {
+            const NotePlace place = m_note_places[m_note_drag];
+            m_note_drag = -1;
+            if (m_note_drag_moved) {
+                m_undo_move_valid = true;
+                m_undo_move_path = place.path;
+                m_undo_move_title = place.title;
+                m_undo_move_lat = m_note_drag_from_lat;
+                m_undo_move_lon = m_note_drag_from_lon;
+                MoveNotePlace(place.path, place.lat, place.lon);
+                // Moved by mistake, while panning the chart: one click puts
+                // it back.
+                ShowVhfNotice("Notitie verplaatst",
+                              wxString::FromUTF8("\u201C") + place.title +
+                                  wxString::FromUTF8("\u201D staat op een nieuwe plek."),
+                              false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
+                              "Terugzetten");
+                return true;
+            }
+            // A click: the note opens and its radius shows.
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                if (m_note_places[i].path == place.path)
+                    m_note_selected = static_cast<int>(i);
+            }
+            RefreshAllCanvases();
+            const wxString path = place.path;
+            if (wxWindow *canvas = GetOCPNCanvasWindow())
+                canvas->CallAfter([this, path]() { OpenNote(path); });
+            return true;
+        }
+        return true;
+    }
+
     if (event.LeftDown()) {
         m_mouse_down = event.GetPosition();
         m_mouse_down_valid = true;
@@ -4192,16 +4280,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
     const wxPoint pixel(static_cast<int>(std::lround(up.x * ratio)),
                         static_cast<int>(std::lround(up.y * ratio)));
 
-    // The sign of a note: the note opens and its radius shows.
-    const int note = NotePlaceAt(pixel, 12.0 * ratio);
-    if (note >= 0) {
-        m_note_selected = note;
-        RefreshAllCanvases();
-        const wxString path = m_note_places[note].path;
-        if (wxWindow *canvas = GetOCPNCanvasWindow())
-            canvas->CallAfter([this, path]() { OpenNote(path); });
-        return false;
-    }
+    // A click beside the signs: no radius shows any more.
     if (m_note_selected >= 0) {
         m_note_selected = -1;
         RefreshAllCanvases();
@@ -4283,6 +4362,12 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
         m_context_submenu->Append(m_menu_delete_note,
                                   quoted + wxString::FromUTF8(" verwijderen\u2026"));
     }
+    if (m_undo_move_valid) {
+        m_context_submenu->AppendSeparator();
+        m_context_submenu->Append(m_menu_undo_move,
+                                  wxString::FromUTF8("\u201C") + m_undo_move_title +
+                                      wxString::FromUTF8("\u201D terugzetten op de oude plek"));
+    }
 }
 
 void legend_pi::OnContextMenuItemCallback(int id)
@@ -4300,6 +4385,10 @@ void legend_pi::OnContextMenuItemCallback(int id)
     }
     if (id == m_menu_pin_boat) {
         PinNoteAtBoat();
+        return;
+    }
+    if (id == m_menu_undo_move) {
+        UndoNoteMove();
         return;
     }
     if (!m_cursor_valid)
@@ -9147,6 +9236,50 @@ void legend_pi::SetNotePlace(double lat, double lon)
         m_legend_window->Raise();
 }
 
+// A sign dragged to another place: the note is pinned there, its radius
+// and the rest of its settings stay.
+void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
+{
+    if (m_editing && m_editing_path == path) {
+        m_note_lat = lat;
+        m_note_lon = lon;
+        NotePlaceChanged();
+        return;
+    }
+
+    wxString text;
+    {
+        wxFile file(path);
+        if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
+            RefreshNotePlaces();
+            return;
+        }
+    }
+    const NoteFrontMatter front = SplitFrontMatter(text);
+    const wxString moved =
+        BlockWithPlace(front.block, true, lat, lon, front.radius) + front.body;
+    wxTempFile out(path);
+    if (!out.IsOpened() || !out.Write(moved, wxConvUTF8) || !out.Commit())
+        wxMessageBox("De nieuwe plek kon niet in de notitie worden bewaard.", "Notitie verplaatsen",
+                     wxOK | wxICON_WARNING, GetOCPNCanvasWindow());
+    RefreshNotePlaces();
+
+    // The note in the window shows its place on top.
+    if (m_legend_window && m_legend_window->IsShown() && m_current_legend_path == path)
+        ShowLegend(m_legend_index);
+}
+
+// The last dragged sign back where it was.
+void legend_pi::UndoNoteMove()
+{
+    if (!m_undo_move_valid)
+        return;
+    m_undo_move_valid = false;
+    if (m_vhf_notice)
+        m_vhf_notice->Hide();
+    MoveNotePlace(m_undo_move_path, m_undo_move_lat, m_undo_move_lon);
+}
+
 void legend_pi::AskNoteRadius()
 {
     wxString value = wxString::Format("%.2f", m_note_radius);
@@ -9562,7 +9695,8 @@ bool legend_pi::PlayVhfSound()
 // A small window at the top of the chart that goes away on its own after a
 // while, or with a click.
 void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
-                              const wxColour &titleColour, std::function<void()> action)
+                              const wxColour &titleColour, std::function<void()> action,
+                              const wxString &actionLabel)
 {
     m_notice_action = action;
     wxWindow *canvas = GetOCPNCanvasWindow();
@@ -9584,11 +9718,39 @@ void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool 
         m_vhf_notice_text = new wxStaticText(panel, wxID_ANY, wxEmptyString);
         sizer->Add(m_vhf_notice_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
         sizer->Add(m_vhf_notice_text, 0, wxALL, 12);
+        // With an action label: the action as a button, and one that closes.
+        m_vhf_notice_buttons = new wxPanel(panel);
+        auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+        m_vhf_notice_action = new wxButton(m_vhf_notice_buttons, wxID_ANY, wxEmptyString);
+        auto *closeButton = new wxButton(m_vhf_notice_buttons, wxID_ANY, "Sluiten");
+        buttonSizer->AddStretchSpacer();
+        buttonSizer->Add(closeButton, 0, wxRIGHT, 8);
+        buttonSizer->Add(m_vhf_notice_action, 0);
+        m_vhf_notice_buttons->SetSizer(buttonSizer);
+        sizer->Add(m_vhf_notice_buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
         panel->SetSizer(sizer);
-        // A click closes it, and opens what it is about, if anything.
+        m_vhf_notice_action->SetDefault();
+        m_vhf_notice_action->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+            if (m_vhf_notice)
+                m_vhf_notice->Hide();
+            if (m_notice_action) {
+                std::function<void()> action = m_notice_action;
+                m_notice_action = std::function<void()>();
+                action();
+            }
+        });
+        closeButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+            m_notice_action = std::function<void()>();
+            if (m_vhf_notice)
+                m_vhf_notice->Hide();
+        });
+        // A click closes it, and opens what it is about, if anything; with
+        // buttons only those do the action.
         auto close = [this](wxMouseEvent &) {
             if (m_vhf_notice)
                 m_vhf_notice->Hide();
+            if (m_vhf_notice_buttons && m_vhf_notice_buttons->IsShown())
+                return;
             if (m_notice_action) {
                 std::function<void()> action = m_notice_action;
                 m_notice_action = std::function<void()>();
@@ -9611,6 +9773,10 @@ void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool 
     m_vhf_notice_text->SetForegroundColour(palette.text);
     m_vhf_notice_title->SetLabel(title);
     m_vhf_notice_text->SetLabel(text);
+    m_vhf_notice_buttons->SetBackgroundColour(palette.background);
+    m_vhf_notice_action->SetLabel(actionLabel);
+    m_vhf_notice_buttons->Show(!actionLabel.IsEmpty());
+    panel->GetSizer()->Layout();
     panel->GetSizer()->Fit(panel);
     m_vhf_notice->SetClientSize(panel->GetBestSize());
     panel->SetSize(m_vhf_notice->GetClientSize());
