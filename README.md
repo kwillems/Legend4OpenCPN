@@ -68,8 +68,8 @@ notities en routebeschrijvingen.
 
 **Eigen legenda's en notities**
 
-- PNG-afbeeldingen en Markdown-bestanden uit een vaste map, om doorheen te
-  bladeren.
+- Notities in Markdown uit een vaste map, om doorheen te bladeren. Een losse
+  PNG in die map wordt vanzelf een notitie.
 - Notities schrijven en bewerken in het venster zelf, zoals in een
   tekstverwerker: koppen, vet, lijsten, afvinklijsten, links en afbeeldingen.
   Op schijf blijft het gewone Markdown.
@@ -81,6 +81,8 @@ notities en routebeschrijvingen.
   melding als je in de buurt komt.
 - Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
   vastgepind op die plek, of onderweg op de positie van de boot.
+- Sleep een blaadje naar een andere plek; per ongeluk verplaatst zet je met
+  één klik terug.
 - In de tekst een link naar een plek: een klik laat de kaart erheen gaan.
 
 **Weergave**
@@ -101,8 +103,7 @@ Een nieuwe versie kun je over de oude heen importeren.
 
 De Legend-knop opent en sluit het venster. Bovenin staat een keuzelijst met
 alle items, met daarnaast de positie (`2 van 12`). Het eerste item is altijd
-de **Kaartlegenda**; daarna volgen je eigen PNG- en Markdown-bestanden op
-alfabet.
+de **Kaartlegenda**; daarna volgen je notities op alfabet.
 
 - Blader met **Vorige** en **Volgende**, of met `←` en `→`.
 - Heeft de keuzelijst de focus, dan werken ook `↑` en `↓`.
@@ -338,27 +339,31 @@ Legend-map vul je ze aan of verbeter je ze.
 
 ## Eigen legenda's en notities
 
-Alle PNG- en Markdown-bestanden in de Legend-map verschijnen in de
-keuzelijst:
+Alle Markdown-bestanden in de Legend-map verschijnen in de keuzelijst:
 
 ```text
 ~/Documents/OpenCPN/Legend/
-├── VHF-Nederland.png
+├── VHF-Nederland.md
 ├── Route-IJsselmeer.md
 ├── Checklist.md
 ├── symbolen.txt
 ├── s57-nl.txt        (optioneel)
 └── images/
     ├── brug.png
-    └── sluis.png
+    ├── sluis.png
+    └── VHF-Nederland.png
 ```
 
-- **PNG-afbeeldingen** worden verkleind tot ze in het venster passen.
 - **Markdown** (`.md`, `.markdown`) wordt opgemaakt weergegeven, met
   tabellen, lokale afbeeldingen en klikbare links. Is de eerste regel een kop
   `# Titel`, dan wordt dat de titel in de keuzelijst; anders de bestandsnaam.
-- Zet afbeeldingen die alleen in Markdown gebruikt worden in een submap
-  zoals `images/`, dan verschijnen ze niet als losse items.
+- Een afbeelding die breder is dan het venster wordt verkleind tot hij past,
+  ook als je het venster smaller maakt; kleinere houden hun eigen maat.
+- **Een losse PNG** in de Legend-map, zoals een gescande legenda, wordt
+  vanzelf een notitie: de afbeelding verhuist naar `images/` en een notitie
+  met dezelfde naam toont hem. Zo kun je hem bewerken, hernoemen,
+  verwijderen en vastpinnen als elke andere notitie. Een PNG die al in een
+  notitie staat, blijft waar hij is.
 
 Een voorbeeld:
 
@@ -407,8 +412,8 @@ Markdown-tekens. Bovenin staat een rij knoppen:
 Enter na een kop geeft weer gewone tekst, Enter op een lege lijstregel
 beëindigt de lijst en `Shift+Enter` begint een nieuwe regel binnen dezelfde
 alinea. Alles wordt vanzelf bewaard, anderhalve seconde nadat je stopt met
-typen; onderin staat wanneer. **Klaar** of `Esc` brengt je terug naar de
-gewone weergave.
+typen; onderin staat wanneer. **Opslaan**, bovenin naast de keuzelijst, of
+`Esc` bewaart en brengt je terug naar de gewone weergave.
 
 Op schijf blijft een notitie gewone Markdown. Een tabel zie je tijdens het
 bewerken als Markdown-tekst in een vaste letter; zo kun je hem bewerken en
@@ -456,7 +461,11 @@ Een vastgepinde notitie:
 - staat als een **geel blaadje** op de kaart. Met de muis erboven zie je de
   titel; een klik opent de notitie en toont de straal als stippellijn. Een
   rechtsklik op het blaadje geeft *Notitie ▸ "…" openen* en *"…"
-  verwijderen*. Net als tonnen en bakens verdwijnt het blaadje als je verder
+  verwijderen*. **Sleep** het blaadje om de notitie te verplaatsen: de
+  straal schuift mee en bij het loslaten komt de nieuwe plek in de notitie.
+  Een melding biedt daarna **Terugzetten** en **Sluiten**; is die weg, dan
+  staat *Notitie ▸ "…" terugzetten op de oude plek* nog in het
+  rechtsklikmenu, voor de laatst verplaatste notitie. Net als tonnen en bakens verdwijnt het blaadje als je verder
   uitzoomt dan 1:200 000;
 - staat onder het kopje **Notities** in de legenda zolang de plek in beeld
   is, de dichtstbijzijnde eerst, met de afstand en de eerste regel tekst. Met
@@ -488,7 +497,7 @@ Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
 ## Weergave
 
 - De legenda volgt de kleurenschema's dag, schemer en nacht van OpenCPN:
-  venster, tekst, iconen, PNG-legenda's en de markering dimmen mee. Overdag
+  venster, tekst, iconen en de markering dimmen mee. Overdag
   volgt het venster de lichte of donkere weergave van macOS.
 - Iconen volgen de schaalfactor voor kaartobjecten uit de instellingen van
   OpenCPN, zodat ze even groot zijn als op de kaart.
