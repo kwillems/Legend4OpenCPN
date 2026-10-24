@@ -5227,27 +5227,53 @@ void legend_pi::FinishWaypointLoading()
 
 void legend_pi::RenderLoadingPage()
 {
+    const size_t total = m_loading ? m_loading_guids.GetCount() : 0;
+    RenderProgressPage("Waypoints worden geladen", m_loading_next, total);
+}
+
+// Opening chart cells takes a fifth of a second each: with more than one
+// to open, the legend shows how far it is, painted at once since OpenCPN
+// handles nothing meanwhile.
+void legend_pi::ShowCellProgress(int done, int total)
+{
+    if (total < 2 || !IsDynamicLegendVisible())
+        return;
+    RenderProgressPage("Kaartbladen worden gelezen", static_cast<size_t>(done),
+                       static_cast<size_t>(total));
+    m_markdown_view->Update();
+}
+
+// What the legend waits for, with a bar that fills and "1.200 van 17.350".
+void legend_pi::RenderProgressPage(const wxString &what, size_t done, size_t total)
+{
     if (!m_markdown_view)
         return;
 
     const LegendPalette palette = GetLegendPalette();
 
-    wxString progress;
-    if (m_loading && !m_loading_guids.IsEmpty()) {
-        progress = wxString::Format(
-            "%zu van %zu",
-            m_loading_next,
-            m_loading_guids.GetCount());
-    }
-
     wxString html;
     html << "<html>" << LegendBodyTag(true)
          << "<p><font size=\"+1\"><b>Kaartlegenda</b></font></p>"
-         << "<p>Waypoints worden geladen&hellip;</p>";
+         << "<p>" << what << "&hellip;</p>";
 
-    if (!progress.IsEmpty()) {
-        html << "<p><font color=\"" << HtmlColour(palette.muted) << "\">"
-             << progress << "</font></p>";
+    if (total > 0) {
+        const int percent =
+            std::max(1, std::min(100, static_cast<int>(done * 100 / total)));
+        auto number = [](size_t value) {
+            wxString text = wxString::Format("%zu", value);
+            for (int at = static_cast<int>(text.length()) - 3; at > 0; at -= 3)
+                text.insert(at, ".");
+            return text;
+        };
+        html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tr>"
+             << "<td width=\"" << percent << "%\" bgcolor=\"" << HtmlColour(palette.text)
+             << "\"><font size=\"1\">&nbsp;</font></td>";
+        if (percent < 100)
+            html << "<td bgcolor=\"" << HtmlColour(palette.rule)
+                 << "\"><font size=\"1\">&nbsp;</font></td>";
+        html << "</tr></table>"
+             << "<p><font color=\"" << HtmlColour(palette.muted) << "\">" << number(done)
+             << " van " << number(total) << "</font></p>";
     }
 
     html << "</body></html>";
@@ -5747,9 +5773,10 @@ void legend_pi::CollectChartObjects(
     // plugin's own reader for plain ENC cells. Where both cover the same
     // water, an object counts once.
     std::vector<ChartObject> objects;
+    const CellProgress progress = [this](int done, int total) { ShowCellProgress(done, total); };
     m_ocharts_available = m_ocharts.Available();
     if (m_ocharts_available)
-        objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale);
+        objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale, progress);
 
     auto positionKey = [](const ChartObject &object) {
         return wxString::Format(
@@ -5764,7 +5791,7 @@ void legend_pi::CollectChartObjects(
     // lights at one position, which differ in colour and character, so
     // for lights those count as well.
     std::set<wxString> seenEnc;
-    const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp);
+    const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp, progress);
     for (const ChartObject &object : enc) {
         const wxString position = positionKey(object);
         if (fromOcharts.count(position) > 0)

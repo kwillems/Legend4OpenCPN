@@ -42,7 +42,8 @@ public:
     // With ignoreScaleLimits the cells are asked as if the view were at a
     // very large scale, so objects hidden by their scale limit come too.
     std::vector<ChartObject> PointObjectsInView(
-        const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false);
+        const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false,
+        const CellProgress &progress = CellProgress());
 
     // Forget the cell inventory; the next query scans the chart folders
     // again (new or removed cells).

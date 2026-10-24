@@ -34,7 +34,8 @@ public:
 
     // The point objects of the cells that cover the viewport, within its
     // bounds. Cells far more detailed than the view are left out.
-    std::vector<ChartObject> PointObjectsInView(const PlugIn_ViewPort &vp);
+    std::vector<ChartObject> PointObjectsInView(
+        const PlugIn_ViewPort &vp, const CellProgress &progress = CellProgress());
 
     // Forget the inventory; the next query scans the chart folders again.
     void Rescan() { m_inventoried = false; }
