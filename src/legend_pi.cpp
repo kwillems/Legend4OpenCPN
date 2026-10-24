@@ -1677,14 +1677,14 @@ int legend_pi::Init()
     RefreshNotePlaces();
     m_note_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { ShowPendingNoteNotice(); });
 
-    // In the chart's right-click menu: "Toon in legenda" and "Marifoon
-    // hier", and "Notitie" with a submenu that PrepareContextMenu() fills
-    // each time for the spot and the state.
+    // In the chart's right-click menu: "Toon in legenda" and "Welk
+    // marifoonkanaal hier?", and "Notitie" with a submenu that
+    // PrepareContextMenu() fills each time for the spot and the state.
     m_menu_reveal = AddCanvasContextMenuItem(
         new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")), this);
     m_menu_actions.push_back(m_menu_reveal);
     m_menu_vhf = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Marifoon hier")), this);
+        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Welk marifoonkanaal hier?")), this);
     m_menu_actions.push_back(m_menu_vhf);
 
     // OpenCPN tells a plugin of this API version which submenu was used,
@@ -9613,7 +9613,7 @@ wxString legend_pi::VhfAreaLine(const VhfArea &area) const
     return line;
 }
 
-// "Marifoon hier" from the chart's menu.
+// "Welk marifoonkanaal hier?" from the chart's menu.
 void legend_pi::ShowVhfHere(double lat, double lon)
 {
     EnsureVhfAreas();
@@ -9629,7 +9629,7 @@ void legend_pi::ShowVhfHere(double lat, double lon)
         text = "Geen marifoongebieden geladen (laag VHFinfo Nederland).";
     else if (text.IsEmpty())
         text = "Hier geldt geen marifoongebied uit VHFinfo Nederland.";
-    ShowVhfNotice("Marifoon hier", text, false);
+    ShowVhfNotice("Marifoonkanaal op deze locatie", text, false);
     if (!parts.empty())
         ShowVhfHighlight(parts);
 }
