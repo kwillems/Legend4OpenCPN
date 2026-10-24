@@ -335,6 +335,7 @@ private:
     int m_menu_new_note = -1;
     int m_menu_open_note = -1;
     int m_menu_delete_note = -1;
+    int m_menu_undo_move = -1;
     int m_menu_link_place = -1;
     int m_menu_pin_note = -1;
     int m_menu_new_note_boat = -1;
@@ -354,6 +355,8 @@ private:
     void SetNotePlace(double lat, double lon);
     void AskNoteRadius();
     void NotePlaceChanged();
+    void MoveNotePlace(const wxString &path, double lat, double lon);
+    void UndoNoteMove();
     void UpdatePlaceBar();
     wxString FormatPosition(double lat, double lon) const;
     bool ParseGeoUri(const wxString &uri, double *lat, double *lon) const;
@@ -560,6 +563,8 @@ private:
     wxFrame *m_vhf_notice = nullptr;
     wxStaticText *m_vhf_notice_title = nullptr;
     wxStaticText *m_vhf_notice_text = nullptr;
+    wxPanel *m_vhf_notice_buttons = nullptr;  // the action as a button, and Sluiten
+    wxButton *m_vhf_notice_action = nullptr;
     wxTimer m_vhf_notice_timer;
     wxTimer m_vhf_sound_timer;          // the next beep
     int m_vhf_beeps_left = 0;
@@ -572,7 +577,8 @@ private:
     void CheckVhfAreaChange();
     void ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
                        const wxColour &titleColour = wxColour(220, 40, 40),
-                       std::function<void()> action = std::function<void()>());
+                       std::function<void()> action = std::function<void()>(),
+                       const wxString &actionLabel = wxEmptyString);
     std::function<void()> m_notice_action; // what a click on the notice opens
 
     // Notes that belong to a place: a sign on the chart, a heading in the
@@ -580,6 +586,18 @@ private:
     std::vector<NotePlace> m_note_places;
     int m_note_selected = -1;            // clicked sign: its radius shows
     int m_note_hover = -1;               // sign under the mouse
+    int m_note_drag = -1;                // sign held down by the mouse
+    wxString m_note_drag_path;
+    wxPoint m_note_drag_start;
+    bool m_note_drag_moved = false;
+    double m_note_drag_from_lat = 0.0;   // where the held sign was
+    double m_note_drag_from_lon = 0.0;
+    // The last sign dragged, to put it back.
+    bool m_undo_move_valid = false;
+    wxString m_undo_move_path;
+    wxString m_undo_move_title;
+    double m_undo_move_lat = 0.0;
+    double m_undo_move_lon = 0.0;
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
     bool m_note_notice_on = true;        // setting
