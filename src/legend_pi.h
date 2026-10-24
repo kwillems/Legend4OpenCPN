@@ -325,8 +325,9 @@ private:
     void ShowNoteNamed(const wxString &fullName);
     void UpdateNoteButtons();
     void InsertLink();
-    // The chart's right-click menu: "Toon in legenda", "Marifoon hier", and
-    // "Notitie" with a submenu whose actions hidden items carry (see Init).
+    // The chart's right-click menu: "Toon in legenda", "Welk marifoonkanaal
+    // hier?", and "Notitie" with a submenu whose actions hidden items carry
+    // (see Init).
     int m_menu_parent = -1;
     wxMenu *m_context_submenu = nullptr;
     std::vector<int> m_menu_actions;
@@ -545,7 +546,7 @@ private:
     std::vector<LightSector> SectorsAt(double lat, double lon, const wxString &rhythm) const;
     wxString m_light_rhythm; // rhythm of the light shining for a click
 
-    // "Marifoon hier": the VHF areas (VHFinfo layer) the boat is in, or
+    // "Welk marifoonkanaal hier?": the VHF areas (VHFinfo layer) the boat is in, or
     // the middle of the chart without a recent position fix.
     VhfAreas m_vhf_areas;
     bool m_vhf_loaded = false;

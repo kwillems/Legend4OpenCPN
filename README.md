@@ -264,8 +264,8 @@ Een marifoongebied kan op de kaart oplichten, lichtrood zoals op
   legenda of op een regel van het Marifoon-kopje: het hele gebied licht op.
   Bestaat een gebied uit meer stukken, dan lichten ze allemaal op. De teller
   ◎ van een rij laat alle gebieden van dat icoon in beeld oplichten.
-- **Marifoon hier** in het rechtsklikmenu van de kaart laat alle gebieden op
-  die plek oplichten en noemt hun kanalen in een venstertje.
+- **Welk marifoonkanaal hier?** in het rechtsklikmenu van de kaart laat alle
+  gebieden op die plek oplichten en noemt hun kanalen in een venstertje.
 - Een gebied licht zes seconden op en vervaagt dan, of blijft staan tot je
   weer op de kaart klikt (instelling *Marifoongebied blijft oplichten*).
 
