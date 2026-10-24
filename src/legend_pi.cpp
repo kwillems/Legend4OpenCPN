@@ -59,7 +59,6 @@
 
 extern "C" {
 #include "md4c-html.h"
-#include "note_places.h"
 }
 
 #ifdef __WXOSX__
@@ -79,10 +78,6 @@ const wxString kDynamicGpxId = "@gpx-legend";
 // Steps of the fade of a row found from the chart (150 ms each).
 const int kFadeSteps = 8;
 
-// Added to the colour index of a light that shines dimmed: the steady
-// part of a fixed and flashing light.
-const int kDimLight = 1000;
-
 // Chart lights are paired with the buoy or beacon at the same spot through
 // a grid of cells of this size in degrees, a few metres.
 const double kCarrierCell = 6e-5;
@@ -96,15 +91,6 @@ struct PendingLight
     bool sector;    // one sector of a sector light
     LightSector part;
 };
-
-// Grid of the sectors of sector lights, about two metres.
-const double kSectorCell = 2e-5;
-
-std::pair<long, long> SectorCell(double lat, double lon)
-{
-    return std::make_pair(static_cast<long>(std::floor(lat / kSectorCell)),
-                          static_cast<long>(std::floor(lon / kSectorCell)));
-}
 
 // An object a light can stand on, and the row it is listed in. Rank 0 for
 // buoys and beacons, 1 for other structures.
@@ -1606,14 +1592,6 @@ legend_pi::legend_pi(void *ppimgr)
                 SetFilter(m_search->GetValue());
         });
 
-    m_light_timer.Bind(
-        wxEVT_TIMER,
-        [this](wxTimerEvent &) { OnLightTimer(); });
-
-    m_all_lights_timer.Bind(
-        wxEVT_TIMER,
-        [this](wxTimerEvent &) { OnAllLightsTimer(); });
-
     m_tap_clock_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) { UpdateTapClock(); });
@@ -1753,10 +1731,8 @@ bool legend_pi::DeInit()
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
     m_filter_timer.Stop();
-    m_light_timer.Stop();
-    m_light_active = false;
-    m_all_lights_timer.Stop();
-    m_all_lights_on = false;
+    m_chosen_light.Clear();
+    m_all_lights.Clear();
     m_vhf_highlight.Clear();
     m_note_notice_timer.Stop();
     m_night_preview = false;
@@ -5612,7 +5588,7 @@ void legend_pi::RunLegendCommand(const wxString &command)
     else if (command == "all-lights") {
         if (m_night_preview)
             SetNightPreview(false);
-        SetAllLightsShining(!m_all_lights_on);
+        SetAllLightsShining(!m_all_lights.IsOn());
         RenderDynamicLegend(true);
     }
     else if (command == "night") {
@@ -5649,8 +5625,8 @@ void legend_pi::ShowSettingsMenu()
         menu.AppendCheckItem(kEnglish, "Engelse namen")->Check(!m_dutch_names);
 
     menu.AppendSeparator();
-    if (m_show_lights && (m_menu_has_lights || m_all_lights_on))
-        menu.AppendCheckItem(kAllLights, "Alle lichten laten branden")->Check(m_all_lights_on);
+    if (m_show_lights && (m_menu_has_lights || m_all_lights.IsOn()))
+        menu.AppendCheckItem(kAllLights, "Alle lichten laten branden")->Check(m_all_lights.IsOn());
     if (m_show_lights && (m_menu_has_lights || m_night_preview))
         menu.AppendCheckItem(kNight, "Nachtvoorbeeld")->Check(m_night_preview);
     if (m_show_lights && (m_menu_has_lights || m_identify_on))
@@ -6212,7 +6188,7 @@ void legend_pi::CollectChartObjects(
     // The parts of a sector light share a position and a rhythm and differ
     // in colour: joined into one light, as charts write it ("Iso.WRG.4s"),
     // with its sectors kept by position.
-    m_light_sectors.clear();
+    m_light_sectors.Clear();
     {
         std::vector<PendingLight> joined;
         std::map<wxString, size_t> sectorLights;
@@ -6221,9 +6197,9 @@ void legend_pi::CollectChartObjects(
                 joined.push_back(pending);
                 continue;
             }
-            const std::pair<long, long> cell = SectorCell(pending.lat, pending.lon);
-            m_light_sectors[cell].push_back(
-                std::make_pair(pending.light.RhythmAbbreviation(), pending.part));
+            const std::pair<long, long> cell = LightSectors::Cell(pending.lat, pending.lon);
+            m_light_sectors.Add(pending.lat, pending.lon, pending.light.RhythmAbbreviation(),
+                                pending.part);
 
             const wxString key = wxString::Format(
                 "%ld|%ld|%d|", cell.first, cell.second, pending.hiddenFrom) +
@@ -6295,29 +6271,6 @@ void legend_pi::CollectChartObjects(
         m_chart_objects_logged = summary;
         wxLogMessage("%s, %ld ms", summary, watch.Time());
     }
-}
-
-std::vector<LightSector> legend_pi::SectorsAt(
-    double lat, double lon, const wxString &rhythm) const
-{
-    std::vector<LightSector> sectors;
-    if (rhythm.IsEmpty())
-        return sectors;
-
-    const std::pair<long, long> cell = SectorCell(lat, lon);
-    for (long dLat = -1; dLat <= 1; ++dLat) {
-        for (long dLon = -1; dLon <= 1; ++dLon) {
-            auto found = m_light_sectors.find(
-                std::make_pair(cell.first + dLat, cell.second + dLon));
-            if (found == m_light_sectors.end())
-                continue;
-            for (const auto &entry : found->second) {
-                if (entry.first == rhythm)
-                    sectors.push_back(entry.second);
-            }
-        }
-    }
-    return sectors;
 }
 
 namespace {
@@ -6457,7 +6410,7 @@ void legend_pi::CollectDynamicLegend()
         }
     }
 
-    m_light_sectors.clear();
+    m_light_sectors.Clear();
     CollectChartObjects(vp, &groups);
 
     // Order the positions of every group from near to far, measured from
@@ -6530,7 +6483,7 @@ void legend_pi::CollectDynamicLegend()
     // Lights shining on the chart follow the list, once it is complete:
     // the lights under their rows are added below.
     if (subRows.empty()) {
-        if (m_all_lights_on)
+        if (m_all_lights.IsOn())
             UpdateAllLights();
         return;
     }
@@ -6561,7 +6514,7 @@ void legend_pi::CollectDynamicLegend()
     }
     m_dynamic_groups.swap(ordered);
 
-    if (m_all_lights_on)
+    if (m_all_lights.IsOn())
         UpdateAllLights();
 }
 
@@ -6649,8 +6602,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
             const size_t at =
                 group.current >= 0 ? static_cast<size_t>(group.current) : 0;
             const std::vector<LightSector> sectors =
-                SectorsAt(group.positions[at].first, group.positions[at].second,
-                          RhythmOf(group.lightText));
+                m_light_sectors.At(group.positions[at].first, group.positions[at].second,
+                                   RhythmOf(group.lightText));
             if (!sectors.empty())
                 label << "<br>" << escape(SectorWords(sectors, m_dutch_names));
         }
@@ -8102,7 +8055,7 @@ void legend_pi::ShowMarkers(
         return;
 
     // One marker at a time: a shining light gives way.
-    StopLightMarker();
+    m_chosen_light.Stop();
 
     m_marker_positions = positions;
     m_marker_phase = 0;
@@ -8139,9 +8092,7 @@ void legend_pi::OnMarkerTimer()
     RefreshAllCanvases();
 }
 
-// The light shines for a few periods, at least a quarter of a minute and
-// at most a minute. Only a change between light and dark repaints the
-// chart.
+// A light with a rhythm shines; one without is marked as any object.
 void legend_pi::ShowLightMarkers(
     const LightCharacter &light,
     const std::vector<std::pair<double, double>> &positions)
@@ -8149,108 +8100,20 @@ void legend_pi::ShowLightMarkers(
     if (positions.empty())
         return;
 
-    std::vector<LightPhase> phases = light.Phases();
-    double cycle = 0.0;
-    for (const LightPhase &phase : phases)
-        cycle += phase.seconds;
-    if (cycle <= 0.0) {
+    if (!m_chosen_light.Show(light, positions)) {
         ShowMarkers(positions);
         return;
     }
-
     StopMarker();
-
-    m_light_positions = positions;
-    m_light_rhythm = light.RhythmAbbreviation();
-    m_light_phases = phases;
-    m_light_colours = light.Colours();
-    m_light_cycle = cycle;
-    m_light_duration = std::min(60.0, std::max(15.0, 3.0 * cycle));
-    m_light_started = wxGetUTCTimeMillis();
-    m_light_state = -2; // nothing drawn yet
-    m_light_active = true;
-
-    m_light_timer.Stop();
-    m_light_timer.Start(40);
-    OnLightTimer();
 }
 
-void legend_pi::StopLightMarker()
+LightStyle legend_pi::CurrentLightStyle() const
 {
-    m_light_timer.Stop();
-
-    if (m_light_active) {
-        m_light_active = false;
-        RefreshAllCanvases();
-    }
-}
-
-namespace {
-
-// The colour index of a light at a moment in its period, -1 while dark,
-// plus kDimLight for the steady part of a fixed and flashing light.
-int PhaseStateAt(const std::vector<LightPhase> &phases, double seconds)
-{
-    double end = 0.0;
-    for (const LightPhase &phase : phases) {
-        end += phase.seconds;
-        if (seconds < end) {
-            if (phase.colour < 0)
-                return -1;
-            return phase.colour + (phase.dim ? kDimLight : 0);
-        }
-    }
-    return -1;
-}
-
-} // namespace
-
-int legend_pi::LightStateAt(double seconds) const
-{
-    return PhaseStateAt(m_light_phases, seconds);
-}
-
-void legend_pi::OnLightTimer()
-{
-    if (!m_light_active) {
-        m_light_timer.Stop();
-        return;
-    }
-
-    const double elapsed =
-        (wxGetUTCTimeMillis() - m_light_started).ToDouble() / 1000.0;
-    if (elapsed > m_light_duration) {
-        StopLightMarker();
-        return;
-    }
-
-    const int state = LightStateAt(std::fmod(elapsed, m_light_cycle));
-    if (state != m_light_state) {
-        m_light_state = state;
-        RefreshAllCanvases();
-    }
-}
-
-// Screen positions of the marked objects on a canvas, leaving out those
-// far outside it.
-std::vector<wxPoint> legend_pi::MarkerCentres(
-    PlugIn_ViewPort *vp,
-    const std::vector<std::pair<double, double>> &positions) const
-{
-    std::vector<wxPoint> centres;
-
-    for (const auto &position : positions) {
-        wxPoint centre;
-        GetCanvasPixLL(vp, &centre, position.first, position.second);
-
-        if (centre.x < -60 || centre.y < -60 ||
-            centre.x > vp->pix_width + 60 || centre.y > vp->pix_height + 60)
-            continue;
-
-        centres.push_back(centre);
-    }
-
-    return centres;
+    LightStyle style;
+    MarkerColours(style.outline, style.highlight);
+    style.dim = std::max(0.6, SchemeDim());
+    style.pixelsPerPoint = ViewportPixelsPerWindowPixel();
+    return style;
 }
 
 bool legend_pi::RenderOverlayMultiCanvas(
@@ -8261,8 +8124,8 @@ bool legend_pi::RenderOverlayMultiCanvas(
 {
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
+    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -8275,9 +8138,12 @@ bool legend_pi::RenderOverlayMultiCanvas(
     const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
                          m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSigns(dc, vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview || drewVhf ||
-                         drewNotes;
-    const bool drewLight = (m_light_active && DrawLightMarkers(dc, vp)) || drewAll;
+    const LightStyle style = CurrentLightStyle();
+    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors)) ||
+                         m_night_preview || drewVhf || drewNotes;
+    const bool drewLight =
+        (m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors)) ||
+        drewAll;
     if (!m_marker_active)
         return drewLight;
 
@@ -8335,8 +8201,8 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)pcontext;
     (void)canvasIndex;
 
-    if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
+    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -8349,9 +8215,12 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
                          m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSignsGL(vp);
-    const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview || drewVhf ||
-                         drewNotes;
-    const bool drewLight = (m_light_active && DrawLightMarkersGL(vp)) || drewAll;
+    const LightStyle style = CurrentLightStyle();
+    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.DrawGL(vp, style, m_light_sectors)) ||
+                         m_night_preview || drewVhf || drewNotes;
+    const bool drewLight =
+        (m_chosen_light.IsActive() && m_chosen_light.DrawGL(vp, style, m_light_sectors)) ||
+        drewAll;
     if (!m_marker_active)
         return drewLight;
 
@@ -8422,392 +8291,6 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
         // A pulsing ring that draws the eye.
         glLineWidth(2.0f);
         circle(cx, cy, radius + 8.0 + pulse * 3.0);
-    }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-
-    return true;
-}
-
-// The chosen light on the chart. A ring with ticks, like the marker, stays
-// where the light is, also while it is dark. While it shines, a large glow
-// with rays in the colour of the light fills the ring; the steady part of a
-// fixed and flashing light is a smaller, paler glow without rays. Sizes
-// follow the pixel density of the screen.
-namespace {
-
-struct LightMarkerLook
-{
-    double scale = 1.0;
-    double ring = 0.0;     // radius of the ring
-    double glow = 0.0;     // radius of the glow
-    double core = 0.0;     // radius of the bright centre
-    double rayFrom = 0.0;  // rays run from here...
-    double rayTo = 0.0;    // ...to here
-    int rays = 8;
-};
-
-// Screen angle (radians, y down) of a bearing at a position: the chart can
-// be turned, so north is found by projecting a point a little to the north.
-double ScreenAngle(PlugIn_ViewPort *vp, double lat, double lon, double bearing)
-{
-    wxPoint centre;
-    wxPoint north;
-    GetCanvasPixLL(vp, &centre, lat, lon);
-    GetCanvasPixLL(vp, &north, lat + 0.01, lon);
-    const double kPi = 3.14159265358979323846;
-    const double up = std::atan2(static_cast<double>(north.y - centre.y),
-                                 static_cast<double>(north.x - centre.x));
-    return up + bearing * kPi / 180.0;
-}
-
-// The sectors of a sector light as coloured wedges around it. Sector limits
-// are bearings from seaward towards the light; the wedge lies on the other
-// side, where the ship sees that colour. Bright while the light shines,
-// faint while it is dark.
-void DrawSectorsGC(
-    wxGraphicsContext *gc,
-    PlugIn_ViewPort *vp,
-    double lat,
-    double lon,
-    double cx,
-    double cy,
-    const std::vector<LightSector> &sectors,
-    double radius,
-    bool lit,
-    const wxColour &outline)
-{
-    const double kPi = 3.14159265358979323846;
-    for (const LightSector &sector : sectors) {
-        double sweep = std::fmod(sector.to - sector.from + 360.0, 360.0);
-        if (sweep <= 0.0)
-            sweep = 360.0;
-        const double start = ScreenAngle(vp, lat, lon, sector.from + 180.0);
-        const wxColour colour =
-            LightDisplayColour(sector.colour, std::max(0.6, SchemeDim()));
-
-        wxGraphicsPath wedge = gc->CreatePath();
-        wedge.MoveToPoint(cx, cy);
-        wedge.AddArc(cx, cy, radius, start, start + sweep * kPi / 180.0, true);
-        wedge.CloseSubpath();
-        gc->SetBrush(wxBrush(
-            wxColour(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45)));
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(
-            wxColour(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90))
-                                     .Width(1.2)));
-        gc->DrawPath(wedge);
-    }
-}
-
-void DrawSectorsGL(
-    PlugIn_ViewPort *vp,
-    double lat,
-    double lon,
-    double cx,
-    double cy,
-    const std::vector<LightSector> &sectors,
-    double radius,
-    bool lit,
-    const wxColour &outline)
-{
-    const double kPi = 3.14159265358979323846;
-    for (const LightSector &sector : sectors) {
-        double sweep = std::fmod(sector.to - sector.from + 360.0, 360.0);
-        if (sweep <= 0.0)
-            sweep = 360.0;
-        const double start = ScreenAngle(vp, lat, lon, sector.from + 180.0);
-        const double end = start + sweep * kPi / 180.0;
-        const int steps = std::max(4, static_cast<int>(sweep / 4.0));
-        const wxColour colour =
-            LightDisplayColour(sector.colour, std::max(0.6, SchemeDim()));
-
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45);
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= steps; ++i) {
-            const double angle = start + (end - start) * i / steps;
-            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
-        }
-        glEnd();
-
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90);
-        glLineWidth(1.2f);
-        glBegin(GL_LINE_LOOP);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= steps; ++i) {
-            const double angle = start + (end - start) * i / steps;
-            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
-        }
-        glEnd();
-    }
-}
-
-LightMarkerLook MakeLightMarkerLook(double pixelsPerPoint, bool dimPart)
-{
-    LightMarkerLook look;
-    look.scale = std::max(1.0, pixelsPerPoint);
-    look.ring = 26.0 * look.scale;
-    look.glow = (dimPart ? 16.0 : 34.0) * look.scale;
-    look.core = (dimPart ? 7.0 : 11.0) * look.scale;
-    look.rayFrom = 15.0 * look.scale;
-    look.rayTo = 31.0 * look.scale;
-    return look;
-}
-
-} // namespace
-
-bool legend_pi::DrawLightMarkers(wxDC &dc, PlugIn_ViewPort *vp)
-{
-    const std::vector<wxPoint> centres = MarkerCentres(vp, m_light_positions);
-    if (centres.empty() || m_light_colours.empty())
-        return false;
-
-    wxColour outline;
-    wxColour highlight;
-    MarkerColours(outline, highlight);
-
-    const bool lit = m_light_state >= 0;
-    const bool dimPart = m_light_state >= kDimLight;
-    const wxColour colour =
-        lit ? LightDisplayColour(
-                  m_light_colours[static_cast<size_t>(m_light_state % kDimLight) %
-                                  m_light_colours.size()],
-                  std::max(0.6, SchemeDim()))
-            : wxColour();
-    const LightMarkerLook look =
-        MakeLightMarkerLook(ViewportPixelsPerWindowPixel(), dimPart);
-    const double s = look.scale;
-    const double kPi = 3.14159265358979323846;
-
-    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
-
-    // Sectors first, under the light.
-    if (gc) {
-        gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-        for (const auto &position : m_light_positions) {
-            const std::vector<LightSector> sectors =
-                SectorsAt(position.first, position.second, m_light_rhythm);
-            if (sectors.empty())
-                continue;
-            wxPoint centre;
-            GetCanvasPixLL(vp, &centre, position.first, position.second);
-            DrawSectorsGC(gc.get(), vp, position.first, position.second, centre.x,
-                          centre.y, sectors, 90.0 * look.scale, lit, outline);
-        }
-    }
-
-    for (const wxPoint &centre : centres) {
-        const double cx = centre.x;
-        const double cy = centre.y;
-
-        if (!gc) {
-            dc.SetBrush(*wxTRANSPARENT_BRUSH);
-            dc.SetPen(wxPen(outline, static_cast<int>(6 * s)));
-            dc.DrawCircle(centre, static_cast<int>(look.ring));
-            dc.SetPen(wxPen(highlight, static_cast<int>(3 * s)));
-            dc.DrawCircle(centre, static_cast<int>(look.ring));
-            if (lit) {
-                dc.SetPen(wxPen(outline, static_cast<int>(2 * s)));
-                dc.SetBrush(wxBrush(colour));
-                dc.DrawCircle(centre, static_cast<int>(look.core * 1.6));
-            }
-            continue;
-        }
-
-        gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-
-        // The glow under everything else.
-        if (lit) {
-            gc->SetPen(*wxTRANSPARENT_PEN);
-            gc->SetBrush(gc->CreateRadialGradientBrush(
-                cx, cy, cx, cy, look.glow,
-                wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210),
-                wxColour(colour.Red(), colour.Green(), colour.Blue(), 0)));
-            gc->DrawEllipse(cx - look.glow, cy - look.glow, 2 * look.glow, 2 * look.glow);
-        }
-
-        // The ring with ticks, as the marker.
-        gc->SetBrush(*wxTRANSPARENT_BRUSH);
-        const double tick = 12.0 * s;
-        for (int pass = 0; pass < 2; ++pass) {
-            gc->SetPen(gc->CreatePen(
-                wxGraphicsPenInfo(pass == 0 ? outline : highlight).Width((pass == 0 ? 6.0 : 3.0) * s)));
-            gc->DrawEllipse(cx - look.ring, cy - look.ring, 2 * look.ring, 2 * look.ring);
-            gc->StrokeLine(cx - look.ring - tick, cy, cx - look.ring + 2 * s, cy);
-            gc->StrokeLine(cx + look.ring - 2 * s, cy, cx + look.ring + tick, cy);
-            gc->StrokeLine(cx, cy - look.ring - tick, cx, cy - look.ring + 2 * s);
-            gc->StrokeLine(cx, cy + look.ring - 2 * s, cx, cy + look.ring + tick);
-        }
-
-        if (!lit)
-            continue;
-
-        // Rays, outlined so that white and yellow show on a light chart.
-        if (!dimPart) {
-            for (int pass = 0; pass < 2; ++pass) {
-                gc->SetPen(gc->CreatePen(
-                    wxGraphicsPenInfo(pass == 0 ? outline : colour)
-                        .Width((pass == 0 ? 5.0 : 3.0) * s)
-                        .Cap(wxCAP_ROUND)));
-                for (int r = 0; r < look.rays; ++r) {
-                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    gc->StrokeLine(cx + look.rayFrom * std::cos(angle),
-                                   cy + look.rayFrom * std::sin(angle),
-                                   cx + look.rayTo * std::cos(angle),
-                                   cy + look.rayTo * std::sin(angle));
-                }
-            }
-        }
-
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(2.0 * s)));
-        gc->SetBrush(wxBrush(
-            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255)));
-        gc->DrawEllipse(cx - look.core, cy - look.core, 2 * look.core, 2 * look.core);
-    }
-
-    return true;
-}
-
-bool legend_pi::DrawLightMarkersGL(PlugIn_ViewPort *vp)
-{
-    const std::vector<wxPoint> centres = MarkerCentres(vp, m_light_positions);
-    if (centres.empty() || m_light_colours.empty())
-        return false;
-
-    wxColour outline;
-    wxColour highlight;
-    MarkerColours(outline, highlight);
-
-    const bool lit = m_light_state >= 0;
-    const bool dimPart = m_light_state >= kDimLight;
-    const wxColour colour =
-        lit ? LightDisplayColour(
-                  m_light_colours[static_cast<size_t>(m_light_state % kDimLight) %
-                                  m_light_colours.size()],
-                  std::max(0.6, SchemeDim()))
-            : wxColour();
-    const LightMarkerLook look =
-        MakeLightMarkerLook(ViewportPixelsPerWindowPixel(), dimPart);
-    const double s = look.scale;
-
-    // GL_CURRENT_BIT included: see RenderGLOverlayMultiCanvas.
-    // GL_LIGHTING_BIT keeps the shade model, set to smooth for the glow.
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT | GL_LIGHTING_BIT);
-
-    glShadeModel(GL_SMOOTH);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    const int segments = 64;
-    const double kPi = 3.14159265358979323846;
-
-    auto circle = [&](double x, double y, double r) {
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    // A disc that fades from the centre colour to transparent at its edge.
-    auto glowDisc = [&](double x, double y, double r, unsigned char alpha) {
-        glBegin(GL_TRIANGLE_FAN);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), alpha);
-        glVertex2d(x, y);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    auto disc = [&](double x, double y, double r) {
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(x, y);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    auto ticks = [&](double x, double y, double r, double length) {
-        glBegin(GL_LINES);
-        glVertex2d(x - r - length, y);
-        glVertex2d(x - r + 2 * s, y);
-        glVertex2d(x + r - 2 * s, y);
-        glVertex2d(x + r + length, y);
-        glVertex2d(x, y - r - length);
-        glVertex2d(x, y - r + 2 * s);
-        glVertex2d(x, y + r - 2 * s);
-        glVertex2d(x, y + r + length);
-        glEnd();
-    };
-
-    // Sectors first, under the light.
-    for (const auto &position : m_light_positions) {
-        const std::vector<LightSector> sectors =
-            SectorsAt(position.first, position.second, m_light_rhythm);
-        if (sectors.empty())
-            continue;
-        wxPoint centre;
-        GetCanvasPixLL(vp, &centre, position.first, position.second);
-        DrawSectorsGL(vp, position.first, position.second, centre.x, centre.y,
-                      sectors, 90.0 * s, lit, outline);
-    }
-
-    for (const wxPoint &centre : centres) {
-        const double cx = centre.x;
-        const double cy = centre.y;
-
-        if (lit)
-            glowDisc(cx, cy, look.glow, dimPart ? 120 : 210);
-
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(6.0 * s));
-        circle(cx, cy, look.ring);
-        ticks(cx, cy, look.ring, 12.0 * s);
-        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
-        glLineWidth(static_cast<float>(3.0 * s));
-        circle(cx, cy, look.ring);
-        ticks(cx, cy, look.ring, 10.0 * s);
-
-        if (!lit)
-            continue;
-
-        if (!dimPart) {
-            for (int pass = 0; pass < 2; ++pass) {
-                if (pass == 0)
-                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-                else
-                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
-                glLineWidth(static_cast<float>((pass == 0 ? 5.0 : 3.0) * s));
-                glBegin(GL_LINES);
-                for (int r = 0; r < look.rays; ++r) {
-                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    glVertex2d(cx + look.rayFrom * std::cos(angle),
-                               cy + look.rayFrom * std::sin(angle));
-                    glVertex2d(cx + look.rayTo * std::cos(angle),
-                               cy + look.rayTo * std::sin(angle));
-                }
-                glEnd();
-            }
-        }
-
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
-        disc(cx, cy, look.core);
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(2.0 * s));
-        circle(cx, cy, look.core);
     }
 
     glColor4ub(255, 255, 255, 255);
@@ -9926,8 +9409,8 @@ void legend_pi::SetNightPreview(bool on)
     g_night_preview = on;
     ApplyViewColours();
     if (on) {
-        m_night_had_all_lights = m_all_lights_on;
-        if (!m_all_lights_on)
+        m_night_had_all_lights = m_all_lights.IsOn();
+        if (!m_all_lights.IsOn())
             SetAllLightsShining(true);
     }
     else if (!m_night_had_all_lights) {
@@ -9936,337 +9419,20 @@ void legend_pi::SetNightPreview(bool on)
     RefreshAllCanvases();
 }
 
-namespace {
-
-// Night blue, dark enough that only lights stand out, light enough that
-// coast and fairways stay faintly visible.
-const wxColour kNightShade(4, 8, 22, 222);
-
-} // namespace
-
-void legend_pi::DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp)
-{
-    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
-    if (!gc)
-        return;
-    gc->SetPen(*wxTRANSPARENT_PEN);
-    gc->SetBrush(wxBrush(kNightShade));
-    gc->DrawRectangle(0, 0, vp->pix_width, vp->pix_height);
-}
-
-void legend_pi::DrawNightShadeGL(PlugIn_ViewPort *vp)
-{
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4ub(kNightShade.Red(), kNightShade.Green(), kNightShade.Blue(),
-               kNightShade.Alpha());
-    glBegin(GL_QUADS);
-    glVertex2d(0, 0);
-    glVertex2d(vp->pix_width, 0);
-    glVertex2d(vp->pix_width, vp->pix_height);
-    glVertex2d(0, vp->pix_height);
-    glEnd();
-    glColor4ub(255, 255, 255, 255);
-    glPopAttrib();
-}
-
 void legend_pi::SetAllLightsShining(bool on)
 {
-    m_all_lights_on = on;
-
-    if (!on) {
-        m_all_lights_timer.Stop();
-        m_shining_lights.clear();
-        m_shining_characters.clear();
-        RefreshAllCanvases();
-        return;
-    }
-
-    m_all_lights_started = wxGetUTCTimeMillis();
-    UpdateAllLights();
-    m_all_lights_timer.Stop();
-    m_all_lights_timer.Start(50);
-    OnAllLightsTimer();
+    if (on)
+        UpdateAllLights();
+    m_all_lights.SetOn(on);
 }
 
-// The lights of the list, so the shining lights follow the chart. One light
-// that is listed twice (a waypoint and a chart light) shines once.
+// The lights of the list, so the shining lights follow the chart.
 void legend_pi::UpdateAllLights()
 {
-    m_shining_lights.clear();
-    m_shining_characters.clear();
-
-    std::map<wxString, size_t> characters;
-    std::set<std::pair<long, long>> taken;
-
+    m_all_lights.ClearLights();
     for (const DynamicGroup &group : m_dynamic_groups) {
         // Only what the chart draws at this scale.
-        if (!group.lightCharacter || group.hiddenAtScale)
-            continue;
-
-        auto known = characters.find(group.lightText);
-        size_t index = 0;
-        if (known != characters.end()) {
-            index = known->second;
-        }
-        else {
-            LightCharacter light;
-            if (!light.Parse(group.lightText))
-                continue;
-            ShiningCharacter character;
-            character.phases = light.Phases();
-            character.colours = light.Colours();
-            character.rhythm = light.RhythmAbbreviation();
-            for (const LightPhase &phase : character.phases)
-                character.cycle += phase.seconds;
-            if (character.cycle <= 0.0)
-                continue;
-            index = m_shining_characters.size();
-            m_shining_characters.push_back(character);
-            characters[group.lightText] = index;
-        }
-
-        for (const auto &position : group.positions) {
-            const auto cell = std::make_pair(
-                static_cast<long>(std::floor(position.first / 0.0003)),
-                static_cast<long>(std::floor(position.second / 0.0005)));
-            if (!taken.insert(cell).second)
-                continue;
-
-            ShiningLight shining;
-            shining.lat = position.first;
-            shining.lon = position.second;
-            shining.character = index;
-            // A fixed start within the period, taken from the position, so
-            // the lights do not flash in step and keep their start when the
-            // list is rebuilt.
-            shining.offset = std::fmod(
-                std::fabs(position.first * 7919.0 + position.second * 104729.0),
-                m_shining_characters[index].cycle);
-            m_shining_lights.push_back(shining);
-        }
+        if (group.lightCharacter && !group.hiddenAtScale)
+            m_all_lights.AddLight(group.lightText, group.positions);
     }
-}
-
-void legend_pi::OnAllLightsTimer()
-{
-    if (!m_all_lights_on) {
-        m_all_lights_timer.Stop();
-        return;
-    }
-
-    const double elapsed =
-        (wxGetUTCTimeMillis() - m_all_lights_started).ToDouble() / 1000.0;
-
-    bool changed = false;
-    for (ShiningLight &light : m_shining_lights) {
-        const ShiningCharacter &character = m_shining_characters[light.character];
-        const int state = PhaseStateAt(
-            character.phases, std::fmod(elapsed + light.offset, character.cycle));
-        if (state != light.state) {
-            light.state = state;
-            changed = true;
-        }
-    }
-
-    if (changed)
-        RefreshAllCanvases();
-}
-
-namespace {
-
-// The colour a shining light has now, or false while it is dark.
-bool ShiningColour(
-    int state,
-    const std::vector<wxString> &colours,
-    wxColour *colour,
-    bool *dimPart)
-{
-    if (state < 0 || colours.empty())
-        return false;
-    *dimPart = state >= kDimLight;
-    *colour = LightDisplayColour(
-        colours[static_cast<size_t>(state % kDimLight) % colours.size()],
-        std::max(0.6, SchemeDim()));
-    return true;
-}
-
-} // namespace
-
-// All lights in view: glow, rays and centre as for a chosen light, smaller
-// and without the ring, so the chart stays readable.
-bool legend_pi::DrawAllLights(wxDC &dc, PlugIn_ViewPort *vp)
-{
-    if (m_shining_lights.empty())
-        return false;
-
-    wxColour outline;
-    wxColour highlight;
-    MarkerColours(outline, highlight);
-    const double pixels = ViewportPixelsPerWindowPixel() * 0.65;
-    const double kPi = 3.14159265358979323846;
-
-    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
-    if (!gc)
-        return false;
-    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-
-    bool drew = false;
-    for (const ShiningLight &light : m_shining_lights) {
-        wxColour colour;
-        bool dimPart = false;
-        if (!ShiningColour(light.state, m_shining_characters[light.character].colours,
-                           &colour, &dimPart))
-            continue;
-
-        wxPoint centre;
-        GetCanvasPixLL(vp, &centre, light.lat, light.lon);
-        if (centre.x < -40 || centre.y < -40 || centre.x > vp->pix_width + 40 ||
-            centre.y > vp->pix_height + 40)
-            continue;
-
-        const LightMarkerLook look = MakeLightMarkerLook(pixels, dimPart);
-        const double s = std::max(0.65, pixels);
-        const double cx = centre.x;
-        const double cy = centre.y;
-
-        const std::vector<LightSector> sectors = SectorsAt(
-            light.lat, light.lon, m_shining_characters[light.character].rhythm);
-        if (!sectors.empty())
-            DrawSectorsGC(gc.get(), vp, light.lat, light.lon, cx, cy, sectors,
-                          60.0 * s, true, outline);
-
-        gc->SetPen(*wxTRANSPARENT_PEN);
-        gc->SetBrush(gc->CreateRadialGradientBrush(
-            cx, cy, cx, cy, look.glow,
-            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210),
-            wxColour(colour.Red(), colour.Green(), colour.Blue(), 0)));
-        gc->DrawEllipse(cx - look.glow, cy - look.glow, 2 * look.glow, 2 * look.glow);
-
-        if (!dimPart) {
-            for (int pass = 0; pass < 2; ++pass) {
-                gc->SetPen(gc->CreatePen(
-                    wxGraphicsPenInfo(pass == 0 ? outline : colour)
-                        .Width((pass == 0 ? 4.0 : 2.5) * s)
-                        .Cap(wxCAP_ROUND)));
-                for (int r = 0; r < look.rays; ++r) {
-                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    gc->StrokeLine(cx + look.rayFrom * std::cos(angle),
-                                   cy + look.rayFrom * std::sin(angle),
-                                   cx + look.rayTo * std::cos(angle),
-                                   cy + look.rayTo * std::sin(angle));
-                }
-            }
-        }
-
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(outline).Width(1.5 * s)));
-        gc->SetBrush(wxBrush(
-            wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255)));
-        gc->DrawEllipse(cx - look.core, cy - look.core, 2 * look.core, 2 * look.core);
-        drew = true;
-    }
-    return drew;
-}
-
-bool legend_pi::DrawAllLightsGL(PlugIn_ViewPort *vp)
-{
-    if (m_shining_lights.empty())
-        return false;
-
-    wxColour outline;
-    wxColour highlight;
-    MarkerColours(outline, highlight);
-    const double pixels = ViewportPixelsPerWindowPixel() * 0.65;
-    const double s = std::max(0.65, pixels);
-    const int segments = 40;
-    const double kPi = 3.14159265358979323846;
-
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT | GL_LIGHTING_BIT);
-    glShadeModel(GL_SMOOTH);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    bool drew = false;
-    for (const ShiningLight &light : m_shining_lights) {
-        wxColour colour;
-        bool dimPart = false;
-        if (!ShiningColour(light.state, m_shining_characters[light.character].colours,
-                           &colour, &dimPart))
-            continue;
-
-        wxPoint centre;
-        GetCanvasPixLL(vp, &centre, light.lat, light.lon);
-        if (centre.x < -40 || centre.y < -40 || centre.x > vp->pix_width + 40 ||
-            centre.y > vp->pix_height + 40)
-            continue;
-
-        const LightMarkerLook look = MakeLightMarkerLook(pixels, dimPart);
-        const double cx = centre.x;
-        const double cy = centre.y;
-
-        const std::vector<LightSector> sectors = SectorsAt(
-            light.lat, light.lon, m_shining_characters[light.character].rhythm);
-        if (!sectors.empty())
-            DrawSectorsGL(vp, light.lat, light.lon, cx, cy, sectors, 60.0 * s, true,
-                          outline);
-
-        glBegin(GL_TRIANGLE_FAN);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210);
-        glVertex2d(cx, cy);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.glow * std::cos(angle), cy + look.glow * std::sin(angle));
-        }
-        glEnd();
-
-        if (!dimPart) {
-            for (int pass = 0; pass < 2; ++pass) {
-                if (pass == 0)
-                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-                else
-                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
-                glLineWidth(static_cast<float>((pass == 0 ? 4.0 : 2.5) * s));
-                glBegin(GL_LINES);
-                for (int r = 0; r < look.rays; ++r) {
-                    const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    glVertex2d(cx + look.rayFrom * std::cos(angle),
-                               cy + look.rayFrom * std::sin(angle));
-                    glVertex2d(cx + look.rayTo * std::cos(angle),
-                               cy + look.rayTo * std::sin(angle));
-                }
-                glEnd();
-            }
-        }
-
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
-        }
-        glEnd();
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(1.5 * s));
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
-        }
-        glEnd();
-        drew = true;
-    }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-    return drew;
 }
