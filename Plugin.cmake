@@ -76,6 +76,10 @@ set(SRC
     src/vhf_areas.cpp
     src/layer_waypoints.h
     src/layer_waypoints.cpp
+    src/chart_notice.h
+    src/chart_notice.cpp
+    src/vhf_highlight.h
+    src/vhf_highlight.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

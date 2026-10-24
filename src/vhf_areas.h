@@ -63,6 +63,12 @@ public:
     std::vector<const VhfArea *> AreaOfWaypoint(double lat, double lon,
                                                const wxString &channel) const;
 
+    // Every part of the area with this description.
+    std::vector<VhfArea> PartsOf(const wxString &description) const;
+
+    // The areas a position lies in, with every other part of each of them.
+    std::vector<VhfArea> WithPartsAt(double lat, double lon) const;
+
 private:
     std::vector<VhfArea> m_areas;
     std::set<wxString> m_icons;
@@ -71,5 +77,8 @@ private:
 // "verkeerspost", "sluis", ... and "uitluisteren", "melden", ...
 wxString VhfTypeWord(const wxString &type, bool dutch);
 wxString VhfUsageWord(const wxString &usage, bool dutch);
+
+// One line about an area: "Kanaal 18 · Ketelbrug · verkeerspost · melden".
+wxString VhfAreaLine(const VhfArea &area, bool dutch);
 
 #endif

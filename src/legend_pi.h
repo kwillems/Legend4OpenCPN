@@ -22,6 +22,8 @@
 #include "note_places.h"
 #include "layer_waypoints.h"
 #include "vhf_areas.h"
+#include "vhf_highlight.h"
+#include "chart_notice.h"
 
 #include <map>
 #include <string>
@@ -571,34 +573,20 @@ private:
     void EnsureVhfAreas();
 
     // The area of a clicked VHF icon, lit on the chart for a few seconds.
-    std::vector<VhfArea> m_vhf_highlight; // copies: a reload frees the areas
-    wxLongLong m_vhf_highlight_started = 0;
-    double m_vhf_highlight_alpha = 1.0;
-    wxTimer m_vhf_highlight_timer;
+    VhfHighlight m_vhf_highlight{[this]() { RefreshAllCanvases(); }};
     bool m_vhf_keep_lit = false;        // setting: lit until the next click
     bool m_vhf_notice_on = true;        // setting: notice on a new area
     std::set<wxString> m_vhf_areas_here; // areas the boat is in
     bool m_vhf_areas_known = false;     // m_vhf_areas_here is from a fix
-    wxFrame *m_vhf_notice = nullptr;
-    wxStaticText *m_vhf_notice_title = nullptr;
-    wxStaticText *m_vhf_notice_text = nullptr;
-    wxPanel *m_vhf_notice_buttons = nullptr;  // the action as a button, and Sluiten
-    wxButton *m_vhf_notice_action = nullptr;
-    wxTimer m_vhf_notice_timer;
-    wxTimer m_vhf_sound_timer;          // the next beep
-    int m_vhf_beeps_left = 0;
-    bool PlayVhfSound();
-    void ShowVhfHighlight(const std::vector<VhfArea> &areas);
-    std::vector<VhfArea> VhfAreasWithParts(double lat, double lon);
-    wxString VhfAreaLine(const VhfArea &area) const;
+    ChartNotice m_notice;               // VHF areas and notes nearby
     void ShowVhfHere(double lat, double lon);
     bool VhfLayerShown() const;
     void CheckVhfAreaChange();
-    void ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
-                       const wxColour &titleColour = wxColour(220, 40, 40),
-                       std::function<void()> action = std::function<void()>(),
-                       const wxString &actionLabel = wxEmptyString);
-    std::function<void()> m_notice_action; // what a click on the notice opens
+    // m_notice in the colours of the legend.
+    void ShowNotice(const wxString &title, const wxString &text, bool sound,
+                    const wxColour &titleColour = wxColour(220, 40, 40),
+                    std::function<void()> action = std::function<void()>(),
+                    const wxString &actionLabel = wxEmptyString);
 
     // Notes that belong to a place: a sign on the chart, a heading in the
     // legend, and a notice nearby.
@@ -641,10 +629,6 @@ private:
     bool HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx);
     bool HighlightVhfAreas(const wxString &icon,
                            const std::vector<std::pair<double, double>> &positions);
-    void StopVhfHighlight();
-    void OnVhfHighlightTimer();
-    bool DrawVhfHighlight(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawVhfHighlightGL(PlugIn_ViewPort *vp);
     double m_ship_lat = 0.0;
     double m_ship_lon = 0.0;
     wxLongLong m_ship_time = 0;   // UTC milliseconds of the last fix, 0 = none

@@ -269,6 +269,32 @@ std::vector<const VhfArea *> VhfAreas::AreaOfWaypoint(double lat, double lon,
     return parts;
 }
 
+std::vector<VhfArea> VhfAreas::PartsOf(const wxString &description) const
+{
+    std::vector<VhfArea> parts;
+    for (const VhfArea &part : m_areas)
+        if (part.description == description)
+            parts.push_back(part);
+    return parts;
+}
+
+std::vector<VhfArea> VhfAreas::WithPartsAt(double lat, double lon) const
+{
+    std::vector<VhfArea> result;
+    std::set<wxString> taken;
+    for (const VhfArea *area : At(lat, lon)) {
+        for (const VhfArea &part : m_areas) {
+            if (part.description == area->description &&
+                taken.insert(part.name + "|" + part.description + "|" +
+                             wxString::Format("%zu", part.polygon.size()) +
+                             wxString::Format("%.6f", part.latMin))
+                    .second)
+                result.push_back(part);
+        }
+    }
+    return result;
+}
+
 wxString VhfTypeWord(const wxString &type, bool dutch)
 {
     if (type == "vts")
@@ -293,4 +319,17 @@ wxString VhfUsageWord(const wxString &usage, bool dutch)
     if (usage == "announce")
         return dutch ? "aanmelden" : "announce";
     return usage;
+}
+
+wxString VhfAreaLine(const VhfArea &area, bool dutch)
+{
+    wxString line = (dutch ? "Kanaal " : "Channel ") + area.channel;
+    const wxString who = area.callName.IsEmpty() ? area.name : area.callName;
+    if (!who.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << who;
+    if (!area.type.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << VhfTypeWord(area.type, dutch);
+    if (!area.usage.IsEmpty())
+        line << wxString::FromUTF8(" \u00b7 ") << VhfUsageWord(area.usage, dutch);
+    return line;
 }
