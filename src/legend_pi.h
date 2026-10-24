@@ -18,6 +18,7 @@
 #include "display_settings.h"
 #include "chart_names.h"
 #include "light_character.h"
+#include "shining_lights.h"
 #include "note_editor.h"
 #include "note_places.h"
 #include "layer_waypoints.h"
@@ -274,9 +275,6 @@ private:
     // Temporary marker on the chart for the object chosen in the legend
     void ShowMarker(double lat, double lon);
     void ShowMarkers(const std::vector<std::pair<double, double>> &positions);
-    std::vector<wxPoint> MarkerCentres(
-        PlugIn_ViewPort *vp,
-        const std::vector<std::pair<double, double>> &positions) const;
     void StopMarker();
     void OnMarkerTimer();
     void RefreshAllCanvases();
@@ -286,24 +284,14 @@ private:
     void ShowLightMarkers(
         const LightCharacter &light,
         const std::vector<std::pair<double, double>> &positions);
-    void StopLightMarker();
-    void OnLightTimer();
 
     // All lights in view shining on the chart at once, each in its own
     // rhythm, until switched off. Follows the chart as the list does.
     void SetAllLightsShining(bool on);
     void SetNightPreview(bool on);
-    void DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp);
-    void DrawNightShadeGL(PlugIn_ViewPort *vp);
     void UpdateAllLights();
-    void OnAllLightsTimer();
-    bool DrawAllLights(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawAllLightsGL(PlugIn_ViewPort *vp);
-    bool DrawLightMarkers(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawLightMarkersGL(PlugIn_ViewPort *vp);
-    // The light's colour (index) at this moment, -1 while dark; plus
-    // kDimLight for the steady part of a fixed and flashing light.
-    int LightStateAt(double seconds) const;
+    // Colours and size of the lights on the chart in this scheme.
+    LightStyle CurrentLightStyle() const;
 
     void OnPreviousLegend(wxCommandEvent &event);
     void OnNextLegend(wxCommandEvent &event);
@@ -542,29 +530,7 @@ private:
     int m_marker_phase;
     wxTimer m_marker_timer;
 
-    struct ShiningCharacter
-    {
-        std::vector<LightPhase> phases;
-        std::vector<wxString> colours;
-        double cycle = 0.0;
-        wxString rhythm; // the abbreviation without colours, for its sectors
-    };
-    struct ShiningLight
-    {
-        double lat = 0.0;
-        double lon = 0.0;
-        size_t character = 0;  // index in m_shining_characters
-        double offset = 0.0;   // seconds; lights do not flash in step
-        int state = -2;        // as LightStateAt(), last drawn
-    };
-    // Sectors of the sector lights in view, by position (grid of about
-    // two metres), from the chart objects last collected.
-    // Each sector with the rhythm of its light ("Iso.4s"): two lights at
-    // one spot keep their own sectors.
-    std::map<std::pair<long, long>, std::vector<std::pair<wxString, LightSector>>>
-        m_light_sectors;
-    std::vector<LightSector> SectorsAt(double lat, double lon, const wxString &rhythm) const;
-    wxString m_light_rhythm; // rhythm of the light shining for a click
+    LightSectors m_light_sectors; // of the chart objects last collected
 
     // "Welk marifoonkanaal hier?": the VHF areas (VHFinfo layer) the boat is in, or
     // the middle of the chart without a recent position fix.
@@ -694,23 +660,10 @@ private:
     std::vector<const VhfArea *> VhfAreasHere(bool *fromShip, bool *layerShown);
 
     bool m_show_lights = true;     // setting: light characters in the list
-    bool m_all_lights_on = false;
     bool m_night_preview = false;        // dark chart with the lights shining
     bool m_night_had_all_lights = false; // all lights were on before it
-    std::vector<ShiningCharacter> m_shining_characters;
-    std::vector<ShiningLight> m_shining_lights;
-    wxLongLong m_all_lights_started;
-    wxTimer m_all_lights_timer;
-
-    bool m_light_active = false;
-    std::vector<std::pair<double, double>> m_light_positions; // lat, lon
-    std::vector<LightPhase> m_light_phases;
-    std::vector<wxString> m_light_colours;
-    double m_light_cycle = 0.0;     // seconds of the phases together
-    double m_light_duration = 0.0;  // seconds the light shines on the chart
-    wxLongLong m_light_started;     // UTC milliseconds
-    int m_light_state = -1;         // as LightStateAt(), last drawn
-    wxTimer m_light_timer;
+    ShiningLights m_all_lights{[this]() { RefreshAllCanvases(); }};
+    ChosenLight m_chosen_light{[this]() { RefreshAllCanvases(); }};
 
     int m_window_x;
     int m_window_y;
