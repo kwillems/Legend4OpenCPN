@@ -644,19 +644,15 @@ const S57Source::ParsedCell *S57Source::Load(const Cell &cell)
     return &(m_loaded[cell.path] = loaded).cell;
 }
 
-std::vector<ChartObject> S57Source::PointObjectsInView(
-    const PlugIn_ViewPort &vp, const CellProgress &progress)
+std::vector<const S57Source::Cell *> S57Source::Candidates(const PlugIn_ViewPort &vp)
 {
-    std::vector<ChartObject> objects;
-    m_diagnostics.Clear();
-
+    std::vector<const Cell *> candidates;
     if (vp.pix_width <= 0 || vp.pix_height <= 0)
-        return objects;
+        return candidates;
 
     if (!m_inventoried)
         Inventory();
 
-    std::vector<const Cell *> candidates;
     for (const Cell &cell : m_cells) {
         if (cell.latMax < vp.lat_min || cell.latMin > vp.lat_max ||
             cell.lonMax < vp.lon_min || cell.lonMin > vp.lon_max)
@@ -670,20 +666,42 @@ std::vector<ChartObject> S57Source::PointObjectsInView(
               [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
     if (candidates.size() > kMaxCellsPerView)
         candidates.resize(kMaxCellsPerView);
+    return candidates;
+}
+
+std::vector<wxString> S57Source::UnreadCells(const PlugIn_ViewPort &vp)
+{
+    std::vector<wxString> paths;
+    for (const Cell *cell : Candidates(vp)) {
+        if (m_loaded.find(cell->path) == m_loaded.end())
+            paths.push_back(cell->path);
+    }
+    return paths;
+}
+
+void S57Source::ReadCell(const wxString &path)
+{
+    for (const Cell &cell : m_cells) {
+        if (cell.path == path) {
+            Load(cell);
+            return;
+        }
+    }
+}
+
+std::vector<ChartObject> S57Source::PointObjectsInView(const PlugIn_ViewPort &vp)
+{
+    std::vector<ChartObject> objects;
+    m_diagnostics.Clear();
+
+    if (vp.pix_width <= 0 || vp.pix_height <= 0)
+        return objects;
+    const std::vector<const Cell *> candidates = Candidates(vp);
 
     std::set<wxString> seen;
     int cellsRead = 0;
 
-    int toRead = 0;
     for (const Cell *cell : candidates) {
-        if (m_loaded.find(cell->path) == m_loaded.end())
-            ++toRead;
-    }
-    int read = 0;
-
-    for (const Cell *cell : candidates) {
-        if (progress && m_loaded.find(cell->path) == m_loaded.end())
-            progress(read++, toRead);
         const ParsedCell *parsed = Load(*cell);
         if (!parsed)
             continue;

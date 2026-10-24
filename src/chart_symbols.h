@@ -13,7 +13,6 @@
 #include <cstdint>  // ocpn_plugin.h (api-18) uses uint64_t without it
 #include "ocpn_plugin.h"
 
-#include <functional>
 #include <map>
 #include <utility>
 #include <vector>
@@ -21,10 +20,6 @@
 #include <wx/gdicmn.h>
 #include <wx/image.h>
 #include <wx/string.h>
-
-// Told before each cell that still has to be opened: how many of the
-// cells to open are done, and how many there are.
-using CellProgress = std::function<void(int done, int total)>;
 
 // One object of a vector chart, independent of where it came from: the
 // o-charts plugin or an S-57 file read by this plugin.
