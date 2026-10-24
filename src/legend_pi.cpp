@@ -6784,7 +6784,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
                     const wxString who = area->callName.IsEmpty() ? area->name : area->callName;
                     html << "<tr bgcolor=\"" << hex(k % 2 == 1 ? stripe : background)
                          << "\"><td id=\"" << kLegendVhfAreaIdPrefix << k << "\"><b>"
-                         << (nl ? "kanaal " : "channel ")
+                         << (nl ? "Kanaal " : "Channel ")
                          << escape(area->channel) << "</b>";
                     if (!who.IsEmpty())
                         html << " &middot; " << escape(who);
@@ -9598,11 +9598,11 @@ std::vector<VhfArea> legend_pi::VhfAreasWithParts(double lat, double lon)
     return result;
 }
 
-// One line about an area: "kanaal 18 · Ketelbrug · verkeerspost · melden".
+// One line about an area: "Kanaal 18 · Ketelbrug · verkeerspost · melden".
 wxString legend_pi::VhfAreaLine(const VhfArea &area) const
 {
     const bool nl = m_dutch_names;
-    wxString line = (nl ? "kanaal " : "channel ") + area.channel;
+    wxString line = (nl ? "Kanaal " : "Channel ") + area.channel;
     const wxString who = area.callName.IsEmpty() ? area.name : area.callName;
     if (!who.IsEmpty())
         line << wxString::FromUTF8(" \u00b7 ") << who;
