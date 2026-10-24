@@ -359,7 +359,8 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
 
 std::vector<ChartObject> OChartsSource::PointObjectsInView(
     const PlugIn_ViewPort &vp,
-    bool ignoreScaleLimits)
+    bool ignoreScaleLimits,
+    const CellProgress &progress)
 {
     std::vector<ChartObject> objects;
     m_diagnostics.Clear();
@@ -399,7 +400,16 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
     int cellsRead = 0;
     int rawCount = 0;
 
+    int toOpen = 0;
     for (const Cell *cell : candidates) {
+        if (m_open.find(cell->path) == m_open.end())
+            ++toOpen;
+    }
+    int opened = 0;
+
+    for (const Cell *cell : candidates) {
+        if (progress && m_open.find(cell->path) == m_open.end())
+            progress(opened++, toOpen);
         PlugInChartBaseExtendedPlus2 *chart = Open(cell->path);
         if (!chart)
             continue;

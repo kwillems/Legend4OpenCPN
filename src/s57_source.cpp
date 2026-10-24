@@ -644,7 +644,8 @@ const S57Source::ParsedCell *S57Source::Load(const Cell &cell)
     return &(m_loaded[cell.path] = loaded).cell;
 }
 
-std::vector<ChartObject> S57Source::PointObjectsInView(const PlugIn_ViewPort &vp)
+std::vector<ChartObject> S57Source::PointObjectsInView(
+    const PlugIn_ViewPort &vp, const CellProgress &progress)
 {
     std::vector<ChartObject> objects;
     m_diagnostics.Clear();
@@ -673,7 +674,16 @@ std::vector<ChartObject> S57Source::PointObjectsInView(const PlugIn_ViewPort &vp
     std::set<wxString> seen;
     int cellsRead = 0;
 
+    int toRead = 0;
     for (const Cell *cell : candidates) {
+        if (m_loaded.find(cell->path) == m_loaded.end())
+            ++toRead;
+    }
+    int read = 0;
+
+    for (const Cell *cell : candidates) {
+        if (progress && m_loaded.find(cell->path) == m_loaded.end())
+            progress(read++, toRead);
         const ParsedCell *parsed = Load(*cell);
         if (!parsed)
             continue;

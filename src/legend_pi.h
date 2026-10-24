@@ -169,6 +169,8 @@ private:
     void CollectDynamicLegend();
     void RefreshDynamicLegendKeepingState();
     void RenderLoadingPage();
+    void RenderProgressPage(const wxString &what, size_t done, size_t total);
+    void ShowCellProgress(int done, int total);
     void ApplyViewColours();
 
     // Filling the waypoint cache in small steps keeps OpenCPN responsive.
