@@ -1632,8 +1632,6 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { UpdateTapClock(); });
 
-    // Fill the cache once OpenCPN has settled after starting, so the first
-    // look at the dynamic legend does not have to wait for it.
     m_cell_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OpenNextChartCell(); });
 
     m_fill_window_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
@@ -1644,6 +1642,8 @@ legend_pi::legend_pi(void *ppimgr)
         wxLogMessage("Legend: window filled in %ld ms", watch.Time());
     });
 
+    // Fill the cache once OpenCPN has settled after starting, so the first
+    // look at the dynamic legend does not have to wait for it.
     m_prefetch_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) {
@@ -1758,6 +1758,12 @@ bool legend_pi::DeInit()
     m_auto_refresh_timer.Stop();
     m_loading_timer.Stop();
     m_prefetch_timer.Stop();
+    m_fill_window_timer.Stop();
+    // A cell opened after m_ocharts.Close() below, or what waits for the
+    // cells, would reach into charts and a window that are gone.
+    m_cell_timer.Stop();
+    m_cells_to_open.clear();
+    m_after_cells = std::function<void()>();
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
     m_filter_timer.Stop();
