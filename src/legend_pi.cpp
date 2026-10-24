@@ -1614,20 +1614,6 @@ legend_pi::legend_pi(void *ppimgr)
         wxEVT_TIMER,
         [this](wxTimerEvent &) { OnAllLightsTimer(); });
 
-    m_vhf_highlight_timer.Bind(
-        wxEVT_TIMER,
-        [this](wxTimerEvent &) { OnVhfHighlightTimer(); });
-
-    // Tries again until OpenCPN takes the next beep.
-    m_vhf_sound_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
-        if (m_vhf_beeps_left <= 0) {
-            m_vhf_sound_timer.Stop();
-            return;
-        }
-        if (PlayVhfSound())
-            --m_vhf_beeps_left;
-    });
-
     m_tap_clock_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) { UpdateTapClock(); });
@@ -1771,11 +1757,8 @@ bool legend_pi::DeInit()
     m_light_active = false;
     m_all_lights_timer.Stop();
     m_all_lights_on = false;
-    m_vhf_highlight_timer.Stop();
-    m_vhf_highlight.clear();
-    m_vhf_notice_timer.Stop();
+    m_vhf_highlight.Clear();
     m_note_notice_timer.Stop();
-    m_vhf_sound_timer.Stop();
     m_night_preview = false;
     g_night_preview = false;
     m_tap_clock_timer.Stop();
@@ -1829,10 +1812,7 @@ bool legend_pi::DeInit()
         m_toolbar_item_id = -1;
     }
 
-    if (m_vhf_notice) {
-        delete m_vhf_notice;
-        m_vhf_notice = nullptr;
-    }
+    m_notice.Close();
     // OpenCPN owns the menu items it was given, and the submenu with its
     // item; only their places in the menu are given up.
     if (m_menu_parent >= 0) {
@@ -2007,6 +1987,7 @@ void legend_pi::LoadConfig()
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
     config.Read("ShowLights", &m_show_lights, true);
     config.Read("VhfKeepLit", &m_vhf_keep_lit, false);
+    m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
     wxString language;
@@ -3670,17 +3651,13 @@ void legend_pi::CreateLegendWindow()
                 case HitKind::AheadVhf:
                     if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
                         const AheadVhf &next = m_ahead_vhf[hit.index];
-                        ShowVhfHighlight(VhfAreasWithParts(next.lat, next.lon));
+                        m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(next.lat, next.lon));
                     }
                     break;
                 case HitKind::VhfArea:
-                    if (static_cast<size_t>(hit.index) < m_vhf_rows.size()) {
-                        std::vector<VhfArea> parts;
-                        for (const VhfArea &part : m_vhf_areas.All())
-                            if (part.description == m_vhf_rows[hit.index].description)
-                                parts.push_back(part);
-                        ShowVhfHighlight(parts);
-                    }
+                    if (static_cast<size_t>(hit.index) < m_vhf_rows.size())
+                        m_vhf_highlight.Show(
+                            m_vhf_areas.PartsOf(m_vhf_rows[hit.index].description));
                     break;
                 case HitKind::Match:
                     if (static_cast<size_t>(hit.index) < m_identify_matches.size())
@@ -4262,11 +4239,11 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 MoveNotePlace(place.path, place.lat, place.lon);
                 // Moved by mistake, while panning the chart: one click puts
                 // it back.
-                ShowVhfNotice("Notitie verplaatst",
-                              wxString::FromUTF8("\u201C") + place.title +
-                                  wxString::FromUTF8("\u201D staat op een nieuwe plek."),
-                              false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
-                              "Terugzetten");
+                ShowNotice("Notitie verplaatst",
+                           wxString::FromUTF8("\u201C") + place.title +
+                               wxString::FromUTF8("\u201D staat op een nieuwe plek."),
+                           false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
+                           "Terugzetten");
                 return true;
             }
             // A click: the note opens and its radius shows.
@@ -5715,14 +5692,7 @@ void legend_pi::ShowSettingsMenu()
     case kVhfKeep:
         m_vhf_keep_lit = !m_vhf_keep_lit;
         SaveConfig();
-        // A lit area now stays, or starts to fade.
-        if (!m_vhf_highlight.empty()) {
-            m_vhf_highlight_started = wxGetUTCTimeMillis();
-            if (m_vhf_keep_lit)
-                m_vhf_highlight_timer.Stop();
-            else
-                m_vhf_highlight_timer.Start(50);
-        }
+        m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
         break;
     case kVhfNotice:
         m_vhf_notice_on = !m_vhf_notice_on;
@@ -8292,7 +8262,7 @@ bool legend_pi::RenderOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.empty() && m_note_places.empty()) ||
+         m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -8302,7 +8272,8 @@ bool legend_pi::RenderOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShade(dc, vp);
-    const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlight(dc, vp);
+    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
+                         m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSigns(dc, vp);
     const bool drewAll = (m_all_lights_on && DrawAllLights(dc, vp)) || m_night_preview || drewVhf ||
                          drewNotes;
@@ -8365,7 +8336,7 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_light_active && !m_all_lights_on && !m_night_preview &&
-         m_vhf_highlight.empty() && m_note_places.empty()) ||
+         m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
         !vp)
         return false;
 
@@ -8375,7 +8346,8 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShadeGL(vp);
-    const bool drewVhf = !m_vhf_highlight.empty() && DrawVhfHighlightGL(vp);
+    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
+                         m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSignsGL(vp);
     const bool drewAll = (m_all_lights_on && DrawAllLightsGL(vp)) || m_night_preview || drewVhf ||
                          drewNotes;
@@ -9173,9 +9145,9 @@ void legend_pi::NewNoteAtBoat()
 
 void legend_pi::ShowNoGpsNotice()
 {
-    ShowVhfNotice("Geen positie van de boot",
-                  "Er is de laatste minuut geen GPS-positie binnengekomen.", false,
-                  wxColour(186, 117, 23));
+    ShowNotice("Geen positie van de boot",
+               "Er is de laatste minuut geen GPS-positie binnengekomen.", false,
+               wxColour(186, 117, 23));
 }
 
 // The notes of the Legend folder that belong to a place: read again when
@@ -9483,7 +9455,7 @@ void legend_pi::CheckNotePlaces()
     m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance +
                           " NM\nKlik om de notitie te openen";
     m_pending_note_path = place.path;
-    if (m_vhf_notice && m_vhf_notice->IsShown())
+    if (m_notice.IsShown())
         m_note_notice_timer.StartOnce(12500);
     else
         ShowPendingNoteNotice();
@@ -9495,8 +9467,8 @@ void legend_pi::ShowPendingNoteNotice()
         return;
     const wxString path = m_pending_note_path;
     m_pending_note_path.Clear();
-    ShowVhfNotice(m_pending_note_title, m_pending_note_text, true, wxColour(186, 117, 23),
-                  [this, path]() { OpenNote(path); });
+    ShowNotice(m_pending_note_title, m_pending_note_text, true, wxColour(186, 117, 23),
+               [this, path]() { OpenNote(path); });
 }
 
 // The note being edited belongs to this place; the radius stays, or is
@@ -9555,8 +9527,7 @@ void legend_pi::UndoNoteMove()
     if (!m_undo_move_valid)
         return;
     m_undo_move_valid = false;
-    if (m_vhf_notice)
-        m_vhf_notice->Hide();
+    m_notice.Hide();
     MoveNotePlace(m_undo_move_path, m_undo_move_lat, m_undo_move_lon);
 }
 
@@ -9811,8 +9782,8 @@ bool legend_pi::HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx)
     }
 
     if (!hit) {
-        if (!m_vhf_highlight.empty())
-            StopVhfHighlight();
+        if (!m_vhf_highlight.IsEmpty())
+            m_vhf_highlight.Stop();
         return false;
     }
 
@@ -9842,66 +9813,19 @@ bool legend_pi::HighlightVhfAreas(const wxString &icon,
     if (lit.empty())
         return false;
 
-    ShowVhfHighlight(lit);
+    m_vhf_highlight.Show(lit);
     return true;
-}
-
-// Lights up these areas: for six seconds, or until the next click on the
-// chart when the setting says so.
-void legend_pi::ShowVhfHighlight(const std::vector<VhfArea> &areas)
-{
-    m_vhf_highlight = areas;
-    m_vhf_highlight_started = wxGetUTCTimeMillis();
-    m_vhf_highlight_alpha = 1.0;
-    if (m_vhf_keep_lit)
-        m_vhf_highlight_timer.Stop();
-    else
-        m_vhf_highlight_timer.Start(50);
-    RefreshAllCanvases();
-}
-
-// The areas at a spot, with every other part of each of them.
-std::vector<VhfArea> legend_pi::VhfAreasWithParts(double lat, double lon)
-{
-    std::vector<VhfArea> result;
-    std::set<wxString> taken;
-    for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
-        for (const VhfArea &part : m_vhf_areas.All()) {
-            if (part.description == area->description &&
-                taken.insert(part.name + "|" + part.description + "|" +
-                             wxString::Format("%zu", part.polygon.size()) +
-                             wxString::Format("%.6f", part.latMin))
-                    .second)
-                result.push_back(part);
-        }
-    }
-    return result;
-}
-
-// One line about an area: "Kanaal 18 · Ketelbrug · verkeerspost · melden".
-wxString legend_pi::VhfAreaLine(const VhfArea &area) const
-{
-    const bool nl = m_dutch_names;
-    wxString line = (nl ? "Kanaal " : "Channel ") + area.channel;
-    const wxString who = area.callName.IsEmpty() ? area.name : area.callName;
-    if (!who.IsEmpty())
-        line << wxString::FromUTF8(" \u00b7 ") << who;
-    if (!area.type.IsEmpty())
-        line << wxString::FromUTF8(" \u00b7 ") << VhfTypeWord(area.type, nl);
-    if (!area.usage.IsEmpty())
-        line << wxString::FromUTF8(" \u00b7 ") << VhfUsageWord(area.usage, nl);
-    return line;
 }
 
 // "Welk marifoonkanaal hier?" from the chart's menu.
 void legend_pi::ShowVhfHere(double lat, double lon)
 {
     EnsureVhfAreas();
-    const std::vector<VhfArea> parts = VhfAreasWithParts(lat, lon);
+    const std::vector<VhfArea> parts = m_vhf_areas.WithPartsAt(lat, lon);
     wxString text;
     std::set<wxString> said;
     for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
-        const wxString line = VhfAreaLine(*area);
+        const wxString line = VhfAreaLine(*area, m_dutch_names);
         if (said.insert(line).second)
             text << (text.IsEmpty() ? "" : "\n") << line;
     }
@@ -9909,9 +9833,9 @@ void legend_pi::ShowVhfHere(double lat, double lon)
         text = "Geen marifoongebieden geladen (laag VHFinfo Nederland).";
     else if (text.IsEmpty())
         text = "Hier geldt geen marifoongebied uit VHFinfo Nederland.";
-    ShowVhfNotice("Marifoonkanaal op deze locatie", text, false);
+    ShowNotice("Marifoonkanaal op deze locatie", text, false);
     if (!parts.empty())
-        ShowVhfHighlight(parts);
+        m_vhf_highlight.Show(parts);
 }
 
 // Whether the layer with the VHF areas is shown in OpenCPN: one of its
@@ -9953,244 +9877,18 @@ void legend_pi::CheckVhfAreaChange()
 
     wxString text;
     for (const VhfArea *area : entered)
-        text << (text.IsEmpty() ? "" : "\n") << VhfAreaLine(*area);
-    ShowVhfNotice("Nieuw marifoongebied", text, true);
-    ShowVhfHighlight(VhfAreasWithParts(m_ship_lat, m_ship_lon));
+        text << (text.IsEmpty() ? "" : "\n") << VhfAreaLine(*area, m_dutch_names);
+    ShowNotice("Nieuw marifoongebied", text, true);
+    m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(m_ship_lat, m_ship_lon));
 }
 
-// False while OpenCPN is still busy with the previous sound: on macOS it
-// plays one at a time, through a system command that takes a moment.
-bool legend_pi::PlayVhfSound()
+void legend_pi::ShowNotice(const wxString &title, const wxString &text, bool sound,
+                           const wxColour &titleColour, std::function<void()> action,
+                           const wxString &actionLabel)
 {
-    wxString *shared = GetpSharedDataLocation();
-    if (!shared)
-        return true;
-    wxString file = *shared + "sounds" + wxFileName::GetPathSeparator() + "beep1.wav";
-    if (!wxFileExists(file))
-        return true;
-    wxLogNull quiet; // a refused try is not worth a warning in the log
-    return PlugInPlaySoundEx(file, -1);
-}
-
-// A small window at the top of the chart that goes away on its own after a
-// while, or with a click.
-void legend_pi::ShowVhfNotice(const wxString &title, const wxString &text, bool sound,
-                              const wxColour &titleColour, std::function<void()> action,
-                              const wxString &actionLabel)
-{
-    m_notice_action = action;
-    wxWindow *canvas = GetOCPNCanvasWindow();
-    if (!canvas)
-        return;
-
-    if (!m_vhf_notice) {
-        m_vhf_notice = new wxFrame(canvas, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                   wxDefaultSize,
-                                   wxFRAME_TOOL_WINDOW | wxFRAME_FLOAT_ON_PARENT |
-                                       wxFRAME_NO_TASKBAR | wxBORDER_SIMPLE);
-        auto *panel = new wxPanel(m_vhf_notice);
-        auto *sizer = new wxBoxSizer(wxVERTICAL);
-        m_vhf_notice_title = new wxStaticText(panel, wxID_ANY, wxEmptyString);
-        wxFont bold = m_vhf_notice_title->GetFont();
-        bold.SetWeight(wxFONTWEIGHT_BOLD);
-        bold.SetPointSize(bold.GetPointSize() + 1);
-        m_vhf_notice_title->SetFont(bold);
-        m_vhf_notice_text = new wxStaticText(panel, wxID_ANY, wxEmptyString);
-        sizer->Add(m_vhf_notice_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
-        sizer->Add(m_vhf_notice_text, 0, wxALL, 12);
-        // With an action label: the action as a button, and one that closes.
-        m_vhf_notice_buttons = new wxPanel(panel);
-        auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-        m_vhf_notice_action = new wxButton(m_vhf_notice_buttons, wxID_ANY, wxEmptyString);
-        auto *closeButton = new wxButton(m_vhf_notice_buttons, wxID_ANY, "Sluiten");
-        buttonSizer->AddStretchSpacer();
-        buttonSizer->Add(closeButton, 0, wxRIGHT, 8);
-        buttonSizer->Add(m_vhf_notice_action, 0);
-        m_vhf_notice_buttons->SetSizer(buttonSizer);
-        sizer->Add(m_vhf_notice_buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
-        panel->SetSizer(sizer);
-        m_vhf_notice_action->SetDefault();
-        m_vhf_notice_action->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
-            if (m_vhf_notice)
-                m_vhf_notice->Hide();
-            if (m_notice_action) {
-                std::function<void()> action = m_notice_action;
-                m_notice_action = std::function<void()>();
-                action();
-            }
-        });
-        closeButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
-            m_notice_action = std::function<void()>();
-            if (m_vhf_notice)
-                m_vhf_notice->Hide();
-        });
-        // A click closes it, and opens what it is about, if anything; with
-        // buttons only those do the action.
-        auto close = [this](wxMouseEvent &) {
-            if (m_vhf_notice)
-                m_vhf_notice->Hide();
-            if (m_vhf_notice_buttons && m_vhf_notice_buttons->IsShown())
-                return;
-            if (m_notice_action) {
-                std::function<void()> action = m_notice_action;
-                m_notice_action = std::function<void()>();
-                action();
-            }
-        };
-        panel->Bind(wxEVT_LEFT_DOWN, close);
-        m_vhf_notice_title->Bind(wxEVT_LEFT_DOWN, close);
-        m_vhf_notice_text->Bind(wxEVT_LEFT_DOWN, close);
-        m_vhf_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
-            if (m_vhf_notice)
-                m_vhf_notice->Hide();
-        });
-    }
-
     const LegendPalette palette = GetLegendPalette();
-    wxWindow *panel = m_vhf_notice->GetChildren().GetFirst()->GetData();
-    panel->SetBackgroundColour(palette.background);
-    m_vhf_notice_title->SetForegroundColour(titleColour);
-    m_vhf_notice_text->SetForegroundColour(palette.text);
-    m_vhf_notice_title->SetLabel(title);
-    m_vhf_notice_text->SetLabel(text);
-    m_vhf_notice_buttons->SetBackgroundColour(palette.background);
-    m_vhf_notice_action->SetLabel(actionLabel);
-    m_vhf_notice_buttons->Show(!actionLabel.IsEmpty());
-    panel->GetSizer()->Layout();
-    panel->GetSizer()->Fit(panel);
-    m_vhf_notice->SetClientSize(panel->GetBestSize());
-    panel->SetSize(m_vhf_notice->GetClientSize());
-
-    // At the top of the chart, in the middle.
-    const wxRect area = canvas->GetScreenRect();
-    const wxSize size = m_vhf_notice->GetSize();
-    m_vhf_notice->Move(area.x + (area.width - size.x) / 2, area.y + 16);
-    m_vhf_notice->ShowWithoutActivating();
-    m_vhf_notice->Raise();
-    m_vhf_notice_timer.StartOnce(12000);
-
-    // OpenCPN's short beep six times, so it is heard in the cockpit.
-    if (sound) {
-        m_vhf_beeps_left = 6;
-        if (PlayVhfSound())
-            --m_vhf_beeps_left;
-        m_vhf_sound_timer.Start(250);
-    }
-}
-
-void legend_pi::StopVhfHighlight()
-{
-    m_vhf_highlight_timer.Stop();
-    m_vhf_highlight.clear();
-    RefreshAllCanvases();
-}
-
-// Lit for six seconds, then fading out in one and a half.
-void legend_pi::OnVhfHighlightTimer()
-{
-    if (m_vhf_keep_lit) {
-        m_vhf_highlight_timer.Stop();
-        return;
-    }
-    const double elapsed =
-        (wxGetUTCTimeMillis() - m_vhf_highlight_started).ToDouble() / 1000.0;
-    const double hold = 6.0;
-    const double fade = 1.5;
-    if (elapsed >= hold + fade) {
-        StopVhfHighlight();
-        return;
-    }
-    const double alpha = elapsed <= hold ? 1.0 : 1.0 - (elapsed - hold) / fade;
-    if (std::fabs(alpha - m_vhf_highlight_alpha) > 0.02 || alpha == 1.0) {
-        const bool changed = alpha != m_vhf_highlight_alpha;
-        m_vhf_highlight_alpha = alpha;
-        if (changed)
-            RefreshAllCanvases();
-    }
-}
-
-namespace {
-
-// Light red, as the selected area on the map of vhfinfo.org (fill #ff6666
-// at 42 %, a red edge); softer in dusk and night.
-void VhfHighlightColours(double alpha, wxColour *fill, wxColour *line)
-{
-    const double dim = IsDimScheme() ? 0.6 : 1.0;
-    *fill = wxColour(255, 102, 102, static_cast<unsigned char>(107 * alpha * dim));
-    *line = wxColour(255, 0, 0, static_cast<unsigned char>(200 * alpha * dim));
-}
-
-} // namespace
-
-bool legend_pi::DrawVhfHighlight(wxDC &dc, PlugIn_ViewPort *vp)
-{
-    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
-    if (!gc)
-        return false;
-    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-
-    wxColour fill;
-    wxColour line;
-    VhfHighlightColours(m_vhf_highlight_alpha, &fill, &line);
-    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
-
-    for (const VhfArea &area : m_vhf_highlight) {
-        wxGraphicsPath path = gc->CreatePath();
-        for (size_t i = 0; i < area.polygon.size(); ++i) {
-            wxPoint at;
-            GetCanvasPixLL(vp, &at, area.polygon[i].first, area.polygon[i].second);
-            if (i == 0)
-                path.MoveToPoint(at.x, at.y);
-            else
-                path.AddLineToPoint(at.x, at.y);
-        }
-        path.CloseSubpath();
-        gc->SetBrush(wxBrush(fill));
-        gc->FillPath(path, wxODDEVEN_RULE);
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(line).Width(2.0 * s).Join(wxJOIN_ROUND)));
-        gc->StrokePath(path);
-    }
-    return true;
-}
-
-bool legend_pi::DrawVhfHighlightGL(PlugIn_ViewPort *vp)
-{
-    wxColour fill;
-    wxColour line;
-    VhfHighlightColours(m_vhf_highlight_alpha, &fill, &line);
-    const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
-
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-                 GL_HINT_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    for (const VhfArea &area : m_vhf_highlight) {
-        std::vector<wxPoint> points(area.polygon.size());
-        for (size_t i = 0; i < area.polygon.size(); ++i)
-            GetCanvasPixLL(vp, &points[i], area.polygon[i].first, area.polygon[i].second);
-
-        glColor4ub(fill.Red(), fill.Green(), fill.Blue(), fill.Alpha());
-        glBegin(GL_TRIANGLES);
-        for (int index : area.triangles)
-            glVertex2d(points[index].x, points[index].y);
-        glEnd();
-
-        glColor4ub(line.Red(), line.Green(), line.Blue(), line.Alpha());
-        glLineWidth(static_cast<float>(2.0 * s));
-        glBegin(GL_LINE_LOOP);
-        for (size_t i = 0; i + 1 < points.size(); ++i)
-            glVertex2d(points[i].x, points[i].y);
-        glEnd();
-    }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-    return true;
+    m_notice.Show(title, text, sound, titleColour, palette.background, palette.text, action,
+                  actionLabel);
 }
 
 std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
@@ -10199,15 +9897,7 @@ std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layer
 
     // Shown only while a layer with these areas is shown in OpenCPN: one
     // of its waypoints is visible.
-    *layerShown = false;
-    if (!m_vhf_areas.IsEmpty()) {
-        for (const CachedWaypoint &wp : m_waypoint_cache) {
-            if (wp.visible && m_vhf_areas.Icons().count(wp.icon) > 0) {
-                *layerShown = true;
-                break;
-            }
-        }
-    }
+    *layerShown = VhfLayerShown();
 
     // A fix of the last minute counts as the boat's position.
     *fromShip = m_ship_time > 0 && (wxGetUTCTimeMillis() - m_ship_time) < 60000;
