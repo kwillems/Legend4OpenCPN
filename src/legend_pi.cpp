@@ -1634,6 +1634,16 @@ legend_pi::legend_pi(void *ppimgr)
 
     // Fill the cache once OpenCPN has settled after starting, so the first
     // look at the dynamic legend does not have to wait for it.
+    m_cell_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OpenNextChartCell(); });
+
+    m_fill_window_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+        if (!m_legend_window || !m_legend_window->IsShown())
+            return;
+        wxStopWatch watch;
+        RefreshLegendFiles();
+        wxLogMessage("Legend: window filled in %ld ms", watch.Time());
+    });
+
     m_prefetch_timer.Bind(
         wxEVT_TIMER,
         [this](wxTimerEvent &) {
@@ -4104,9 +4114,18 @@ void legend_pi::ToggleLegendWindow()
         SaveConfig();
         m_legend_window->Hide();
     } else {
-        RefreshLegendFiles();
+        // The window first, then what is in it: building the chart legend
+        // can take a second, and a window that does not come looks broken.
+        if (m_legend_index == 0 && m_markdown_view && m_content_book) {
+            m_content_book->SetSelection(1);
+            RenderProgressPage("De kaartlegenda wordt opgebouwd", 0, 0);
+        }
         m_legend_window->Show();
         m_legend_window->Raise();
+        // macOS puts the window on screen once OpenCPN is back in its event
+        // loop; a moment later the content follows.
+        wxLogMessage("Legend: window shown");
+        m_fill_window_timer.StartOnce(60);
     }
 }
 
@@ -4822,6 +4841,13 @@ void legend_pi::OnAutoRefreshTimer()
 
 void legend_pi::RefreshDynamicLegendKeepingState()
 {
+    // New chart cells in view: open them first, then come back.
+    if (OpenChartCellsFirst([this]() {
+            if (IsDynamicLegendVisible())
+                RefreshDynamicLegendKeepingState();
+        }))
+        return;
+
     const std::vector<DynamicGroup> previous = m_dynamic_groups;
 
     CollectDynamicLegend();
@@ -5098,6 +5124,163 @@ void legend_pi::ResolveLabel(
     group.label = key;
 }
 
+namespace {
+
+CachedWaypoint CachedFromWaypoint(const PlugIn_Waypoint_Ex &wp)
+{
+    CachedWaypoint entry;
+    entry.lat = wp.m_lat;
+    entry.lon = wp.m_lon;
+    entry.icon = wp.IconName;
+    entry.description = wp.IconDescription;
+    entry.firstLine = FirstDescriptionLine(wp.m_MarkDescription);
+    entry.visible = wp.IsVisible;
+    entry.useScamin = wp.b_useScamin;
+    entry.scamin = wp.scamin;
+
+    LightCharacter light;
+    if (light.FindInWaypoint(wp.m_MarkName, wp.m_MarkDescription))
+        entry.light = light.Abbreviation();
+    return entry;
+}
+
+bool SamePoint(const PlugIn_Waypoint_Ex &wp, const LayerWaypoint &point)
+{
+    return std::fabs(wp.m_lat - point.lat) < 1e-6 && std::fabs(wp.m_lon - point.lon) < 1e-6 &&
+           wp.IconName == point.icon;
+}
+
+} // namespace
+
+// The waypoints of the layer files, taken from the files themselves. Of
+// each layer OpenCPN is asked only its first and last point, which find it
+// in OpenCPN's list and tell whether the layer is shown, and one point per
+// icon for the icon's description. False when the files do not match
+// OpenCPN's list: then everything comes from OpenCPN, as before.
+bool legend_pi::PrefillFromLayers(const wxArrayString &guids)
+{
+    m_loading_prefilled.clear();
+    m_loading_have.clear();
+
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (!privateDir || privateDir->IsEmpty())
+        return false;
+
+    wxStopWatch watch;
+    m_layer_waypoints.Load(*privateDir + wxFileName::GetPathSeparator() + "layers");
+    const std::vector<LayerFile> &files = m_layer_waypoints.Files();
+    if (files.empty())
+        return false;
+    const long readMs = watch.Time();
+
+    const size_t count = guids.GetCount();
+    std::vector<CachedWaypoint> prefilled(count);
+    std::vector<char> have(count, 0);
+    std::vector<char> inLayer(count, 0);
+    std::vector<bool> used(files.size(), false);
+    int asked = 0;
+    auto fetch = [&](size_t index) {
+        ++asked;
+        return GetWaypointEx_Plugin(guids[index]);
+    };
+
+    size_t pos = 0;
+    size_t own = 0;
+    size_t layers = 0;
+    while (pos < count) {
+        std::unique_ptr<PlugIn_Waypoint_Ex> first = fetch(pos);
+        int layer = -1;
+        if (first) {
+            for (size_t f = 0; f < files.size() && layer < 0; ++f) {
+                const std::vector<LayerWaypoint> &points = files[f].points;
+                if (used[f] || points.size() > count - pos || !SamePoint(*first, points.front()))
+                    continue;
+                std::unique_ptr<PlugIn_Waypoint_Ex> last = fetch(pos + points.size() - 1);
+                if (last && SamePoint(*last, points.back()))
+                    layer = static_cast<int>(f);
+            }
+        }
+
+        // Not where a layer starts: an own waypoint, as OpenCPN gives it.
+        if (layer < 0) {
+            if (first) {
+                prefilled[pos] = CachedFromWaypoint(*first);
+                have[pos] = 1;
+            }
+            ++pos;
+            // Many of those: the files do not tell much, so stop asking twice.
+            if (++own > 500)
+                return false;
+            continue;
+        }
+
+        used[layer] = true;
+        ++layers;
+        const std::vector<LayerWaypoint> &points = files[layer].points;
+        // Hiding a layer hides all of its waypoints.
+        const bool visible = first->IsVisible;
+        for (size_t i = 0; i < points.size(); ++i) {
+            const LayerWaypoint &point = points[i];
+            auto description = m_icon_descriptions.find(point.icon);
+            if (description == m_icon_descriptions.end()) {
+                wxString text = first->IconDescription;
+                if (i > 0) {
+                    std::unique_ptr<PlugIn_Waypoint_Ex> wp = fetch(pos + i);
+                    text = wp ? wp->IconDescription : wxString();
+                }
+                description = m_icon_descriptions.emplace(point.icon, text).first;
+            }
+
+            CachedWaypoint &entry = prefilled[pos + i];
+            entry.lat = point.lat;
+            entry.lon = point.lon;
+            entry.icon = point.icon;
+            entry.description = description->second;
+            entry.firstLine = FirstDescriptionLine(point.description);
+            entry.visible = visible;
+            entry.useScamin = point.useScamin;
+            entry.scamin = point.scamin;
+            LightCharacter light;
+            if (light.FindInWaypoint(point.name, point.description))
+                entry.light = light.Abbreviation();
+            have[pos + i] = 1;
+            inLayer[pos + i] = 1;
+        }
+        pos += points.size();
+    }
+
+    // A check of points spread over the layers against OpenCPN.
+    std::vector<size_t> layered;
+    for (size_t i = 0; i < count; ++i) {
+        if (inLayer[i])
+            layered.push_back(i);
+    }
+    const size_t kChecks = 24;
+    for (size_t k = 0; k < kChecks && !layered.empty(); ++k) {
+        const size_t index = layered[(k * 7919 + 13) % layered.size()];
+        std::unique_ptr<PlugIn_Waypoint_Ex> wp = fetch(index);
+        const CachedWaypoint &entry = prefilled[index];
+        if (!wp || std::fabs(wp->m_lat - entry.lat) > 1e-6 ||
+            std::fabs(wp->m_lon - entry.lon) > 1e-6 || wp->IconName != entry.icon ||
+            wp->IsVisible != entry.visible ||
+            wp->b_useScamin != entry.useScamin ||
+            (entry.useScamin && std::fabs(wp->scamin - entry.scamin) > 0.5) ||
+            FirstDescriptionLine(wp->m_MarkDescription) != entry.firstLine) {
+            wxLogMessage("Legend: layer files do not match OpenCPN's waypoints at %zu, "
+                         "asking OpenCPN for each",
+                         index);
+            return false;
+        }
+    }
+
+    m_loading_prefilled.swap(prefilled);
+    m_loading_have.swap(have);
+    wxLogMessage("Legend: %zu of %zu waypoints from %zu layer files (read in %ld ms), "
+                 "%d asked of OpenCPN, %ld ms",
+                 layered.size(), count, layers, readMs, asked, watch.Time());
+    return true;
+}
+
 bool legend_pi::StartWaypointLoading(bool reloadAll)
 {
     // A loading run is busy; its end refreshes the legend. Only a request
@@ -5126,8 +5309,20 @@ bool legend_pi::StartWaypointLoading(bool reloadAll)
     m_loading_fetched = 0;
     m_loading_started = wxGetLocalTimeMillis();
 
+    // The first time the layer files are read, half a second at once: in a
+    // timer step, so the window can show that it is loading first.
+    if (m_waypoint_cache.empty()) {
+        m_loading_prefill_pending = true;
+        m_loading_timer.Start(10);
+        return false;
+    }
+    m_loading_prefill_pending = false;
+    PrefillFromLayers(guids);
+
     size_t missing = 0;
     for (size_t i = 0; i < guids.GetCount(); ++i) {
+        if (i < m_loading_have.size() && m_loading_have[i])
+            continue;
         if (m_loading_known.find(guids[i]) == m_loading_known.end())
             ++missing;
     }
@@ -5150,13 +5345,25 @@ void legend_pi::OnLoadingTimer()
         return;
     }
 
+    if (m_loading_prefill_pending) {
+        m_loading_prefill_pending = false;
+        PrefillFromLayers(m_loading_guids);
+        return;
+    }
+
     // Work for a short moment per step, then give OpenCPN room to paint
     // and handle input.
     wxStopWatch step;
 
     while (m_loading_next < m_loading_guids.GetCount() &&
            step.Time() < 40) {
-        const wxString &guid = m_loading_guids[m_loading_next++];
+        const size_t index = m_loading_next++;
+        const wxString &guid = m_loading_guids[index];
+
+        if (index < m_loading_have.size() && m_loading_have[index]) {
+            m_loading_cache.push_back(m_loading_prefilled[index]);
+            continue;
+        }
 
         auto found = m_loading_known.find(guid);
         if (found != m_loading_known.end()) {
@@ -5168,20 +5375,8 @@ void legend_pi::OnLoadingTimer()
         std::unique_ptr<PlugIn_Waypoint_Ex> wp = GetWaypointEx_Plugin(guid);
         ++m_loading_fetched;
 
-        if (wp) {
-            entry.lat = wp->m_lat;
-            entry.lon = wp->m_lon;
-            entry.icon = wp->IconName;
-            entry.description = wp->IconDescription;
-            entry.firstLine = FirstDescriptionLine(wp->m_MarkDescription);
-            entry.visible = wp->IsVisible;
-            entry.useScamin = wp->b_useScamin;
-            entry.scamin = wp->scamin;
-
-            LightCharacter light;
-            if (light.FindInWaypoint(wp->m_MarkName, wp->m_MarkDescription))
-                entry.light = light.Abbreviation();
-        }
+        if (wp)
+            entry = CachedFromWaypoint(*wp);
 
         m_loading_cache.push_back(entry);
     }
@@ -5205,6 +5400,8 @@ void legend_pi::FinishWaypointLoading()
     m_loading_cache.clear();
     m_loading_known.clear();
     m_loading_guids.Clear();
+    m_loading_prefilled.clear();
+    m_loading_have.clear();
 
     BuildCommonLines();
 
@@ -5231,16 +5428,60 @@ void legend_pi::RenderLoadingPage()
     RenderProgressPage("Waypoints worden geladen", m_loading_next, total);
 }
 
-// Opening chart cells takes a fifth of a second each: with more than one
-// to open, the legend shows how far it is, painted at once since OpenCPN
-// handles nothing meanwhile.
-void legend_pi::ShowCellProgress(int done, int total)
+// Opening a chart cell takes a fifth of a second. With more than one to
+// open for the view, they are opened one per timer step, so OpenCPN stays
+// usable and the legend shows how far it is; then `then` runs, and finds
+// every cell open. False when there is nothing worth waiting for.
+bool legend_pi::OpenChartCellsFirst(std::function<void()> then)
 {
-    if (total < 2 || !IsDynamicLegendVisible())
+    if (m_cell_timer.IsRunning()) {
+        m_after_cells = then;
+        return true;
+    }
+    if (!m_viewport_valid)
+        return false;
+
+    m_cells_to_open.clear();
+    PlugIn_ViewPort vp = m_viewport;
+    if (m_ocharts.Available()) {
+        for (const wxString &path : m_ocharts.UnopenedCells(vp))
+            m_cells_to_open.emplace_back(true, path);
+    }
+    for (const wxString &path : m_s57.UnreadCells(vp))
+        m_cells_to_open.emplace_back(false, path);
+    if (m_cells_to_open.size() < 2)
+        return false;
+
+    m_cells_opened = 0;
+    m_after_cells = then;
+    if (IsDynamicLegendVisible())
+        RenderProgressPage("Kaartbladen worden gelezen", 0, m_cells_to_open.size());
+    m_cell_timer.StartOnce(10);
+    return true;
+}
+
+void legend_pi::OpenNextChartCell()
+{
+    if (m_cells_opened < m_cells_to_open.size()) {
+        const auto &cell = m_cells_to_open[m_cells_opened++];
+        if (cell.first)
+            m_ocharts.OpenCell(cell.second);
+        else
+            m_s57.ReadCell(cell.second);
+    }
+    if (m_cells_opened < m_cells_to_open.size()) {
+        if (IsDynamicLegendVisible())
+            RenderProgressPage("Kaartbladen worden gelezen", m_cells_opened,
+                               m_cells_to_open.size());
+        m_cell_timer.StartOnce(10);
         return;
-    RenderProgressPage("Kaartbladen worden gelezen", static_cast<size_t>(done),
-                       static_cast<size_t>(total));
-    m_markdown_view->Update();
+    }
+
+    m_cells_to_open.clear();
+    std::function<void()> then = m_after_cells;
+    m_after_cells = std::function<void()>();
+    if (then)
+        then();
 }
 
 // What the legend waits for, with a bar that fills and "1.200 van 17.350".
@@ -5773,10 +6014,9 @@ void legend_pi::CollectChartObjects(
     // plugin's own reader for plain ENC cells. Where both cover the same
     // water, an object counts once.
     std::vector<ChartObject> objects;
-    const CellProgress progress = [this](int done, int total) { ShowCellProgress(done, total); };
     m_ocharts_available = m_ocharts.Available();
     if (m_ocharts_available)
-        objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale, progress);
+        objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale);
 
     auto positionKey = [](const ChartObject &object) {
         return wxString::Format(
@@ -5791,7 +6031,7 @@ void legend_pi::CollectChartObjects(
     // lights at one position, which differ in colour and character, so
     // for lights those count as well.
     std::set<wxString> seenEnc;
-    const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp, progress);
+    const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp);
     for (const ChartObject &object : enc) {
         const wxString position = positionKey(object);
         if (fromOcharts.count(position) > 0)
@@ -7693,11 +7933,18 @@ void legend_pi::ShowDynamicLegend(bool reloadWaypoints)
         m_content_book->SetSelection(1);
 
     if (StartWaypointLoading(reloadWaypoints)) {
-        CollectDynamicLegend();
-        RenderDynamicLegend(false);
+        auto show = [this]() {
+            if (!IsDynamicLegendVisible())
+                return;
+            CollectDynamicLegend();
+            RenderDynamicLegend(false);
 
-        // A layer may have been hidden or shown while the legend was closed.
-        m_visibility_timer.StartOnce(300);
+            // A layer may have been hidden or shown while the legend was
+            // closed.
+            m_visibility_timer.StartOnce(300);
+        };
+        if (!OpenChartCellsFirst(show))
+            show();
         return;
     }
 

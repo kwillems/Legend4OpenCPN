@@ -74,6 +74,8 @@ set(SRC
     src/light_character.cpp
     src/vhf_areas.h
     src/vhf_areas.cpp
+    src/layer_waypoints.h
+    src/layer_waypoints.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c

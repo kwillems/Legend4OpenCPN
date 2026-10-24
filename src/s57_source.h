@@ -34,8 +34,12 @@ public:
 
     // The point objects of the cells that cover the viewport, within its
     // bounds. Cells far more detailed than the view are left out.
-    std::vector<ChartObject> PointObjectsInView(
-        const PlugIn_ViewPort &vp, const CellProgress &progress = CellProgress());
+    std::vector<ChartObject> PointObjectsInView(const PlugIn_ViewPort &vp);
+
+    // The cells of this view that are not read yet, and one of them read,
+    // so the legend can read them one by one before it asks for objects.
+    std::vector<wxString> UnreadCells(const PlugIn_ViewPort &vp);
+    void ReadCell(const wxString &path);
 
     // Forget the inventory; the next query scans the chart folders again.
     void Rescan() { m_inventoried = false; }
@@ -73,6 +77,7 @@ private:
     void Inventory();
     void LoadCache(std::map<wxString, Cell> *cache) const;
     void SaveCache() const;
+    std::vector<const Cell *> Candidates(const PlugIn_ViewPort &vp);
     const ParsedCell *Load(const Cell &cell);
     static wxString Signature(const wxString &basePath);
 

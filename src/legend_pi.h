@@ -20,6 +20,7 @@
 #include "light_character.h"
 #include "note_editor.h"
 #include "note_places.h"
+#include "layer_waypoints.h"
 #include "vhf_areas.h"
 
 #include <map>
@@ -170,11 +171,13 @@ private:
     void RefreshDynamicLegendKeepingState();
     void RenderLoadingPage();
     void RenderProgressPage(const wxString &what, size_t done, size_t total);
-    void ShowCellProgress(int done, int total);
+    bool OpenChartCellsFirst(std::function<void()> then);
+    void OpenNextChartCell();
     void ApplyViewColours();
 
     // Filling the waypoint cache in small steps keeps OpenCPN responsive.
     bool StartWaypointLoading(bool reloadAll); // true: cache is up to date
+    bool PrefillFromLayers(const wxArrayString &guids);
     void OnLoadingTimer();
     void FinishWaypointLoading();
 
@@ -456,11 +459,24 @@ private:
     wxArrayString m_loading_guids;
     std::vector<CachedWaypoint> m_loading_cache;
     std::map<wxString, size_t> m_loading_known; // GUID -> m_waypoint_cache
+    // Waypoints taken from the layer files, by place in m_loading_guids.
+    std::vector<CachedWaypoint> m_loading_prefilled;
+    std::vector<char> m_loading_have;
+    bool m_loading_prefill_pending = false;
+    LayerWaypoints m_layer_waypoints;
+    std::map<wxString, wxString> m_icon_descriptions; // icon -> OpenCPN's description
     size_t m_loading_next;
     int m_loading_fetched;
     wxLongLong m_loading_started;
     wxTimer m_loading_timer;
     wxTimer m_prefetch_timer;
+    wxTimer m_fill_window_timer;  // fills the legend window once it is on screen
+    // Chart cells of the view opened one by one before the legend asks
+    // for their objects; then what was waiting.
+    wxTimer m_cell_timer;
+    std::vector<std::pair<bool, wxString>> m_cells_to_open; // o-charts?, path
+    size_t m_cells_opened = 0;
+    std::function<void()> m_after_cells;
     wxTimer m_visibility_timer;
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue

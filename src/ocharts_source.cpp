@@ -357,23 +357,17 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
     return chart;
 }
 
-std::vector<ChartObject> OChartsSource::PointObjectsInView(
-    const PlugIn_ViewPort &vp,
-    bool ignoreScaleLimits,
-    const CellProgress &progress)
+// Cells that overlap the view, the most detailed first; those far more
+// detailed than the view are skipped.
+std::vector<const OChartsSource::Cell *> OChartsSource::Candidates(const PlugIn_ViewPort &vp)
 {
-    std::vector<ChartObject> objects;
-    m_diagnostics.Clear();
-
+    std::vector<const Cell *> candidates;
     if (vp.pix_width <= 0 || vp.pix_height <= 0 || vp.view_scale_ppm <= 0.0)
-        return objects;
+        return candidates;
 
     if (!m_inventoried)
         Inventory();
 
-    // Cells that overlap the view, the most detailed first; those far more
-    // detailed than the view are skipped.
-    std::vector<const Cell *> candidates;
     for (const Cell &cell : m_cells) {
         if (cell.extent.NLAT < vp.lat_min || cell.extent.SLAT > vp.lat_max ||
             cell.extent.ELON < vp.lon_min || cell.extent.WLON > vp.lon_max)
@@ -387,6 +381,29 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
               [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
     if (candidates.size() > kMaxCellsPerView)
         candidates.resize(kMaxCellsPerView);
+    return candidates;
+}
+
+std::vector<wxString> OChartsSource::UnopenedCells(const PlugIn_ViewPort &vp)
+{
+    std::vector<wxString> paths;
+    for (const Cell *cell : Candidates(vp)) {
+        if (m_open.find(cell->path) == m_open.end())
+            paths.push_back(cell->path);
+    }
+    return paths;
+}
+
+std::vector<ChartObject> OChartsSource::PointObjectsInView(
+    const PlugIn_ViewPort &vp,
+    bool ignoreScaleLimits)
+{
+    std::vector<ChartObject> objects;
+    m_diagnostics.Clear();
+
+    if (vp.pix_width <= 0 || vp.pix_height <= 0 || vp.view_scale_ppm <= 0.0)
+        return objects;
+    const std::vector<const Cell *> candidates = Candidates(vp);
 
     // Query radius: half the diagonal of the view, in degrees.
     const double kPi = 3.14159265358979323846;
@@ -400,16 +417,7 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
     int cellsRead = 0;
     int rawCount = 0;
 
-    int toOpen = 0;
     for (const Cell *cell : candidates) {
-        if (m_open.find(cell->path) == m_open.end())
-            ++toOpen;
-    }
-    int opened = 0;
-
-    for (const Cell *cell : candidates) {
-        if (progress && m_open.find(cell->path) == m_open.end())
-            progress(opened++, toOpen);
         PlugInChartBaseExtendedPlus2 *chart = Open(cell->path);
         if (!chart)
             continue;

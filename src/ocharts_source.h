@@ -42,8 +42,13 @@ public:
     // With ignoreScaleLimits the cells are asked as if the view were at a
     // very large scale, so objects hidden by their scale limit come too.
     std::vector<ChartObject> PointObjectsInView(
-        const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false,
-        const CellProgress &progress = CellProgress());
+        const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false);
+
+    // The cells of this view that are not open yet, and one of them opened:
+    // each takes a fifth of a second, so the legend opens them one by one,
+    // with room for OpenCPN in between, before it asks for the objects.
+    std::vector<wxString> UnopenedCells(const PlugIn_ViewPort &vp);
+    void OpenCell(const wxString &path) { Open(path); }
 
     // Forget the cell inventory; the next query scans the chart folders
     // again (new or removed cells).
@@ -80,6 +85,7 @@ private:
     void Inventory();
     void LoadCache(std::map<wxString, Cell> *cache) const;
     void SaveCache() const;
+    std::vector<const Cell *> Candidates(const PlugIn_ViewPort &vp);
     PlugInChartBaseExtendedPlus2 *Create();
     PlugInChartBaseExtendedPlus2 *Open(const wxString &path);
 
