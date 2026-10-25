@@ -7,7 +7,7 @@
 // Free Software Foundation; either version 2 of the License, or (at your
 // option) any later version. See the LICENSE file for details.
 
-// legend_pi, underway: the boat's position, Vooruit, Licht herkennen and
+// legend_pi, underway: the boat's position, Uitkijk, Licht herkennen and
 // the VHF areas.
 
 #include "legend_pi.h"
@@ -44,7 +44,7 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
     CheckVhfAreaChange();
     CheckNotePlaces();
 
-    // The fan of Vooruit follows the boat; once more when it goes away.
+    // The fan of the Uitkijk follows the boat; once more when it goes away.
     const bool fan = AheadFanVisible();
     if (fan || m_ahead_fan_was_visible)
         RefreshAllCanvases();
@@ -117,7 +117,7 @@ void legend_pi::SortFromBoat(DynamicGroup &group) const
                      });
 }
 
-// How far Vooruit looks: as far as the boat goes in half an hour, at least
+// How far the Uitkijk looks: as far as the boat goes in half an hour, at least
 // 0.3 and at most 8 sea miles.
 double legend_pi::AheadRange() const
 {
@@ -159,7 +159,7 @@ void legend_pi::ComputeAhead()
         if (!group.parentKey.IsEmpty() || group.lightSymbol)
             continue;
         // The signs of the VHF layer mark an area, not something in the
-        // water; Vooruit tells the areas themselves apart.
+        // water; the Uitkijk tells the areas themselves apart.
         if (!group.chartSymbol &&
             m_vhf_areas.Icons().count(group.iconName.IsEmpty() ? group.key : group.iconName) > 0)
             continue;
@@ -409,7 +409,7 @@ void legend_pi::TapUp()
         m_markdown_view->CallAfter([this]() { RenderDynamicLegend(true); });
 }
 
-// A click on a line of the "Vooruit" block: that object on the chart.
+// A click on a line of the "Uitkijk" block: that object on the chart.
 void legend_pi::ShowAheadItem(size_t index)
 {
     if (index >= m_ahead.size())

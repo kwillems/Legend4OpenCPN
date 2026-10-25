@@ -32,14 +32,32 @@
 
 namespace {
 
-// The fan of Vooruit: a soft amber, as the beam of a searchlight, just
-// visible over the chart; darker in dusk and night like the other signs.
+// The fan of the Uitkijk: a soft amber, as the beam of a searchlight, just
+// visible over the chart. In dusk and night the chart is dark: the beam is
+// dimmed less than the other signs and a little more opaque, so it still
+// shows, in a warm colour that spares night vision.
 void AheadFanColours(wxColour *fill, wxColour *edge)
 {
-    const double dim = SchemeDim();
+    double dim = 1.0;
+    int fillAlpha = 28;
+    int edgeAlpha = 110;
+    switch (LegendScheme()) {
+    case PI_GLOBAL_COLOR_SCHEME_DUSK:
+        dim = 0.8;
+        fillAlpha = 40;
+        edgeAlpha = 130;
+        break;
+    case PI_GLOBAL_COLOR_SCHEME_NIGHT:
+        dim = 0.6;
+        fillAlpha = 48;
+        edgeAlpha = 140;
+        break;
+    default:
+        break;
+    }
     auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
-    *fill = wxColour(shade(239), shade(159), shade(39), 28);
-    *edge = wxColour(shade(186), shade(117), shade(23), 110);
+    *fill = wxColour(shade(239), shade(159), shade(39), fillAlpha);
+    *edge = wxColour(shade(186), shade(117), shade(23), edgeAlpha);
 }
 
 } // namespace

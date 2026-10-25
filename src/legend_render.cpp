@@ -142,7 +142,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 }
 
 // The page of the dynamic legend: the title bar, the blocks at the top
-// (Marifoon, Vooruit, Notities, Licht herkennen), then the rows under
+// (Marifoon, Uitkijk, Notities, Licht herkennen), then the rows under
 // their headings and the counts at the foot.
 wxString legend_pi::BuildDynamicPage()
 {
@@ -157,7 +157,7 @@ wxString legend_pi::BuildDynamicPage()
     page.html << "<html>" << LegendBodyTag(true);
     RenderTitleBar(page);
 
-    // Marifoon and Vooruit: headings at the top of the list that fold like
+    // Marifoon and Uitkijk: headings at the top of the list that fold like
     // the others; folded, the heading still tells the channel or the next
     // object. Not during a search or the order edit mode.
     m_rendered_headings.clear();
@@ -556,7 +556,7 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
          << "</table>";
 }
 
-// A heading of a block at the top of the list (Marifoon, Vooruit, ...),
+// A heading of a block at the top of the list (Marifoon, Uitkijk, ...),
 // with a summary after it; true when it is open.
 bool legend_pi::RenderExtraHeading(DynamicPage &page, const wxString &key,
                                    const wxString &title, const wxString &summary)
@@ -642,7 +642,7 @@ void legend_pi::RenderVhfBlock(DynamicPage &page)
     html << "</table>";
 }
 
-// Vooruit: while sailing, what the boat meets in the coming half hour, in
+// Uitkijk: while sailing, what the boat meets in the coming half hour, in
 // order of arrival.
 void legend_pi::RenderAheadBlock(DynamicPage &page)
 {
@@ -698,24 +698,22 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         return text;
     };
 
-    wxString summary;
-    const double inf = 1e9;
-    const double firstObject = m_ahead.empty() ? inf : m_ahead.front().minutes;
-    const double firstVhf = m_ahead_vhf.empty() ? inf : m_ahead_vhf.front().minutes;
-    const double firstNote = m_ahead_notes.empty() ? inf : m_ahead_notes.front().minutes;
-    if (firstNote < inf && firstNote <= firstVhf && firstNote < firstObject)
-        summary = whenMinutes(firstNote) + ": " + (nl ? "notitie " : "note ") +
-                  EscapeHtml(m_ahead_notes.front().title);
-    else if (firstVhf < inf && firstVhf < firstObject)
-        summary = whenMinutes(m_ahead_vhf.front().minutes) + ": " +
-                  vhfText(m_ahead_vhf.front());
-    else if (m_ahead.empty())
-        summary = nl ? "niets in de komende 30 minuten" : "nothing in the next 30 minutes";
-    else
-        summary = when(m_ahead.front()) + ", " + side(m_ahead.front()) + ": " +
-                  name(m_ahead.front());
+    // Beside the heading, what the Uitkijk covers: the coming half hour at
+    // this speed (less at the most distant 8 sea miles) and the field of
+    // view of the setting; and when nothing lies in it, that too.
+    const double range = AheadRange();
+    const int minutes = static_cast<int>(std::lround(range / m_ship_sog * 60.0));
+    wxString summary =
+        wxString::Format(nl ? "komende %d minuten, tot %s" : "next %d minutes, up to %s",
+                         minutes, FormatDistance(range)) +
+        " &middot; " + (nl ? "blikveld " : "field of view ") +
+        wxString::Format("%d&deg;", m_ahead_angle);
+    if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
+        summary << " &middot; " << (nl ? "niets in het blikveld" : "nothing in view");
 
-    if (!RenderExtraHeading(page, "@vooruit", nl ? "Vooruit" : "Ahead", summary))
+    // The key "@vooruit" is the block's name before; the folded state is
+    // kept under it.
+    if (!RenderExtraHeading(page, "@vooruit", nl ? "Uitkijk" : "Lookout", summary))
         return;
 
     // The icons as large as in the rows of the legend: each its own size,

@@ -1371,7 +1371,7 @@ void legend_pi::RunLegendCommand(const wxString &command)
     }
 }
 
-// "Breedte van Vooruit": the list and the fan on the chart follow at once.
+// "Blikveld van de uitkijk": the list and the fan on the chart follow at once.
 void legend_pi::SetAheadAngle(int angle)
 {
     m_ahead_angle = angle;
@@ -1422,7 +1422,7 @@ void legend_pi::ShowSettingsMenu()
             ->Check(m_note_notice_on);
 
     menu.AppendSeparator();
-    menu.AppendCheckItem(kAheadFan, "Vooruit op de kaart tonen")->Check(m_ahead_fan_shown);
+    menu.AppendCheckItem(kAheadFan, "Uitkijk op de kaart tonen")->Check(m_ahead_fan_shown);
     auto *width = new wxMenu;
     width->AppendRadioItem(kAhead15, wxString::FromUTF8("Smal (15\u00b0)"))
         ->Check(m_ahead_angle == 15);
@@ -1430,7 +1430,7 @@ void legend_pi::ShowSettingsMenu()
         ->Check(m_ahead_angle == 30);
     width->AppendRadioItem(kAhead45, wxString::FromUTF8("Breed (45\u00b0)"))
         ->Check(m_ahead_angle == 45);
-    menu.AppendSubMenu(width, "Breedte van Vooruit");
+    menu.AppendSubMenu(width, "Blikveld van de uitkijk");
     if (m_menu_has_headings) {
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));

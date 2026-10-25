@@ -40,7 +40,7 @@ void AlongAndAcross(double lat0, double lon0, double course, double lat, double 
 void PositionAt(double lat0, double lon0, double course, double along, double across,
                 double *lat, double *lon);
 
-// The fan of Vooruit: a circle of `minHalfWidth` sea miles around the
+// The fan of the Uitkijk: a circle of `minHalfWidth` sea miles around the
 // boat, for what lies beside it or was just passed, and ahead of it up to
 // `range` sea miles a strip at least `minHalfWidth` wide on either side,
 // widening at `halfAngle` degrees on either side of the course.
