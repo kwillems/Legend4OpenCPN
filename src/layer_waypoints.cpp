@@ -18,15 +18,6 @@
 
 namespace {
 
-wxString ChildText(const wxXmlNode *node, const wxString &name)
-{
-    for (const wxXmlNode *child = node->GetChildren(); child; child = child->GetNext()) {
-        if (child->GetName() == name)
-            return child->GetNodeContent();
-    }
-    return wxString();
-}
-
 bool ReadLayerFile(const wxString &path, std::vector<LayerWaypoint> *points)
 {
     wxXmlDocument document;

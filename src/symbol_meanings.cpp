@@ -116,12 +116,14 @@ const SymbolMeaning *SymbolMeanings::Find(const wxString &key, bool dutch,
 
 wxString TextInLanguage(const wxString &text, bool dutch)
 {
-    const int bar = text.Find(" | ");
+    // The bar with or without spaces: a line is trimmed when read, so the
+    // space before or after an empty part is gone ("= | Yellow buoy").
+    const int bar = text.Find('|');
     if (bar == wxNOT_FOUND)
         return text;
 
     wxString nl = text.Left(bar);
-    wxString en = text.Mid(bar + 3);
+    wxString en = text.Mid(bar + 1);
     nl.Trim(true).Trim(false);
     en.Trim(true).Trim(false);
 
