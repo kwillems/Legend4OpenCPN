@@ -361,8 +361,7 @@ private:
 
     wxString MakeDisplayTitle(const wxString &path) const;
     wxString RenderMarkdownFile(const wxString &path) const;
-    // dropTitle leaves out a first "# Title" line, which the choice shows.
-    wxString RenderMarkdownText(std::string markdown, bool dropTitle = true) const;
+    wxString RenderMarkdownText(const std::string &markdown) const;
 
     // Writing notes: the current Markdown item in a text box, saved on its
     // own a moment after typing stops.
