@@ -281,14 +281,10 @@ std::vector<VhfArea> VhfAreas::PartsOf(const wxString &description) const
 std::vector<VhfArea> VhfAreas::WithPartsAt(double lat, double lon) const
 {
     std::vector<VhfArea> result;
-    std::set<wxString> taken;
+    std::set<const VhfArea *> taken;
     for (const VhfArea *area : At(lat, lon)) {
         for (const VhfArea &part : m_areas) {
-            if (part.description == area->description &&
-                taken.insert(part.name + "|" + part.description + "|" +
-                             wxString::Format("%zu", part.polygon.size()) +
-                             wxString::Format("%.6f", part.latMin))
-                    .second)
+            if (part.description == area->description && taken.insert(&part).second)
                 result.push_back(part);
         }
     }

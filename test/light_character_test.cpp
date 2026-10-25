@@ -9,60 +9,12 @@
 
 // Unit tests of the light characters: reading them from text, from S-57
 // and from waypoints, telling them in words, their rhythm, and recognising
-// a tapped rhythm. Prints every failed check and returns non-zero when
-// there is one.
+// a tapped rhythm.
 
+#include "checks.h"
 #include "light_character.h"
 
-#include <cmath>
-#include <cstdio>
-
-#include <wx/init.h>
-
 namespace {
-
-int g_checks = 0;
-int g_failures = 0;
-
-void Check(bool ok, const char *what, int line)
-{
-    ++g_checks;
-    if (ok)
-        return;
-    ++g_failures;
-    std::printf("line %d: failed: %s\n", line, what);
-}
-
-void CheckEqual(const wxString &actual, const wxString &expected, const char *what, int line)
-{
-    ++g_checks;
-    if (actual == expected)
-        return;
-    ++g_failures;
-    std::printf("line %d: %s\n    expected: \"%s\"\n    actual:   \"%s\"\n", line, what,
-                expected.utf8_str().data(), actual.utf8_str().data());
-}
-
-void CheckNear(double actual, double expected, double tolerance, const char *what, int line)
-{
-    ++g_checks;
-    if (std::fabs(actual - expected) <= tolerance)
-        return;
-    ++g_failures;
-    std::printf("line %d: %s\n    expected: %g (within %g)\n    actual:   %g\n", line, what,
-                expected, tolerance, actual);
-}
-
-#define CHECK(cond) Check((cond), #cond, __LINE__)
-#define CHECK_EQ(actual, expected) CheckEqual((actual), (expected), #actual, __LINE__)
-#define CHECK_NEAR(actual, expected, tolerance) \
-    CheckNear((actual), (expected), (tolerance), #actual, __LINE__)
-
-// Texts with characters outside ASCII, such as degrees and Morse dots.
-wxString U(const char *text)
-{
-    return wxString::FromUTF8(text);
-}
 
 // The abbreviation of a parsed text, or "(invalid)".
 wxString Read(const wxString &text)
@@ -276,7 +228,8 @@ void TestPhases()
         {"Q(6)+LFl.15s", 15.0}, {"Mo(U)W.15s", 15.0}, {"LFl.W.10s", 10.0},
         {"VQ(3)W.5s", 5.0},     {"Fl.G.5s", 5.0},     {"FFl.R.6s", 6.0}};
     for (const auto &light : periods)
-        CheckNear(Length(PhasesOf(light.first)), light.second, 1e-9, light.first, __LINE__);
+        CheckNear(Length(PhasesOf(light.first)), light.second, 1e-9, light.first, __FILE__,
+                  __LINE__);
 
     // Isophase: as long light as dark.
     std::vector<LightPhase> phases = PhasesOf("Iso.G.4s");
@@ -399,14 +352,8 @@ void TestTaps()
 
 } // namespace
 
-int main()
+void TestLightCharacters()
 {
-    wxInitializer initializer;
-    if (!initializer.IsOk()) {
-        std::printf("wxWidgets could not be initialised\n");
-        return 2;
-    }
-
     TestParse();
     TestColours();
     TestFromS57();
@@ -415,7 +362,4 @@ int main()
     TestPhases();
     TestSectorWords();
     TestTaps();
-
-    std::printf("%d checks, %d failed\n", g_checks, g_failures);
-    return g_failures == 0 ? 0 : 1;
 }

@@ -126,13 +126,18 @@ macro(add_plugin_libraries)
         # Unit tests of the parts that do without OpenCPN: built with
         # "make legend-tests", run with "ctest" in the build folder.
         enable_testing()
-        find_package(wxWidgets REQUIRED core base)
+        find_package(wxWidgets REQUIRED core base xml)
         add_executable(legend-tests EXCLUDE_FROM_ALL
+            test/test_main.cpp
             test/light_character_test.cpp
+            test/vhf_areas_test.cpp
+            test/note_places_test.cpp
             src/light_character.cpp
+            src/vhf_areas.cpp
+            src/note_places.cpp
         )
         target_include_directories(legend-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
         target_link_libraries(legend-tests ${wxWidgets_LIBRARIES})
-        add_test(NAME light_character COMMAND legend-tests)
+        add_test(NAME legend COMMAND legend-tests)
     endif ()
 endmacro()
