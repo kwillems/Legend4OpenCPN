@@ -62,6 +62,9 @@ wxString CountText(const DynamicGroup &group)
 // Icons of a heading strip; more than this are counted instead.
 const size_t kStripIcons = 6;
 
+// The largest square a row icon gets; larger icons are scaled down.
+const int kMaxIconBox = 64;
+
 } // namespace
 
 // The dynamic legend while its page is built: the colours, which rows are
@@ -284,7 +287,6 @@ void legend_pi::LoadRowIcons(DynamicPage &page)
     const wxColour &active = palette.active;
     const wxColour &muted = palette.muted;
 
-    const int kMaxIconBox = 64;
     page.tilePadding = palette.iconTiles ? 3 : 0;
 
     // Row icons follow OpenCPN's chart object scale factor, so they look as
@@ -712,6 +714,20 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     if (!RenderExtraHeading(page, "@vooruit", nl ? "Vooruit" : "Ahead", summary))
         return;
 
+    // The icons as large as in the rows of the legend: each its own size,
+    // in a square as large as the largest of them, on a tile when the
+    // rows have one.
+    int box = page.iconBox;
+    for (const AheadItem &item : m_ahead) {
+        const wxImage &icon = page.icons[item.group];
+        if (icon.IsOk())
+            box = std::max(box, std::min(kMaxIconBox,
+                                         std::max(icon.GetWidth(), icon.GetHeight())));
+    }
+    const wxColour *tile = page.palette.iconTiles ? &page.palette.tile : nullptr;
+    const int padding = page.tilePadding;
+    const int cell = box + 2 * padding + 10;
+
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
     size_t row = 0;
     size_t nextVhf = 0;
@@ -722,10 +738,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_aheadvhf_%zu.png", m_dynamic_generation, v),
-            VhfBadgeImage(next.area.channel, rowColour, 24),
-            VhfBadgeImage(next.area.channel, rowColour, 48));
+            VhfBadgeImage(next.area.channel, rowColour, box),
+            VhfBadgeImage(next.area.channel, rowColour, 2 * box));
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
+             << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\"><img src=\"memory:"
              << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
              << whenMinutes(next.minutes) << "</b> &middot; "
              << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
@@ -738,14 +754,15 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_aheadnote_%zu.png", m_dynamic_generation, n),
-            NoteSignImage(rowColour, 24), NoteSignImage(rowColour, 48));
+            NoteSignImage(rowColour, box), NoteSignImage(rowColour, 2 * box));
         wxString where = std::fabs(note.cross) < 0.02
                              ? wxString(nl ? "recht vooruit" : "dead ahead")
                              : note.cross > 0.0 ? wxString(nl ? "stuurboord" : "starboard")
                                                 : wxString(nl ? "bakboord" : "port");
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
-             << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
+             << "\" width=\"" << cell
+             << "\" align=\"center\" valign=\"middle\"><img src=\"memory:" << image
+             << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
              << whenMinutes(note.minutes) << "</b> &middot; " << where << " &middot; "
              << (nl ? "notitie " : "note ") << EscapeHtml(note.title) << "</td></tr>";
     };
@@ -771,13 +788,13 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
 
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\">";
+             << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\">";
         if (page.icons[item.group].IsOk()) {
             const wxString image = AddDynamicImage(
                 wxString::Format("legend_dyn_%d_ahead_%zu.png",
                                  m_dynamic_generation, k),
-                NormalizeIcon(page.icons[item.group], rowColour, 24, nullptr, 0),
-                NormalizeIcon(page.icons2[item.group], rowColour, 48, nullptr, 0));
+                NormalizeIcon(page.icons[item.group], rowColour, box, tile, padding),
+                NormalizeIcon(page.icons2[item.group], rowColour, 2 * box, tile, 2 * padding));
             html << "<img src=\"memory:" << image << "\">";
         }
         html << "</td><td id=\"" << id << "\" valign=\"middle\">"
