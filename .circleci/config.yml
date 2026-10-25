@@ -242,6 +242,8 @@ jobs:
             - /Users/distiller/project/cache
       - run: >
           sh -c "otool -L build-osx/app/*/OpenCPN.app/Contents/PlugIns/*.dylib"
+      # Legend4OpenCPN: the unit tests (re-add after update-templates).
+      - run: cd build-osx && make legend-tests && ctest --output-on-failure
       - run: cd build-osx; /bin/bash < upload.sh
       - run: ci/git-push.sh  build-osx
       - run: mkdir -p /tmp/artifacts && cp build-osx/*.tar.gz build-osx/*.xml /tmp/artifacts/ || true
