@@ -640,7 +640,7 @@ void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
 
     // The settings, also reachable as links: "legend-<command>:".
     for (const char *command : {"reorder", "collapse-all", "expand-all", "language",
-                                "lights", "all-lights", "hidden"}) {
+                                "lights", "all-lights", "hidden", "distance"}) {
         if (href == wxString("legend-") + command + ":") {
             const wxString name(command);
             m_markdown_view->CallAfter([this, name]() { RunLegendCommand(name); });
@@ -1364,6 +1364,11 @@ void legend_pi::RunLegendCommand(const wxString &command)
         RefreshDynamicLegendKeepingState();
         RenderDynamicLegend(true);
     }
+    else if (command == "distance") {
+        m_show_distance = !m_show_distance;
+        SaveConfig();
+        RenderDynamicLegend(true);
+    }
 }
 
 // The menu behind "Instellingen": what is shown, with a tick when it is on,
@@ -1375,8 +1380,8 @@ void legend_pi::ShowSettingsMenu()
 
     enum
     {
-        kLights = 1000, kHidden, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep, kVhfNotice,
-        kNoteNotice,
+        kLights = 1000, kHidden, kDistance, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep,
+        kVhfNotice, kNoteNotice,
         kFold, kReorder
     };
 
@@ -1384,6 +1389,8 @@ void legend_pi::ShowSettingsMenu()
     menu.AppendCheckItem(kLights, "Lichten")->Check(m_show_lights);
     menu.AppendCheckItem(kHidden, "Ook op deze schaal verborgen tonen")
         ->Check(m_show_hidden_at_scale);
+    menu.AppendCheckItem(kDistance, "Afstand en peiling vanaf de boot")
+        ->Check(m_show_distance);
     if (m_chart_sources_available || m_menu_has_lights)
         menu.AppendCheckItem(kEnglish, "Engelse namen")->Check(!m_dutch_names);
 
@@ -1415,6 +1422,9 @@ void legend_pi::ShowSettingsMenu()
         break;
     case kHidden:
         RunLegendCommand("hidden");
+        break;
+    case kDistance:
+        RunLegendCommand("distance");
         break;
     case kEnglish:
         RunLegendCommand("language");

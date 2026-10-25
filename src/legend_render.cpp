@@ -11,6 +11,8 @@
 
 #include "legend_pi.h"
 
+#include "geo.h"
+
 #include "legend_html_window.h"
 #include "legend_icons.h"
 #include "legend_shared.h"
@@ -649,6 +651,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
 
     ComputeAhead();
     m_ahead_drawn_key = m_ahead_key;
+    m_distance_drawn_key = DistanceKey();
     m_ahead_rendered = wxGetUTCTimeMillis();
 
     if (!m_ahead_sailing)
@@ -778,8 +781,16 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
             html << "<img src=\"memory:" << image << "\">";
         }
         html << "</td><td id=\"" << id << "\" valign=\"middle\">"
-             << "<b>" << when(item) << "</b> &middot; " << side(item)
-             << " &middot; " << name(item);
+             << "<b>" << when(item) << "</b> &middot; " << side(item);
+        // Setting "Afstand en peiling vanaf de boot": to this object.
+        if (DistanceFromBoatShown() && item.position < group.positions.size()) {
+            const auto &at = group.positions[item.position];
+            html << " &middot; "
+                 << FormatDistance(SeaMiles(m_ship_lat, m_ship_lon, at.first, at.second))
+                 << " &middot; "
+                 << FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, at.first, at.second));
+        }
+        html << " &middot; " << name(item);
         if (!item.light.IsEmpty() && !group.lightCharacter)
             html << " &middot; <b>" << EscapeHtml(item.light) << "</b>";
         html << "</td></tr>";
@@ -1398,6 +1409,14 @@ void legend_pi::RenderRow(DynamicPage &page, size_t i)
     if (isActive)
         label = "<b>" + label + "</b>";
 
+    // Setting "Afstand en peiling vanaf de boot": the nearest one, small,
+    // under the text.
+    const wxString distance = DistanceText(group);
+    if (!distance.IsEmpty()) {
+        label << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
+              << distance << "</font>";
+    }
+
     // Every cell of the row carries the row id, so a click anywhere
     // in the row can be traced back to its symbol. The counter is a
     // button of its own: it marks all objects of the symbol at once.
@@ -1540,8 +1559,12 @@ void legend_pi::RenderFooter(DynamicPage &page)
     html << ".</font></p>";
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-            "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; "
-            "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
+         << (DistanceFromBoatShown()
+                 ? "Onder elke rij staan de afstand en de ware peiling vanaf de "
+                   "boot naar het dichtstbijzijnde exemplaar. Klik op een rij om "
+                   "naar het exemplaar te gaan dat het dichtst bij de boot ligt; "
+                 : "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; ")
+         << "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
             "exemplaren in beeld tegelijk aan te wijzen. De lijst past zich "
             "vanzelf aan als je de kaart verschuift of zoomt.";
     if (page.showHeadings)

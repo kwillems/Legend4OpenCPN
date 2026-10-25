@@ -12,6 +12,8 @@
 
 #include "legend_pi.h"
 
+#include "geo.h"
+
 #include "legend_html_window.h"
 #include "legend_shared.h"
 
@@ -52,15 +54,61 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
     bool layerShown = false;
     VhfAreasHere(&fromShip, &layerShown);
 
-    // What lies ahead changes with every fix while sailing; the list is
-    // redrawn at most every five seconds for it.
+    // What lies ahead, and the distances from the boat, change with every
+    // fix while sailing; the list is redrawn at most every five seconds for
+    // them.
     ComputeAhead();
-    const bool aheadChanged =
-        m_ahead_key != m_ahead_drawn_key &&
-        (wxGetUTCTimeMillis() - m_ahead_rendered) >= 5000;
+    const bool waited = (wxGetUTCTimeMillis() - m_ahead_rendered) >= 5000;
+    const bool aheadChanged = m_ahead_key != m_ahead_drawn_key && waited;
+    const bool distanceChanged =
+        m_show_distance && waited && DistanceKey() != m_distance_drawn_key;
 
-    if (m_vhf_shown_key != previous || aheadChanged)
+    if (m_vhf_shown_key != previous || aheadChanged || distanceChanged)
         RenderDynamicLegend(true);
+}
+
+bool legend_pi::DistanceFromBoatShown() const
+{
+    return m_show_distance && BoatPositionKnown();
+}
+
+// "0,3 NM · 045°" to the object of the row nearest to the boat; empty when
+// the setting is off or the boat's position is not known.
+wxString legend_pi::DistanceText(const DynamicGroup &group) const
+{
+    if (!DistanceFromBoatShown() || group.positions.empty())
+        return wxString();
+
+    const std::pair<double, double> *nearest = nullptr;
+    double best = 0.0;
+    for (const auto &position : group.positions) {
+        const double miles = SeaMiles(m_ship_lat, m_ship_lon, position.first, position.second);
+        if (!nearest || miles < best) {
+            nearest = &position;
+            best = miles;
+        }
+    }
+    return FormatDistance(best) + wxString::FromUTF8(" \u00b7 ") +
+           FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, nearest->first,
+                                        nearest->second));
+}
+
+wxString legend_pi::DistanceKey() const
+{
+    wxString key;
+    for (const DynamicGroup &group : m_dynamic_groups)
+        key << DistanceText(group) << '|';
+    return key;
+}
+
+void legend_pi::SortFromBoat(DynamicGroup &group) const
+{
+    std::stable_sort(group.positions.begin(), group.positions.end(),
+                     [this](const std::pair<double, double> &a,
+                            const std::pair<double, double> &b) {
+                         return SeaMiles(m_ship_lat, m_ship_lon, a.first, a.second) <
+                                SeaMiles(m_ship_lat, m_ship_lon, b.first, b.second);
+                     });
 }
 
 // The objects of the list in a fan ahead of the boat: a strip that widens

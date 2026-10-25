@@ -27,6 +27,7 @@ int main()
     TestNotePlaces();
     TestSymbolMeanings();
     TestLayerWaypoints();
+    TestGeo();
 
     std::printf("%d checks, %d failed\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
