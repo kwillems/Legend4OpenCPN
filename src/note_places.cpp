@@ -49,7 +49,11 @@ bool ParseRadius(wxString value, double *radius)
     value.Trim(true).Trim(false);
     value = value.BeforeFirst(' ');
     value.Replace(",", ".");
-    return value.ToCDouble(radius) && *radius > 0.0 && *radius < 100.0;
+    double number = 0.0;
+    if (!value.ToCDouble(&number) || number <= 0.0 || number >= 100.0)
+        return false;
+    *radius = number;
+    return true;
 }
 
 // "1:50000", "1:50.000", "50000" or "1:50k".
@@ -66,10 +70,10 @@ bool ParseScale(wxString value, int *scale)
         value.RemoveLast();
     }
     long number = 0;
-    if (!value.ToLong(&number) || number <= 0)
+    if (!value.ToLong(&number) || number <= 0 || number * factor < 1000)
         return false;
     *scale = static_cast<int>(number * factor);
-    return *scale >= 1000;
+    return true;
 }
 
 wxString KeyOf(const wxString &line)
