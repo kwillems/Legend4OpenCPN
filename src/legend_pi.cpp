@@ -9621,8 +9621,13 @@ void legend_pi::ShowNotice(const wxString &title, const wxString &text, bool sou
                            const wxString &actionLabel)
 {
     const LegendPalette palette = GetLegendPalette();
-    m_notice.Show(title, text, sound, titleColour, palette.background, palette.text, action,
-                  actionLabel);
+    NoticeColours colours;
+    colours.title = titleColour;
+    colours.background = palette.background;
+    colours.text = palette.text;
+    colours.frame = palette.headerRule;
+    colours.accent = palette.active;
+    m_notice.Show(title, text, sound, colours, action, actionLabel);
 }
 
 std::vector<const VhfArea *> legend_pi::VhfAreasHere(bool *fromShip, bool *layerShown)
