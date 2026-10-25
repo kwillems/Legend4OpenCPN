@@ -3694,13 +3694,12 @@ void legend_pi::OnLegendClick(const Hit &hit)
     case HitKind::AheadVhf:
         if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
             const AheadVhf &next = m_ahead_vhf[hit.index];
-            m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(next.lat, next.lon));
+            ShowVhfAreas(m_vhf_areas.WithPartsAt(next.lat, next.lon));
         }
         break;
     case HitKind::VhfArea:
         if (static_cast<size_t>(hit.index) < m_vhf_rows.size())
-            m_vhf_highlight.Show(
-                m_vhf_areas.PartsOf(m_vhf_rows[hit.index].description));
+            ShowVhfAreas(m_vhf_areas.PartsOf(m_vhf_rows[hit.index].description));
         break;
     case HitKind::Match:
         if (static_cast<size_t>(hit.index) < m_identify_matches.size())
@@ -9490,8 +9489,25 @@ bool legend_pi::HighlightVhfAreas(const wxString &icon,
     if (lit.empty())
         return false;
 
-    m_vhf_highlight.Show(lit);
+    ShowVhfAreas(lit);
     return true;
+}
+
+// Lights up these areas, with a notice of their channels, as "Welk
+// marifoonkanaal hier?" does.
+void legend_pi::ShowVhfAreas(const std::vector<VhfArea> &areas)
+{
+    if (areas.empty())
+        return;
+    wxString text;
+    std::set<wxString> said;
+    for (const VhfArea &area : areas) {
+        const wxString line = VhfAreaLine(area, m_dutch_names);
+        if (said.insert(line).second)
+            text << (text.IsEmpty() ? "" : "\n") << line;
+    }
+    ShowNotice(said.size() > 1 ? "Marifoongebieden" : "Marifoongebied", text, false);
+    m_vhf_highlight.Show(areas);
 }
 
 // "Welk marifoonkanaal hier?" from the chart's menu.

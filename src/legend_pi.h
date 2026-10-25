@@ -603,6 +603,7 @@ private:
     bool m_vhf_areas_known = false;     // m_vhf_areas_here is from a fix
     ChartNotice m_notice;               // VHF areas and notes nearby
     void ShowVhfHere(double lat, double lon);
+    void ShowVhfAreas(const std::vector<VhfArea> &areas);
     bool VhfLayerShown() const;
     void CheckVhfAreaChange();
     // m_notice in the colours of the legend.
