@@ -1258,24 +1258,13 @@ void legend_pi::SetColorScheme(PI_ColorScheme cs)
 
 wxString legend_pi::PickLanguage(const wxString &text) const
 {
-    const int bar = text.Find(" | ");
-    if (bar == wxNOT_FOUND)
-        return text;
-
-    wxString dutch = text.Left(bar);
-    wxString english = text.Mid(bar + 3);
-    dutch.Trim(true).Trim(false);
-    english.Trim(true).Trim(false);
-
-    if (m_dutch_names)
-        return dutch.IsEmpty() ? english : dutch;
-    return english.IsEmpty() ? dutch : english;
+    return TextInLanguage(text, m_dutch_names);
 }
 
 wxString legend_pi::SectionTitle(int section) const
 {
-    if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
-        return PickLanguage(m_meaning_sections[static_cast<size_t>(section)]);
+    if (section >= 0 && section < static_cast<int>(m_symbol_meanings.Sections().size()))
+        return PickLanguage(m_symbol_meanings.Sections()[static_cast<size_t>(section)]);
     if (section == -2)
         return m_dutch_names ? "Kaartsymbolen" : "Chart symbols";
     if (section == -3)
@@ -1285,8 +1274,8 @@ wxString legend_pi::SectionTitle(int section) const
 
 wxString legend_pi::SectionName(int section) const
 {
-    if (section >= 0 && section < static_cast<int>(m_meaning_sections.size()))
-        return m_meaning_sections[static_cast<size_t>(section)];
+    if (section >= 0 && section < static_cast<int>(m_symbol_meanings.Sections().size()))
+        return m_symbol_meanings.Sections()[static_cast<size_t>(section)];
 
     // Chart symbols not mentioned in symbolen.txt have a heading of their
     // own, before the waypoints without heading.
@@ -1319,7 +1308,7 @@ void legend_pi::SetAllSectionsCollapsed(bool collapsed)
     m_collapsed_sections.clear();
 
     if (collapsed) {
-        for (const wxString &name : m_meaning_sections)
+        for (const wxString &name : m_symbol_meanings.Sections())
             m_collapsed_sections.insert(name);
         m_collapsed_sections.insert(SectionName(-2));
         m_collapsed_sections.insert(SectionName(-3));
@@ -1466,8 +1455,8 @@ void legend_pi::ShowSettingsMenu()
 int legend_pi::BuiltInSection(int builtIn) const
 {
     const wxString name = builtIn == -2 ? "kaartsymbolen" : "lichtkarakters";
-    for (size_t i = 0; i < m_meaning_sections.size(); ++i) {
-        wxString first = m_meaning_sections[i].BeforeFirst('|');
+    for (size_t i = 0; i < m_symbol_meanings.Sections().size(); ++i) {
+        wxString first = m_symbol_meanings.Sections()[i].BeforeFirst('|');
         first.Trim(true).Trim(false);
         if (first.Lower() == name)
             return static_cast<int>(i);
@@ -1574,7 +1563,7 @@ bool legend_pi::GroupMatchesFilter(const DynamicGroup &group) const
 void legend_pi::MoveSection(int section, int delta)
 {
     const int target = section + delta;
-    const int count = static_cast<int>(m_meaning_sections.size());
+    const int count = static_cast<int>(m_symbol_meanings.Sections().size());
 
     if (section < 0 || section >= count || target < 0 || target >= count)
         return;

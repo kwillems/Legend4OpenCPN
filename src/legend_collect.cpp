@@ -236,62 +236,13 @@ void legend_pi::LoadMeanings()
         return;
 
     m_meanings_modified = modified;
-    m_meaning_sections.clear();
-    m_meanings.clear();
-    m_meanings_exact.clear();
-    m_meanings_patterns.clear();
-
-    wxTextFile file;
-    if (!file.Open(path, wxConvUTF8))
+    if (!m_symbol_meanings.Load(path))
         return;
-
-    int section = -1;
-
-    for (size_t i = 0; i < file.GetLineCount(); ++i) {
-        wxString line = file[i];
-        line.Trim(true).Trim(false);
-
-        if (line.IsEmpty() || line.StartsWith("#"))
-            continue;
-
-        if (line.StartsWith("[") && line.EndsWith("]")) {
-            wxString heading = line.Mid(1, line.length() - 2);
-            heading.Trim(true).Trim(false);
-            m_meaning_sections.push_back(heading);
-            section = static_cast<int>(m_meaning_sections.size()) - 1;
-            continue;
-        }
-
-        const int equals = line.Find('=');
-        if (equals == wxNOT_FOUND)
-            continue;
-
-        SymbolMeaning entry;
-        entry.name = line.Left(equals);
-        entry.meaning = line.Mid(equals + 1);
-        entry.name.Trim(true).Trim(false);
-        entry.meaning.Trim(true).Trim(false);
-        entry.section = section;
-        entry.order = static_cast<int>(m_meanings.size());
-
-        if (entry.name.IsEmpty())
-            continue;
-
-        const size_t index = m_meanings.size();
-        const bool pattern = entry.name.Find('*') != wxNOT_FOUND;
-        const wxString name = entry.name;
-        m_meanings.push_back(entry);
-
-        if (pattern)
-            m_meanings_patterns.push_back(index);
-        else if (m_meanings_exact.find(name) == m_meanings_exact.end())
-            m_meanings_exact[name] = index;
-    }
 
     wxLogMessage(
         "Legend: %zu symbol lines, %zu headings from %s",
-        m_meanings.size(),
-        m_meaning_sections.size(),
+        m_symbol_meanings.Lines().size(),
+        m_symbol_meanings.Sections().size(),
         path);
 }
 
@@ -350,35 +301,8 @@ void legend_pi::ResolveLabel(
     group.section = -1;
     group.order = 1 << 30;
 
-    const SymbolMeaning *entry = nullptr;
     wxString meaning;
-
-    auto exact = m_meanings_exact.find(key);
-    if (exact != m_meanings_exact.end()) {
-        entry = &m_meanings[exact->second];
-        meaning = PickLanguage(entry->meaning);
-    }
-    else {
-        for (size_t index : m_meanings_patterns) {
-            const SymbolMeaning &pattern = m_meanings[index];
-            const int star = pattern.name.Find('*');
-            const wxString prefix = pattern.name.Left(star);
-            const wxString suffix = pattern.name.Mid(star + 1);
-
-            if (key.length() < prefix.length() + suffix.length() ||
-                !key.StartsWith(prefix) || !key.EndsWith(suffix))
-                continue;
-
-            const wxString part = key.Mid(
-                prefix.length(),
-                key.length() - prefix.length() - suffix.length());
-
-            entry = &pattern;
-            meaning = PickLanguage(pattern.meaning);
-            meaning.Replace("*", part);
-            break;
-        }
-    }
+    const SymbolMeaning *entry = m_symbol_meanings.Find(key, m_dutch_names, &meaning);
 
     if (entry) {
         group.section = entry->section;

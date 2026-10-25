@@ -19,6 +19,7 @@
 #include "chart_names.h"
 #include "light_character.h"
 #include "shining_lights.h"
+#include "symbol_meanings.h"
 #include "note_editor.h"
 #include "note_places.h"
 #include "layer_waypoints.h"
@@ -81,16 +82,6 @@ struct DynamicGroup
 
     // Row of the light flares of the chart (S-57 class LIGHTS).
     bool lightSymbol = false;
-};
-
-// One line of symbolen.txt: icon name (may hold one '*'), meaning (may be
-// empty: the line then only places the icon under its heading).
-struct SymbolMeaning
-{
-    wxString name;
-    wxString meaning;
-    int section = -1; // index in the list of headings, -1 = before any
-    int order = 0;    // position in the file
 };
 
 // What the dynamic legend needs of one waypoint. Asking OpenCPN for a
@@ -484,11 +475,8 @@ private:
     int m_dynamic_total;
     wxString m_active_group_key; // symbol clicked last, highlighted
 
-    // symbolen.txt: headings, lines in file order, and lookups into them.
-    std::vector<wxString> m_meaning_sections;
-    std::vector<SymbolMeaning> m_meanings;
-    std::map<wxString, size_t> m_meanings_exact;
-    std::vector<size_t> m_meanings_patterns;
+    // symbolen.txt: headings and lines, and when the file was read.
+    SymbolMeanings m_symbol_meanings;
     wxDateTime m_meanings_modified;
 
     std::set<wxString> m_collapsed_sections;

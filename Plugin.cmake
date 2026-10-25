@@ -94,6 +94,8 @@ set(SRC
     src/vhf_highlight.cpp
     src/shining_lights.h
     src/shining_lights.cpp
+    src/symbol_meanings.h
+    src/symbol_meanings.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c
