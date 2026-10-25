@@ -109,6 +109,10 @@ struct CachedWaypoint
     wxString light;     // light character found in its name or description
 };
 
+// The plugin. Its functions are spread over files by topic: legend_pi.cpp
+// (start, settings, legend files and the toolbar), legend_window.cpp,
+// legend_collect.cpp, legend_render.cpp, legend_chart.cpp,
+// legend_notes.cpp and legend_navigation.cpp.
 class legend_pi : public opencpn_plugin_118
 {
 public:
