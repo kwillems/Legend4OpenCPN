@@ -4,8 +4,9 @@ Legend4OpenCPN is een plugin voor [OpenCPN](https://opencpn.org) die naast de
 kaart uitlegt wat je ziet. Hij houdt een legenda bij van precies de boeien,
 bakens, tekens en andere symbolen die op dat moment op je scherm staan, en
 verandert mee als je de kaart verschuift of zoomt. Daarnaast vertelt hij wat
-de lichten doen en wat er voor de boeg ligt, en toont hij je eigen legenda's,
-notities en routebeschrijvingen.
+de lichten doen en houdt hij voor je de uitkijk: wat er op je koers ligt en
+hoe ver het weg is. Ook toont hij je eigen legenda's, notities en
+routebeschrijvingen.
 
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
@@ -33,6 +34,8 @@ notities en routebeschrijvingen.
 - Klik op een rij en de plugin wijst het symbool aan op de kaart; klik op de
   kaart en de plugin wijst de rij aan. De teller ◎ wijst alle exemplaren
   tegelijk aan.
+- Onderweg desgewenst onder elke rij de **afstand en peiling vanaf de boot**
+  naar het dichtstbijzijnde exemplaar, zoals *0,3 NM · 045°*.
 - Zelf in te delen onder kopjes, in te klappen en te ordenen, met een
   zoekveld.
 - Eigen betekenissen in één tekstbestand; iconen als PNG of SVG.
@@ -53,18 +56,21 @@ notities en routebeschrijvingen.
   groot vlak of de spatiebalk, en de plugin noemt de lichten in beeld die het
   best passen. Een gemiste periode door de deining is geen probleem.
 
-**Vooruit kijken**
+**Uitkijk**
 
 - Tijdens het varen: wat je het komende half uur op koers tegenkomt, op
-  volgorde van aankomst, met de kant waar het ligt en zijn licht, en het
-  volgende marifoongebied.
+  volgorde van aankomst, met de kant waar het ligt, de afstand en zijn licht,
+  en het volgende marifoongebied. Ook wat je op dit moment passeert.
+- Het blikveld staat als lichte bundel op de kaart, zodat je ziet waar de
+  uitkijk kijkt; smal, middel of breed.
 
 **Marifoon**
 
 - Het kanaal van het gebied waar je vaart, met wat je moet doen en het
   telefoonnummer.
-- Een klik op een VHF-icoon of rechtsklikken op de kaart laat het hele gebied oplichten; vaar je een nieuw
-  gebied in, dan volgt een melding met pieptonen.
+- Een klik op een VHF-icoon of rechtsklikken op de kaart laat het hele gebied
+  oplichten en noemt het kanaal; vaar je een nieuw gebied in, dan volgt een
+  melding met pieptonen.
 
 **Eigen legenda's en notities**
 
@@ -77,7 +83,7 @@ notities en routebeschrijvingen.
 **Notities op de kaart**
 
 - Pin een notitie vast op een plek: die staat als geel blaadje op de kaart,
-  onder *Notities* in de legenda en in *Vooruit*, en je krijgt een
+  onder *Notities* in de legenda en in de *Uitkijk*, en je krijgt een
   melding als je in de buurt komt.
 - Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
   vastgepind op die plek, of onderweg op de positie van de boot.
@@ -93,7 +99,7 @@ notities en routebeschrijvingen.
 ## Installeren
 
 1. Download of bouw het pakket, bijvoorbeeld
-   `Legend-v0.2.0-alpha25_darwin-wx32-10.13.6-arm64.tar.gz`.
+   `Legend-v0.2.0-alpha27_darwin-wx32-10.13.6-arm64.tar.gz`.
 2. Kies in OpenCPN **Opties → Plugins → Import Plugin** en kies het pakket.
 3. Zet de plugin aan. In de werkbalk verschijnt de Legend-knop.
 
@@ -132,7 +138,9 @@ zoomen of draaien, en ook als je een laag aan- of uitzet.
 
 - **Klik op een rij** en het dichtstbijzijnde exemplaar wordt op de kaart
   gemarkeerd met een ring. Nog een klik gaat naar het volgende (`2/7`). Staat
-  het niet ruim in beeld, dan schuift de kaart ernaartoe.
+  het niet ruim in beeld, dan schuift de kaart ernaartoe. Staat *Afstand en
+  peiling vanaf de boot* aan, dan is dat het exemplaar dat het dichtst bij de
+  boot ligt (zie hieronder).
 - **Klik op de teller** (`×7 ◎`) en alle exemplaren in beeld worden tegelijk
   aangewezen.
 - **Klik op de kaart** op een symbool terwijl de legenda open is, of kies
@@ -155,6 +163,7 @@ In het menu Instellingen:
 |---|---|
 | Lichten | Lichtrijen tonen of verbergen |
 | Ook op deze schaal verborgen tonen | Ook symbolen die de kaart op deze schaal niet tekent (zie hieronder) |
+| Afstand en peiling vanaf de boot | Onder elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
 | Engelse namen | Betekenissen in het Engels in plaats van het Nederlands |
 | Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
 | Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
@@ -162,6 +171,8 @@ In het menu Instellingen:
 | Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
 | Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
 | Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
+| Uitkijk op de kaart tonen | Het blikveld van de uitkijk als lichte bundel op de kaart; standaard aan |
+| Blikveld van de uitkijk ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -199,6 +210,21 @@ deze schaal verborgen tonen** krijgen ze een grijze rij met een gesloten oogje
 en de schaal waarop ze verschijnen (`1:200k`). Een klik zoomt in tot het
 dichtstbijzijnde exemplaar zichtbaar is. Wat je zelf hebt uitgezet bij
 *Gebruikers standaard* in OpenCPN blijft weg.
+
+### Afstand en peiling vanaf de boot
+
+Met **Afstand en peiling vanaf de boot** staat onder elke rij klein en grijs
+hoe ver het dichtstbijzijnde exemplaar van de boot af ligt en in welke
+richting: *0,3 NM · 045°* (ware peiling), of in meters onder een tiende
+zeemijl, zoals *150 m*. In de Uitkijk staat het bij elk object.
+
+- Een klik op een rij gaat dan naar het exemplaar dat het dichtst bij de boot
+  ligt; nog een klik naar het volgende, steeds verder weg. Klik je eerst een
+  andere rij aan, dan begint het weer bij het dichtstbijzijnde.
+- Het werkt alleen met een GPS-positie van de laatste minuut; anders blijven
+  de getallen weg en geldt het midden van de kaart, zoals altijd.
+- Onderweg worden de getallen hooguit eens per vijf seconden bijgewerkt.
+- Thuis uitproberen kan met de plugin ShipDriver.
 
 ## Lichten
 
@@ -261,11 +287,14 @@ Een marifoongebied kan op de kaart oplichten, lichtrood zoals op
 [vhfinfo.org](https://vhfinfo.org/map.html):
 
 - **Klik op een VHF-icoon** van de laag op de kaart, op zijn rij in de
-  legenda of op een regel van het Marifoon-kopje: het hele gebied licht op.
-  Bestaat een gebied uit meer stukken, dan lichten ze allemaal op. De teller
-  ◎ van een rij laat alle gebieden van dat icoon in beeld oplichten.
+  legenda of op een regel van het Marifoon-kopje: het hele gebied licht op en
+  bovenaan de kaart verschijnt een venstertje met het kanaal. Bestaat een
+  gebied uit meer stukken, dan lichten ze allemaal op. De teller ◎ van een
+  rij laat alle gebieden van dat icoon in beeld oplichten.
 - **Welk marifoonkanaal hier?** in het rechtsklikmenu van de kaart laat alle
-  gebieden op die plek oplichten en noemt hun kanalen in een venstertje.
+  gebieden op die plek oplichten en noemt hun kanalen in een venstertje. Dit
+  werkt ook als de laag in OpenCPN uit staat: de plugin leest de gebieden
+  zelf uit het GPX-bestand.
 - Een gebied licht zes seconden op en vervaagt dan, of blijft staan tot je
   weer op de kaart klikt (instelling *Marifoongebied blijft oplichten*).
 
@@ -273,28 +302,47 @@ Een marifoongebied kan op de kaart oplichten, lichtrood zoals op
 waar je net nog niet was, dan licht het op en verschijnt bovenaan de kaart
 een venstertje met het kanaal, bijvoorbeeld *kanaal 18 · Ketelbrug ·
 verkeerspost · melden*, met zes pieptonen. Het venstertje verdwijnt na twaalf
-seconden of met een klik. Dit werkt ook als het legendavenster dicht is, en
+seconden, met **Sluiten** of met een klik ernaast. Dit werkt ook als het legendavenster dicht is, en
 is uit te zetten met *Melding bij nieuw marifoongebied*.
 
-### Vooruit
+### Uitkijk
 
-Het kopje **Vooruit** laat zien wat je de komende dertig minuten op koers
-tegenkomt. Het verschijnt zodra de boot vaart: een recente GPS-positie en
-minstens een halve knoop.
+Het kopje **Uitkijk** laat zien wat je de komende tijd op koers tegenkomt.
+Het verschijnt zodra de boot vaart: een recente GPS-positie en minstens een
+halve knoop. Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld
+*komende 30 minuten, tot 2,5 NM · blikveld 30°*, en *niets in het blikveld*
+als er niets ligt.
 
 - Tot acht objecten uit de legenda, op volgorde van aankomst, bijvoorbeeld
-  *over 4 min · stuurboord · Rode spitse ton*, met het lichtkarakter erbij.
+  *over 4 min · stuurboord · 0,6 NM · 038° · Rode spitse ton*, met het
+  lichtkarakter erbij. Afstand en peiling staan erbij als *Afstand en peiling
+  vanaf de boot* aan staat.
+- Ook wat je op dit moment passeert: wat binnen 0,12 zeemijl (zo'n 220 meter)
+  naast of net achter je ligt, staat bovenaan als *nu*, tot het achter je uit
+  die cirkel valt.
 - Tot twee marifoongebieden waar de koers in gaat, op hun plek in de tijd,
   bijvoorbeeld *over 12 min · marifoongebied kanaal 22 · Houtribsluizen ·
-  melden*. Een klik laat het gebied oplichten.
+  melden*. Een klik laat het gebied oplichten. De tekens van de laag
+  *VHFinfo Nederland* zelf tellen niet als object; echte marifoonborden langs
+  het water (B11, E23) wel.
 - Tot drie vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
   stuurboord · notitie Ondiepte bij de Ketelbrug*. Een klik opent de notitie.
-- De plugin kijkt in een waaier vóór de boot die verder weg breder wordt, tot
-  zo ver als je in een half uur komt (hooguit 8 zeemijl).
-- Ingeklapt noemt het kopje nog het eerstvolgende object.
 - Een klik op een regel wijst het object aan op de kaart, of laat zijn licht
   branden.
-- Testen zonder te varen kan met de plugin ShipDriver.
+
+**Het blikveld.** De uitkijk kijkt vanuit een cirkel van 0,12 zeemijl om de
+boot in een waaier vooruit: dichtbij minstens 0,12 zeemijl breed aan elke
+kant, verderop breder, tot zo ver als je in een half uur komt (hooguit 8
+zeemijl). Hoe breed de waaier uitloopt, kies je met **Blikveld van de
+uitkijk**: smal (15°), middel (30°, standaard) of breed (45°) aan weerszijden
+van de koers.
+
+Met **Uitkijk op de kaart tonen** (standaard aan) staat het blikveld als heel
+lichte, amberkleurige bundel op de kaart, zolang de legenda open is en de
+boot vaart. Zo zie je waarom een ton wel of niet in de lijst staat. Bij
+schemer en nacht wordt de bundel gedimd, maar blijft hij zichtbaar.
+
+Testen zonder te varen kan met de plugin ShipDriver.
 
 ## Je eigen betekenissen: `symbolen.txt`
 
@@ -323,7 +371,8 @@ BOYPIL60      = Rode pilaarton | Red pillar buoy
   wordt door die tekst vervangen. Exacte namen gaan voor.
 - `[Kopje]` begint een groep. Kopjes en regels verschijnen in de volgorde van
   het bestand.
-- Twee talen: `betekenis | meaning` en `[Kopje | Heading]`.
+- Twee talen: `betekenis | meaning` en `[Kopje | Heading]`. Is één kant
+  leeg, zoals `| Yellow buoy`, dan geldt in beide talen de andere.
 - Een lege betekenis (`vhf_* =`) deelt het symbool alleen in.
 - Regels die met `#` beginnen worden overgeslagen.
 
@@ -472,7 +521,7 @@ Een vastgepinde notitie:
   *Ook op deze schaal verborgen tonen* blijft een notitie voorbij zijn
   schaalgrens er grijs staan, met een dicht oogje en de schaal; een klik zoomt
   erheen;
-- staat in **Vooruit** als je koers erlangs gaat;
+- staat in de **Uitkijk** als je koers erlangs gaat;
 - geeft onderweg een **melding** met pieptonen zodra je binnen de straal
   komt. Een klik op de melding opent de notitie. Een notitie die je net
   vastpint waar de boot is, of die je aan het bewerken bent, meldt zich niet;
@@ -510,8 +559,9 @@ Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
 
 ## Waar de gegevens vandaan komen
 
-- **Waypoints** vraagt de plugin aan OpenCPN. Het eerste inlezen gebeurt op de
-  achtergrond kort na het starten.
+- **Waypoints van lagen** leest de plugin zelf uit de GPX-bestanden in de
+  map `layers` van OpenCPN; andere waypoints vraagt hij aan OpenCPN. Het
+  eerste inlezen gebeurt kort na het starten, met een voortgangsbalk.
 - **o-charts-kaarten** (`.oesu`) leest de plugin via de o-charts-plugin zelf,
   zoals OpenCPN dat doet voor *Kaartobjectgegevens*. De o-charts-plugin doet
   de ontsleuteling en de licentiecontrole; Legend4OpenCPN slaat geen
@@ -522,8 +572,10 @@ Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
 - De plugin toont dezelfde objecten als de kaart: hij vraagt OpenCPN welke
   objectsoorten op dit moment getekend worden, met de weergavecategorie, de
   aan- en uitgezette klassen en de schaalgrenzen.
-- **Marifoongebieden** komen uit de GPX-lagen in de map `layers` van
-  OpenCPN.
+- **Marifoongebieden** leest de plugin uit de GPX-lagen in de map `layers`
+  van OpenCPN: de gesloten tracks met een regel `VHF-kanaal:` in de
+  beschrijving. Een nieuwe versie van zo'n laag ziet de plugin na een herstart
+  van OpenCPN.
 
 Instellingen en caches staan in de privémap van OpenCPN:
 
@@ -544,7 +596,7 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
   als kaartsymbool.
 - Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
-- Vooruit kijkt alleen naar wat in beeld is.
+- De uitkijk kijkt alleen naar wat in beeld is.
 - De markering op de kaart is getest met **OpenGL aan**.
 - Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
   het bestand, dan kan het icoon op macOS leeg blijven.
@@ -586,7 +638,7 @@ De melding dat `wxWidgets_CONFIG_EXECUTABLE` niet gebruikt is, klopt niet en
 mag je negeren. Waarschuwingen over CMake-policies zijn ook onschuldig.
 
 Het pakket (`.tar.gz`) komt in `build/`. De naam komt uit de git-tag op de
-huidige commit, bijvoorbeeld `Legend-v0.2.0-alpha25_…tar.gz`; zonder tag
+huidige commit, bijvoorbeeld `Legend-v0.2.0-alpha27_…tar.gz`; zonder tag
 volgt hij uit `Plugin.cmake` met datum en commit-id. Draai na een nieuwe tag
 opnieuw `cmake ..`.
 
@@ -597,6 +649,21 @@ Meldingen van de plugin staan in het logboek van OpenCPN en beginnen met
 grep "Legend:" ~/Library/Logs/opencpn.log | tail -20
 ```
 
+### Tests
+
+De onderdelen die zonder OpenCPN werken, hebben unit tests in `test/`:
+lichtkarakters, marifoongebieden, notities met een plek, `symbolen.txt`, het
+inlezen van laagwaypoints en afstanden, peilingen en het blikveld van de
+uitkijk. Bouwen en draaien in de map `build/`:
+
+```bash
+make legend-tests
+ctest --output-on-failure
+```
+
+`./legend-tests` toont elke mislukte controle met het verwachte en het
+werkelijke resultaat. In CircleCI draaien de tests mee na het bouwen.
+
 ### Projectstructuur
 
 ```text
@@ -605,16 +672,32 @@ Legend4OpenCPN/
 │   ├── legend_toolbar.png
 │   └── s57-nl.txt           # Nederlandse namen van kaartobjecten
 ├── src/
-│   ├── legend_pi.cpp/.h        # plugin, venster en kaartlegenda
-│   ├── chart_symbols.cpp/.h    # S-52-symbolen en S-57-catalogus van OpenCPN
-│   ├── ocharts_source.cpp/.h   # kaartobjecten via de o-charts-plugin
-│   ├── s57_source.cpp/.h       # kaartobjecten uit ENC-cellen (S-57)
-│   ├── display_settings.cpp/.h # wat de kaart nu tekent
-│   ├── chart_names.cpp/.h      # namen van kaartobjecten (NL/EN)
-│   ├── light_character.cpp/.h  # lichtkarakters: lezen, woorden, ritme, herkennen
-│   ├── note_editor.cpp/.h      # notities bewerken: Markdown in en uit
-│   ├── note_places.cpp/.h      # notities met een plek: het blokje bovenaan
-│   └── vhf_areas.cpp/.h        # marifoongebieden uit de lagen
+│   ├── legend_pi.cpp/.h        # de plugin: starten, instellingen, legendabestanden
+│   ├── legend_window.cpp       # het venster, klikken, toetsen, instellingenmenu
+│   ├── legend_collect.cpp      # waypoints, betekenissen en kaartobjecten verzamelen
+│   ├── legend_render.cpp       # de pagina van de kaartlegenda, blok voor blok
+│   ├── legend_chart.cpp        # klikken, menu en tekenen op de kaart
+│   ├── legend_notes.cpp        # notities schrijven en op de kaart
+│   ├── legend_navigation.cpp   # onderweg: positie, uitkijk, licht herkennen, marifoon
+│   ├── legend_html_window.*    # het HTML-venster van de legenda
+│   ├── legend_icons.*          # iconen inlezen en tekenen
+│   ├── legend_shared.*         # kleuren en hulpjes die alle delen gebruiken
+│   ├── symbol_meanings.*       # symbolen.txt lezen en opzoeken
+│   ├── geo.*                   # afstand, peiling en het blikveld
+│   ├── chart_symbols.*         # S-52-symbolen en S-57-catalogus van OpenCPN
+│   ├── ocharts_source.*        # kaartobjecten via de o-charts-plugin
+│   ├── s57_source.*            # kaartobjecten uit ENC-cellen (S-57)
+│   ├── display_settings.*      # wat de kaart nu tekent
+│   ├── chart_names.*           # namen van kaartobjecten (NL/EN)
+│   ├── layer_waypoints.*       # waypoints uit de GPX-lagen
+│   ├── light_character.*       # lichtkarakters: lezen, woorden, ritme, herkennen
+│   ├── shining_lights.*        # lichten laten branden op de kaart
+│   ├── note_editor.*           # notities bewerken: Markdown in en uit
+│   ├── note_places.*           # notities met een plek: het blokje bovenaan
+│   ├── vhf_areas.*             # marifoongebieden uit de lagen
+│   ├── vhf_highlight.*         # een marifoongebied laten oplichten
+│   └── chart_notice.*          # het venstertje bovenaan de kaart
+├── test/                    # unit tests (make legend-tests, ctest)
 ├── third_party/md4c/        # Markdown-verwerking (submodule)
 ├── opencpn-libs/            # OpenCPN-plugin-API (submodule)
 ├── Plugin.cmake
