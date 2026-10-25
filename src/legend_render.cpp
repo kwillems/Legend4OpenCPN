@@ -241,7 +241,7 @@ void legend_pi::PrepareDynamicRows(DynamicPage &page)
 
     // Headings only when symbolen.txt defines them; a collapsed heading
     // hides its rows.
-    page.showHeadings = !m_meaning_sections.empty();
+    page.showHeadings = !m_symbol_meanings.Sections().empty();
     page.collapsed.assign(groupCount, false);
     for (size_t i = 0; i < groupCount; ++i) {
         // In the order edit mode only the headings are shown.
@@ -1091,7 +1091,7 @@ void legend_pi::RenderReorderList(DynamicPage &page)
     const wxColour &rule = palette.rule;
     wxString &html = page.html;
 
-    const int count = static_cast<int>(m_meaning_sections.size());
+    const int count = static_cast<int>(m_symbol_meanings.Sections().size());
 
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\">";
 

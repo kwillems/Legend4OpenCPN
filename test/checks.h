@@ -111,5 +111,7 @@ private:
 void TestLightCharacters();
 void TestVhfAreas();
 void TestNotePlaces();
+void TestSymbolMeanings();
+void TestLayerWaypoints();
 
 #endif

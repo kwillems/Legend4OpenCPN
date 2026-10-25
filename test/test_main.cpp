@@ -25,6 +25,8 @@ int main()
     TestLightCharacters();
     TestVhfAreas();
     TestNotePlaces();
+    TestSymbolMeanings();
+    TestLayerWaypoints();
 
     std::printf("%d checks, %d failed\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

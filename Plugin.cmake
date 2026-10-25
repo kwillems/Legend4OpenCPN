@@ -94,6 +94,8 @@ set(SRC
     src/vhf_highlight.cpp
     src/shining_lights.h
     src/shining_lights.cpp
+    src/symbol_meanings.h
+    src/symbol_meanings.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c
@@ -132,9 +134,13 @@ macro(add_plugin_libraries)
             test/light_character_test.cpp
             test/vhf_areas_test.cpp
             test/note_places_test.cpp
+            test/symbol_meanings_test.cpp
+            test/layer_waypoints_test.cpp
             src/light_character.cpp
             src/vhf_areas.cpp
             src/note_places.cpp
+            src/symbol_meanings.cpp
+            src/layer_waypoints.cpp
         )
         target_include_directories(legend-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
         target_link_libraries(legend-tests ${wxWidgets_LIBRARIES})
