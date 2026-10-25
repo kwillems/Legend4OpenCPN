@@ -156,6 +156,39 @@ public:
 
 private:
     void CreateLegendWindow();
+    // The parts of the legend window, in the order they are created.
+    wxSizer *CreateHeaderRow(wxPanel *panel);
+    wxWindow *CreateFormatBar(wxPanel *panel);
+    wxWindow *CreatePlaceBar(wxPanel *panel);
+    wxWindow *CreateSearchField(wxPanel *panel);
+    void CreateImagePage();
+    void CreateMarkdownView(const wxFont &uiFont);
+    void CreateNoteEditor();
+    wxWindow *CreateNavigation(wxPanel *panel);
+    wxWindow *CreateEditFooter(wxPanel *panel);
+    void BindWindowEvents();
+    void OnLegendKey(wxKeyEvent &event);
+    void OnLegendLink(wxHtmlLinkEvent &event);
+
+    // What is under the mouse in the dynamic legend: a row, its counter, a
+    // heading, a button, ..., with its number in the page.
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button,
+                         AheadVhf, VhfArea, AheadNote, Note };
+    struct Hit
+    {
+        HitKind kind = HitKind::None;
+        int index = -1;
+        bool operator==(const Hit &other) const
+        {
+            return kind == other.kind && index == other.index;
+        }
+    };
+    Hit HitAt(const wxPoint &pos) const;
+    void BindLegendMouse();
+    void OnLegendClick(const Hit &hit);
+    wxString LegendTip(const Hit &hit) const;
+    Hit m_pressed_hit;    // where the mouse went down; a click ends there
+    wxString m_shown_tip; // the tooltip shown, changed only when it differs
     void ToggleLegendWindow();
 
     void ScanLegendFiles();
