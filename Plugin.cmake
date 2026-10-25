@@ -56,6 +56,18 @@ endif ()
 set(SRC
     src/legend_pi.h
     src/legend_pi.cpp
+    src/legend_chart.cpp
+    src/legend_collect.cpp
+    src/legend_navigation.cpp
+    src/legend_notes.cpp
+    src/legend_render.cpp
+    src/legend_window.cpp
+    src/legend_shared.h
+    src/legend_shared.cpp
+    src/legend_icons.h
+    src/legend_icons.cpp
+    src/legend_html_window.h
+    src/legend_html_window.cpp
     src/chart_symbols.h
     src/chart_symbols.cpp
     src/ocharts_source.h
