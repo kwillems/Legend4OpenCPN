@@ -110,5 +110,17 @@ macro(add_plugin_libraries)
     if (NOT QT_ANDROID)
         find_package(wxWidgets REQUIRED richtext)
         target_link_libraries(${PACKAGE_NAME} ${wxWidgets_LIBRARIES})
+
+        # Unit tests of the parts that do without OpenCPN: built with
+        # "make legend-tests", run with "ctest" in the build folder.
+        enable_testing()
+        find_package(wxWidgets REQUIRED core base)
+        add_executable(legend-tests EXCLUDE_FROM_ALL
+            test/light_character_test.cpp
+            src/light_character.cpp
+        )
+        target_include_directories(legend-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        target_link_libraries(legend-tests ${wxWidgets_LIBRARIES})
+        add_test(NAME light_character COMMAND legend-tests)
     endif ()
 endmacro()
