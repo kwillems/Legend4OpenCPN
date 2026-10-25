@@ -58,7 +58,7 @@ const wxString kLegendMatchIdPrefix = "legend-match-";
 // 0 clears the taps, 1 closes, 10 to 14 choose a colour.
 const wxString kLegendButtonIdPrefix = "legend-button-";
 
-// Id of a line of the "Vooruit" block, followed by its number.
+// Id of a line of the "Uitkijk" block, followed by its number.
 const wxString kLegendAheadIdPrefix = "legend-ahead-";
 const wxString kLegendAheadVhfIdPrefix = "legend-aheadvhf-";
 const wxString kLegendAheadNoteIdPrefix = "legend-aheadnote-";

@@ -10,6 +10,9 @@
 #ifndef _GEO_H_
 #define _GEO_H_
 
+#include <utility>
+#include <vector>
+
 #include <wx/string.h>
 
 // Distances and bearings over the short distances of the legend: the
@@ -27,5 +30,28 @@ wxString FormatDistance(double seaMiles);
 
 // "045°": whole degrees, three digits; 359.6 becomes "000°".
 wxString FormatBearing(double degrees);
+
+// A position seen from a starting point along a course (degrees true):
+// sea miles ahead, and sea miles to starboard (negative: to port).
+void AlongAndAcross(double lat0, double lon0, double course, double lat, double lon,
+                    double *along, double *across);
+
+// The position that lies those sea miles ahead and to starboard.
+void PositionAt(double lat0, double lon0, double course, double along, double across,
+                double *lat, double *lon);
+
+// The fan of the Uitkijk: a circle of `minHalfWidth` sea miles around the
+// boat, for what lies beside it or was just passed, and ahead of it up to
+// `range` sea miles a strip at least `minHalfWidth` wide on either side,
+// widening at `halfAngle` degrees on either side of the course.
+bool InFan(double along, double across, double range, double halfAngle, double minHalfWidth);
+
+// Its outline as positions (lat, lon), in order, not closed: the corners
+// ahead and the half circle behind the boat. Where the strip widens the
+// outline bends outward, so the fan is not convex; from the boat every
+// point of it is in sight.
+std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, double course,
+                                                  double range, double halfAngle,
+                                                  double minHalfWidth);
 
 #endif

@@ -17,15 +17,50 @@
 
 #include "legend_pi.h"
 
+#include "geo.h"
 #include "legend_shared.h"
 
 #include <wx/glcanvas.h>
 #include <wx/dc.h>
+#include <wx/graphics.h>
 #include <wx/log.h>
 #include <wx/menu.h>
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+
+namespace {
+
+// The fan of the Uitkijk: a soft amber, as the beam of a searchlight, just
+// visible over the chart. In dusk and night the chart is dark: the beam is
+// dimmed less than the other signs and a little more opaque, so it still
+// shows, in a warm colour that spares night vision.
+void AheadFanColours(wxColour *fill, wxColour *edge)
+{
+    double dim = 1.0;
+    int fillAlpha = 28;
+    int edgeAlpha = 110;
+    switch (LegendScheme()) {
+    case PI_GLOBAL_COLOR_SCHEME_DUSK:
+        dim = 0.8;
+        fillAlpha = 40;
+        edgeAlpha = 130;
+        break;
+    case PI_GLOBAL_COLOR_SCHEME_NIGHT:
+        dim = 0.6;
+        fillAlpha = 48;
+        edgeAlpha = 140;
+        break;
+    default:
+        break;
+    }
+    auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
+    *fill = wxColour(shade(239), shade(159), shade(39), fillAlpha);
+    *edge = wxColour(shade(186), shade(117), shade(23), edgeAlpha);
+}
+
+} // namespace
 
 // Viewport pixels per window pixel: the viewport counts physical pixels,
 // mouse events logical ones (2 to 1 on a Retina display).
@@ -788,7 +823,8 @@ bool legend_pi::RenderOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
+         !AheadFanVisible()) ||
         !vp)
         return false;
 
@@ -798,12 +834,13 @@ bool legend_pi::RenderOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShade(dc, vp);
+    const bool drewFan = DrawAheadFan(dc, vp);
     const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
                          m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSigns(dc, vp);
     const LightStyle style = CurrentLightStyle();
     const bool drewAll = (m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes;
+                         m_night_preview || drewVhf || drewNotes || drewFan;
     const bool drewLight =
         (m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors)) ||
         drewAll;
@@ -865,7 +902,8 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     (void)canvasIndex;
 
     if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty()) ||
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
+         !AheadFanVisible()) ||
         !vp)
         return false;
 
@@ -875,12 +913,13 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
 
     if (m_night_preview)
         DrawNightShadeGL(vp);
+    const bool drewFan = DrawAheadFanGL(vp);
     const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
                          m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSignsGL(vp);
     const LightStyle style = CurrentLightStyle();
     const bool drewAll = (m_all_lights.IsOn() && m_all_lights.DrawGL(vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes;
+                         m_night_preview || drewVhf || drewNotes || drewFan;
     const bool drewLight =
         (m_chosen_light.IsActive() && m_chosen_light.DrawGL(vp, style, m_light_sectors)) ||
         drewAll;
@@ -1000,4 +1039,100 @@ void legend_pi::UpdateAllLights()
         if (group.lightCharacter && !group.hiddenAtScale)
             m_all_lights.AddLight(group.lightText, group.positions);
     }
+}
+
+// The fan is drawn while it means something: the setting is on, the
+// legend is open and the boat sails (a recent fix and some speed, as
+// ComputeAhead() asks).
+bool legend_pi::AheadFanVisible() const
+{
+    return m_ahead_fan_shown && IsDynamicLegendVisible() && m_ship_time > 0 &&
+           (wxGetUTCTimeMillis() - m_ship_time) < 60000 && !std::isnan(m_ship_cog) &&
+           !std::isnan(m_ship_sog) && m_ship_sog >= 0.5;
+}
+
+std::vector<wxPoint> legend_pi::AheadFanPixels(PlugIn_ViewPort *vp) const
+{
+    std::vector<wxPoint> points;
+    if (!AheadFanVisible())
+        return points;
+    for (const auto &corner : FanOutline(m_ship_lat, m_ship_lon, m_ship_cog, AheadRange(),
+                                         m_ahead_angle, kAheadMinHalfWidth)) {
+        wxPoint at;
+        GetCanvasPixLL(vp, &at, corner.first, corner.second);
+        points.push_back(at);
+    }
+    return points;
+}
+
+bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
+{
+    const std::vector<wxPoint> points = AheadFanPixels(vp);
+    if (points.empty())
+        return false;
+    std::unique_ptr<wxGraphicsContext> gc(wxGraphicsContext::CreateFromUnknownDC(dc));
+    if (!gc)
+        return false;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+
+    wxColour fill;
+    wxColour edge;
+    AheadFanColours(&fill, &edge);
+    wxGraphicsPath path = gc->CreatePath();
+    path.MoveToPoint(points[0].x, points[0].y);
+    for (size_t i = 1; i < points.size(); ++i)
+        path.AddLineToPoint(points[i].x, points[i].y);
+    path.CloseSubpath();
+    gc->SetBrush(wxBrush(fill));
+    gc->FillPath(path);
+    gc->SetPen(gc->CreatePen(
+        wxGraphicsPenInfo(edge).Width(1.5 * std::max(1.0, ViewportPixelsPerWindowPixel()))));
+    gc->StrokePath(path);
+    return true;
+}
+
+bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
+{
+    const std::vector<wxPoint> points = AheadFanPixels(vp);
+    if (points.empty())
+        return false;
+
+    wxColour fill;
+    wxColour edge;
+    AheadFanColours(&fill, &edge);
+
+    // GL_CURRENT_BIT included, see the marker in RenderGLOverlayMultiCanvas.
+    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+                 GL_HINT_BIT);
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+    // The outline bends outward where the strip near the boat starts to
+    // widen, so triangles from one of its corners would overlap there (a
+    // darker edge). From the boat, the middle of the circle, every point
+    // is in sight: triangles from there cover the fan once.
+    wxPoint boat;
+    GetCanvasPixLL(vp, &boat, m_ship_lat, m_ship_lon);
+    glColor4ub(fill.Red(), fill.Green(), fill.Blue(), fill.Alpha());
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2d(boat.x, boat.y);
+    for (const wxPoint &point : points)
+        glVertex2d(point.x, point.y);
+    glVertex2d(points.front().x, points.front().y);
+    glEnd();
+
+    glColor4ub(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha());
+    glLineWidth(static_cast<float>(1.5 * std::max(1.0, ViewportPixelsPerWindowPixel())));
+    glBegin(GL_LINE_LOOP);
+    for (const wxPoint &point : points)
+        glVertex2d(point.x, point.y);
+    glEnd();
+
+    glColor4ub(255, 255, 255, 255);
+    glLineWidth(1.0f);
+    glPopAttrib();
+    return true;
 }

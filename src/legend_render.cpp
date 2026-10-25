@@ -62,6 +62,9 @@ wxString CountText(const DynamicGroup &group)
 // Icons of a heading strip; more than this are counted instead.
 const size_t kStripIcons = 6;
 
+// The largest square a row icon gets; larger icons are scaled down.
+const int kMaxIconBox = 64;
+
 } // namespace
 
 // The dynamic legend while its page is built: the colours, which rows are
@@ -139,7 +142,7 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 }
 
 // The page of the dynamic legend: the title bar, the blocks at the top
-// (Marifoon, Vooruit, Notities, Licht herkennen), then the rows under
+// (Marifoon, Uitkijk, Notities, Licht herkennen), then the rows under
 // their headings and the counts at the foot.
 wxString legend_pi::BuildDynamicPage()
 {
@@ -154,7 +157,7 @@ wxString legend_pi::BuildDynamicPage()
     page.html << "<html>" << LegendBodyTag(true);
     RenderTitleBar(page);
 
-    // Marifoon and Vooruit: headings at the top of the list that fold like
+    // Marifoon and Uitkijk: headings at the top of the list that fold like
     // the others; folded, the heading still tells the channel or the next
     // object. Not during a search or the order edit mode.
     m_rendered_headings.clear();
@@ -284,7 +287,6 @@ void legend_pi::LoadRowIcons(DynamicPage &page)
     const wxColour &active = palette.active;
     const wxColour &muted = palette.muted;
 
-    const int kMaxIconBox = 64;
     page.tilePadding = palette.iconTiles ? 3 : 0;
 
     // Row icons follow OpenCPN's chart object scale factor, so they look as
@@ -554,7 +556,7 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
          << "</table>";
 }
 
-// A heading of a block at the top of the list (Marifoon, Vooruit, ...),
+// A heading of a block at the top of the list (Marifoon, Uitkijk, ...),
 // with a summary after it; true when it is open.
 bool legend_pi::RenderExtraHeading(DynamicPage &page, const wxString &key,
                                    const wxString &title, const wxString &summary)
@@ -640,7 +642,7 @@ void legend_pi::RenderVhfBlock(DynamicPage &page)
     html << "</table>";
 }
 
-// Vooruit: while sailing, what the boat meets in the coming half hour, in
+// Uitkijk: while sailing, what the boat meets in the coming half hour, in
 // order of arrival.
 void legend_pi::RenderAheadBlock(DynamicPage &page)
 {
@@ -664,6 +666,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                                 static_cast<int>(std::lround(item.minutes)));
     };
     auto side = [nl](const AheadItem &item) {
+        // In the circle round the boat an object can lie behind it, just
+        // passed.
+        if (std::fabs(item.cross) < 0.02 && item.minutes < 0.0)
+            return wxString(nl ? "recht achter" : "right astern");
         if (std::fabs(item.cross) < 0.02)
             return wxString(nl ? "recht vooruit" : "dead ahead");
         if (item.cross > 0.0)
@@ -692,25 +698,37 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         return text;
     };
 
-    wxString summary;
-    const double inf = 1e9;
-    const double firstObject = m_ahead.empty() ? inf : m_ahead.front().minutes;
-    const double firstVhf = m_ahead_vhf.empty() ? inf : m_ahead_vhf.front().minutes;
-    const double firstNote = m_ahead_notes.empty() ? inf : m_ahead_notes.front().minutes;
-    if (firstNote < inf && firstNote <= firstVhf && firstNote < firstObject)
-        summary = whenMinutes(firstNote) + ": " + (nl ? "notitie " : "note ") +
-                  EscapeHtml(m_ahead_notes.front().title);
-    else if (firstVhf < inf && firstVhf < firstObject)
-        summary = whenMinutes(m_ahead_vhf.front().minutes) + ": " +
-                  vhfText(m_ahead_vhf.front());
-    else if (m_ahead.empty())
-        summary = nl ? "niets in de komende 30 minuten" : "nothing in the next 30 minutes";
-    else
-        summary = when(m_ahead.front()) + ", " + side(m_ahead.front()) + ": " +
-                  name(m_ahead.front());
+    // Beside the heading, what the Uitkijk covers: the coming half hour at
+    // this speed (less at the most distant 8 sea miles) and the field of
+    // view of the setting; and when nothing lies in it, that too.
+    const double range = AheadRange();
+    const int minutes = static_cast<int>(std::lround(range / m_ship_sog * 60.0));
+    wxString summary =
+        wxString::Format(nl ? "komende %d minuten, tot %s" : "next %d minutes, up to %s",
+                         minutes, FormatDistance(range)) +
+        " &middot; " + (nl ? "blikveld " : "field of view ") +
+        wxString::Format("%d&deg;", m_ahead_angle);
+    if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
+        summary << " &middot; " << (nl ? "niets in het blikveld" : "nothing in view");
 
-    if (!RenderExtraHeading(page, "@vooruit", nl ? "Vooruit" : "Ahead", summary))
+    // The key "@vooruit" is the block's name before; the folded state is
+    // kept under it.
+    if (!RenderExtraHeading(page, "@vooruit", nl ? "Uitkijk" : "Lookout", summary))
         return;
+
+    // The icons as large as in the rows of the legend: each its own size,
+    // in a square as large as the largest of them, on a tile when the
+    // rows have one.
+    int box = page.iconBox;
+    for (const AheadItem &item : m_ahead) {
+        const wxImage &icon = page.icons[item.group];
+        if (icon.IsOk())
+            box = std::max(box, std::min(kMaxIconBox,
+                                         std::max(icon.GetWidth(), icon.GetHeight())));
+    }
+    const wxColour *tile = page.palette.iconTiles ? &page.palette.tile : nullptr;
+    const int padding = page.tilePadding;
+    const int cell = box + 2 * padding + 10;
 
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
     size_t row = 0;
@@ -722,10 +740,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_aheadvhf_%zu.png", m_dynamic_generation, v),
-            VhfBadgeImage(next.area.channel, rowColour, 24),
-            VhfBadgeImage(next.area.channel, rowColour, 48));
+            VhfBadgeImage(next.area.channel, rowColour, box),
+            VhfBadgeImage(next.area.channel, rowColour, 2 * box));
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
+             << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\"><img src=\"memory:"
              << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
              << whenMinutes(next.minutes) << "</b> &middot; "
              << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
@@ -738,14 +756,15 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_aheadnote_%zu.png", m_dynamic_generation, n),
-            NoteSignImage(rowColour, 24), NoteSignImage(rowColour, 48));
+            NoteSignImage(rowColour, box), NoteSignImage(rowColour, 2 * box));
         wxString where = std::fabs(note.cross) < 0.02
                              ? wxString(nl ? "recht vooruit" : "dead ahead")
                              : note.cross > 0.0 ? wxString(nl ? "stuurboord" : "starboard")
                                                 : wxString(nl ? "bakboord" : "port");
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\"><img src=\"memory:"
-             << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
+             << "\" width=\"" << cell
+             << "\" align=\"center\" valign=\"middle\"><img src=\"memory:" << image
+             << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
              << whenMinutes(note.minutes) << "</b> &middot; " << where << " &middot; "
              << (nl ? "notitie " : "note ") << EscapeHtml(note.title) << "</td></tr>";
     };
@@ -771,13 +790,13 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
 
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
-             << "\" width=\"34\" align=\"center\" valign=\"middle\">";
+             << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\">";
         if (page.icons[item.group].IsOk()) {
             const wxString image = AddDynamicImage(
                 wxString::Format("legend_dyn_%d_ahead_%zu.png",
                                  m_dynamic_generation, k),
-                NormalizeIcon(page.icons[item.group], rowColour, 24, nullptr, 0),
-                NormalizeIcon(page.icons2[item.group], rowColour, 48, nullptr, 0));
+                NormalizeIcon(page.icons[item.group], rowColour, box, tile, padding),
+                NormalizeIcon(page.icons2[item.group], rowColour, 2 * box, tile, 2 * padding));
             html << "<img src=\"memory:" << image << "\">";
         }
         html << "</td><td id=\"" << id << "\" valign=\"middle\">"
