@@ -12,7 +12,7 @@
 #include <cstdint>  // ocpn_plugin.h (api-18) uses uint64_t without it
 #include "ocpn_plugin.h"
 
-#include <wx/button.h>
+#include <wx/cursor.h>
 #include <wx/filename.h>
 #include <wx/frame.h>
 #include <wx/log.h>
@@ -40,6 +40,47 @@ ChartNotice::~ChartNotice()
     Close();
 }
 
+ChartNotice::Button ChartNotice::MakeButton(const wxString &label,
+                                            std::function<void()> onClick)
+{
+    Button button;
+    button.frame = new wxPanel(m_buttons);
+    button.inside = new wxPanel(button.frame);
+    button.label = new wxStaticText(button.inside, wxID_ANY, label);
+
+    auto *insideSizer = new wxBoxSizer(wxHORIZONTAL);
+    insideSizer->AddSpacer(10);
+    insideSizer->Add(button.label, 0, wxTOP | wxBOTTOM, 5);
+    insideSizer->AddSpacer(10);
+    button.inside->SetSizer(insideSizer);
+    auto *frameSizer = new wxBoxSizer(wxHORIZONTAL);
+    frameSizer->Add(button.inside, 1, wxEXPAND | wxALL, 1);
+    button.frame->SetSizer(frameSizer);
+
+    // A press and release on the button, as with a real one.
+    for (wxWindow *part : {static_cast<wxWindow *>(button.frame),
+                           static_cast<wxWindow *>(button.inside),
+                           static_cast<wxWindow *>(button.label)}) {
+        part->SetCursor(wxCursor(wxCURSOR_HAND));
+        part->Bind(wxEVT_LEFT_UP, [onClick](wxMouseEvent &) { onClick(); });
+    }
+    return button;
+}
+
+void ChartNotice::ColourButton(const Button &button, const wxColour &frame,
+                               const wxColour &fill, const wxColour &text)
+{
+    button.frame->SetBackgroundColour(frame);
+    button.inside->SetBackgroundColour(fill);
+    button.label->SetForegroundColour(text);
+}
+
+void ChartNotice::LayoutButton(const Button &button)
+{
+    button.frame->Layout();
+    button.inside->Layout();
+}
+
 void ChartNotice::Create(wxWindow *canvas)
 {
     m_frame = new wxFrame(canvas, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
@@ -55,31 +96,32 @@ void ChartNotice::Create(wxWindow *canvas)
     m_text = new wxStaticText(m_panel, wxID_ANY, wxEmptyString);
     sizer->Add(m_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
     sizer->Add(m_text, 0, wxALL, 12);
-    // With an action label: the action as a button, and one that closes.
+    // Sluiten on every notice; with an action label the action as a
+    // button beside it, in bold.
     m_buttons = new wxPanel(m_panel);
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_action_button = new wxButton(m_buttons, wxID_ANY, wxEmptyString);
-    auto *closeButton = new wxButton(m_buttons, wxID_ANY, "Sluiten");
-    buttonSizer->AddStretchSpacer();
-    buttonSizer->Add(closeButton, 0, wxRIGHT, 8);
-    buttonSizer->Add(m_action_button, 0);
-    m_buttons->SetSizer(buttonSizer);
-    sizer->Add(m_buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
-    m_panel->SetSizer(sizer);
-    m_action_button->SetDefault();
-    m_action_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
-        Hide();
-        RunAction();
-    });
-    closeButton->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+    m_close_button = MakeButton("Sluiten", [this]() {
         m_action = std::function<void()>();
         Hide();
     });
-    // A click closes it, and opens what it is about, if anything; with
-    // buttons only those do the action.
+    m_action_button = MakeButton(wxEmptyString, [this]() {
+        Hide();
+        RunAction();
+    });
+    wxFont actionFont = m_action_button.label->GetFont();
+    actionFont.SetWeight(wxFONTWEIGHT_BOLD);
+    m_action_button.label->SetFont(actionFont);
+    buttonSizer->AddStretchSpacer();
+    buttonSizer->Add(m_close_button.frame, 0, wxRIGHT, 8);
+    buttonSizer->Add(m_action_button.frame, 0);
+    m_buttons->SetSizer(buttonSizer);
+    sizer->Add(m_buttons, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 12);
+    m_panel->SetSizer(sizer);
+    // A click elsewhere closes it, and opens what it is about, if anything;
+    // with an action button only that button does the action.
     auto close = [this](wxMouseEvent &) {
         Hide();
-        if (m_buttons && m_buttons->IsShown())
+        if (m_action_button.frame && m_action_button.frame->IsShown())
             return;
         RunAction();
     };
@@ -91,9 +133,7 @@ void ChartNotice::Create(wxWindow *canvas)
 void ChartNotice::Show(const wxString &title,
                        const wxString &text,
                        bool sound,
-                       const wxColour &titleColour,
-                       const wxColour &background,
-                       const wxColour &textColour,
+                       const NoticeColours &colours,
                        std::function<void()> action,
                        const wxString &actionLabel)
 {
@@ -104,18 +144,23 @@ void ChartNotice::Show(const wxString &title,
     if (!m_frame)
         Create(canvas);
 
-    m_panel->SetBackgroundColour(background);
-    m_title->SetForegroundColour(titleColour);
-    m_text->SetForegroundColour(textColour);
+    m_panel->SetBackgroundColour(colours.background);
+    m_title->SetForegroundColour(colours.title);
+    m_text->SetForegroundColour(colours.text);
     m_title->SetLabel(title);
     m_text->SetLabel(text);
-    m_buttons->SetBackgroundColour(background);
-    m_action_button->SetLabel(actionLabel);
-    m_buttons->Show(!actionLabel.IsEmpty());
+    m_buttons->SetBackgroundColour(colours.background);
+    ColourButton(m_close_button, colours.frame, colours.background, colours.text);
+    ColourButton(m_action_button, colours.frame, colours.accent, colours.text);
+    m_action_button.label->SetLabel(actionLabel);
+    m_action_button.frame->Show(!actionLabel.IsEmpty());
     m_panel->GetSizer()->Layout();
     m_panel->GetSizer()->Fit(m_panel);
     m_frame->SetClientSize(m_panel->GetBestSize());
     m_panel->SetSize(m_frame->GetClientSize());
+    m_buttons->Layout();
+    LayoutButton(m_close_button);
+    LayoutButton(m_action_button);
 
     // At the top of the chart, in the middle.
     const wxRect area = canvas->GetScreenRect();
@@ -156,7 +201,8 @@ void ChartNotice::Close()
     m_title = nullptr;
     m_text = nullptr;
     m_buttons = nullptr;
-    m_action_button = nullptr;
+    m_close_button = Button();
+    m_action_button = Button();
 }
 
 void ChartNotice::RunAction()
