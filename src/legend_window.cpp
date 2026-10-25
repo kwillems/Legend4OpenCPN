@@ -1371,6 +1371,15 @@ void legend_pi::RunLegendCommand(const wxString &command)
     }
 }
 
+// "Breedte van Vooruit": the list and the fan on the chart follow at once.
+void legend_pi::SetAheadAngle(int angle)
+{
+    m_ahead_angle = angle;
+    SaveConfig();
+    RenderDynamicLegend(true);
+    RefreshAllCanvases();
+}
+
 // The menu behind "Instellingen": what is shown, with a tick when it is on,
 // and the actions on the list.
 void legend_pi::ShowSettingsMenu()
@@ -1381,7 +1390,7 @@ void legend_pi::ShowSettingsMenu()
     enum
     {
         kLights = 1000, kHidden, kDistance, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep,
-        kVhfNotice, kNoteNotice,
+        kVhfNotice, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
         kFold, kReorder
     };
 
@@ -1411,12 +1420,24 @@ void legend_pi::ShowSettingsMenu()
     if (!m_note_places.empty())
         menu.AppendCheckItem(kNoteNotice, "Melding bij notitie in de buurt")
             ->Check(m_note_notice_on);
+
+    menu.AppendSeparator();
+    menu.AppendCheckItem(kAheadFan, "Vooruit op de kaart tonen")->Check(m_ahead_fan_shown);
+    auto *width = new wxMenu;
+    width->AppendRadioItem(kAhead15, wxString::FromUTF8("Smal (15\u00b0)"))
+        ->Check(m_ahead_angle == 15);
+    width->AppendRadioItem(kAhead30, wxString::FromUTF8("Middel (30\u00b0)"))
+        ->Check(m_ahead_angle == 30);
+    width->AppendRadioItem(kAhead45, wxString::FromUTF8("Breed (45\u00b0)"))
+        ->Check(m_ahead_angle == 45);
+    menu.AppendSubMenu(width, "Breedte van Vooruit");
     if (m_menu_has_headings) {
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
     }
 
-    switch (m_markdown_view->GetPopupMenuSelectionFromUser(menu)) {
+    const int selection = m_markdown_view->GetPopupMenuSelectionFromUser(menu);
+    switch (selection) {
     case kLights:
         RunLegendCommand("lights");
         break;
@@ -1450,6 +1471,16 @@ void legend_pi::ShowSettingsMenu()
     case kNoteNotice:
         m_note_notice_on = !m_note_notice_on;
         SaveConfig();
+        break;
+    case kAheadFan:
+        m_ahead_fan_shown = !m_ahead_fan_shown;
+        SaveConfig();
+        RefreshAllCanvases();
+        break;
+    case kAhead15:
+    case kAhead30:
+    case kAhead45:
+        SetAheadAngle(selection == kAhead15 ? 15 : selection == kAhead30 ? 30 : 45);
         break;
     case kFold:
         RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");

@@ -9,6 +9,7 @@
 
 #include "geo.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -59,6 +60,72 @@ wxString FormatDistance(double seaMiles)
                                     : wxString::Format("%.0f NM", seaMiles);
     text.Replace(".", ",");
     return text;
+}
+
+void AlongAndAcross(double lat0, double lon0, double course, double lat, double lon,
+                    double *along, double *across)
+{
+    double east = 0.0;
+    double north = 0.0;
+    Offset(lat0, lon0, lat, lon, &east, &north);
+    const double c = course * kPi / 180.0;
+    *along = east * std::sin(c) + north * std::cos(c);
+    *across = east * std::cos(c) - north * std::sin(c);
+}
+
+void PositionAt(double lat0, double lon0, double course, double along, double across,
+                double *lat, double *lon)
+{
+    const double c = course * kPi / 180.0;
+    const double east = along * std::sin(c) + across * std::cos(c);
+    const double north = along * std::cos(c) - across * std::sin(c);
+    *lat = lat0 + north / 60.0;
+    // At the middle latitude, as Offset() measures it.
+    *lon = lon0 + east / (60.0 * std::cos((lat0 + *lat) / 2.0 * kPi / 180.0));
+}
+
+bool InFan(double along, double across, double range, double halfAngle, double minHalfWidth)
+{
+    if (along * along + across * across <= minHalfWidth * minHalfWidth)
+        return true;
+    const double widen = std::tan(halfAngle * kPi / 180.0);
+    return along >= 0.0 && along <= range &&
+           std::fabs(across) <= std::max(minHalfWidth, along * widen);
+}
+
+std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, double course,
+                                                  double range, double halfAngle,
+                                                  double minHalfWidth)
+{
+    // Along and across: the boat's end, where the fan starts to widen
+    // (when that is before its far end), and the far end.
+    const double widen = std::tan(halfAngle * kPi / 180.0);
+    const double bend = widen > 0.0 ? minHalfWidth / widen : range;
+    const double far = std::max(minHalfWidth, range * widen);
+    std::vector<std::pair<double, double>> corners = {{0.0, -minHalfWidth}};
+    if (bend < range)
+        corners.push_back({bend, -minHalfWidth});
+    corners.push_back({range, -far});
+    corners.push_back({range, far});
+    if (bend < range)
+        corners.push_back({bend, minHalfWidth});
+    corners.push_back({0.0, minHalfWidth});
+
+    // The half circle behind the boat, from starboard round to port.
+    const int kArcSteps = 24;
+    for (int step = 1; step < kArcSteps; ++step) {
+        const double angle = kPi / 2.0 + kPi * step / kArcSteps;
+        corners.push_back({minHalfWidth * std::cos(angle), minHalfWidth * std::sin(angle)});
+    }
+
+    std::vector<std::pair<double, double>> outline;
+    for (const auto &corner : corners) {
+        double lat = 0.0;
+        double lon = 0.0;
+        PositionAt(lat0, lon0, course, corner.first, corner.second, &lat, &lon);
+        outline.emplace_back(lat, lon);
+    }
+    return outline;
 }
 
 wxString FormatBearing(double degrees)

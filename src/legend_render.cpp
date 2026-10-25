@@ -666,6 +666,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                                 static_cast<int>(std::lround(item.minutes)));
     };
     auto side = [nl](const AheadItem &item) {
+        // In the circle round the boat an object can lie behind it, just
+        // passed.
+        if (std::fabs(item.cross) < 0.02 && item.minutes < 0.0)
+            return wxString(nl ? "recht achter" : "right astern");
         if (std::fabs(item.cross) < 0.02)
             return wxString(nl ? "recht vooruit" : "dead ahead");
         if (item.cross > 0.0)

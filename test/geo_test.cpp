@@ -70,6 +70,89 @@ void TestFormat()
     CHECK_EQ(FormatBearing(359.6), U("000°"));
 }
 
+void TestAlongAndAcross()
+{
+    const double lat = 52.6;
+    const double lon = 5.5;
+    double along = 0.0;
+    double across = 0.0;
+
+    // Sailing north: a point one mile north is ahead, one mile east is to
+    // starboard.
+    AlongAndAcross(lat, lon, 0.0, lat + 1.0 / 60.0, lon, &along, &across);
+    CHECK_NEAR(along, 1.0, 1e-9);
+    CHECK_NEAR(across, 0.0, 1e-9);
+    double east = 0.0;
+    double ignored = 0.0;
+    PositionAt(lat, lon, 90.0, 1.0, 0.0, &ignored, &east);
+    AlongAndAcross(lat, lon, 0.0, lat, east, &along, &across);
+    CHECK_NEAR(along, 0.0, 1e-9);
+    CHECK_NEAR(across, 1.0, 1e-6);
+
+    // Sailing south (188°, as on the IJsselmeer test): west is starboard.
+    AlongAndAcross(lat, lon, 188.0, lat - 1.5 / 60.0, lon - 0.012, &along, &across);
+    CHECK(along > 1.4 && along < 1.6);
+    CHECK(across > 0.0);
+
+    // There and back again.
+    for (double course : {0.0, 45.0, 188.0, 300.0}) {
+        double at = 0.0;
+        double ao = 0.0;
+        PositionAt(lat, lon, course, 2.5, -0.7, &at, &ao);
+        AlongAndAcross(lat, lon, course, at, ao, &along, &across);
+        CHECK_NEAR(along, 2.5, 1e-9);
+        CHECK_NEAR(across, -0.7, 1e-9);
+    }
+}
+
+void TestFan()
+{
+    // Near the boat at least 0.12 mile wide on either side.
+    CHECK(InFan(0.1, 0.11, 5.0, 15.0, 0.12));
+    CHECK(InFan(0.1, -0.11, 5.0, 15.0, 0.12));
+    CHECK(!InFan(0.1, 0.13, 5.0, 15.0, 0.12));
+    // The circle round the boat: beside it and just passed count too.
+    CHECK(InFan(0.0, 0.0, 5.0, 15.0, 0.12));
+    CHECK(InFan(0.0, 0.11, 5.0, 15.0, 0.12));
+    CHECK(InFan(-0.1, -0.05, 5.0, 15.0, 0.12));
+    CHECK(!InFan(-0.1, -0.1, 5.0, 15.0, 0.12));
+    // Not further behind the boat, not beyond the range.
+    CHECK(!InFan(-1.0, 0.0, 5.0, 15.0, 0.12));
+    CHECK(!InFan(5.1, 0.0, 5.0, 15.0, 0.12));
+    // Further away the angle decides: a buoy 26° off the bow, as on the
+    // test with ShipDriver, falls outside 15° and inside 30°.
+    CHECK(!InFan(1.54, 0.53, 5.0, 15.0, 0.12));
+    CHECK(InFan(1.54, 0.53, 5.0, 30.0, 0.12));
+    CHECK(InFan(1.54, -0.53, 5.0, 30.0, 0.12));
+    CHECK(InFan(1.0, 0.99, 5.0, 45.0, 0.12));
+
+    // The outline: six corners when it widens before its far end, the far
+    // end as wide as the angle says, then 23 points of the half circle
+    // behind the boat.
+    const double lat = 52.6;
+    const double lon = 5.5;
+    auto outline = FanOutline(lat, lon, 0.0, 4.0, 30.0, 0.12);
+    CHECK(outline.size() == 6 + 23);
+    double along = 0.0;
+    double across = 0.0;
+    if (outline.size() == 6 + 23) {
+        AlongAndAcross(lat, lon, 0.0, outline[0].first, outline[0].second, &along, &across);
+        CHECK_NEAR(along, 0.0, 1e-9);
+        CHECK_NEAR(across, -0.12, 1e-9);
+        AlongAndAcross(lat, lon, 0.0, outline[3].first, outline[3].second, &along, &across);
+        CHECK_NEAR(along, 4.0, 1e-9);
+        CHECK_NEAR(across, 4.0 * std::tan(30.0 * 3.14159265358979323846 / 180.0), 1e-9);
+    }
+    // Every point of the half circle lies behind the boat, 0.12 mile off.
+    for (size_t i = 6; i < outline.size(); ++i) {
+        AlongAndAcross(lat, lon, 0.0, outline[i].first, outline[i].second, &along, &across);
+        CHECK(along < 0.0);
+        CHECK_NEAR(std::sqrt(along * along + across * across), 0.12, 1e-6);
+    }
+    // Too short to widen: a strip of four corners and the half circle.
+    CHECK(FanOutline(lat, lon, 0.0, 0.2, 15.0, 0.12).size() == 4 + 23);
+}
+
 } // namespace
 
 void TestGeo()
@@ -77,4 +160,6 @@ void TestGeo()
     TestDistance();
     TestBearing();
     TestFormat();
+    TestAlongAndAcross();
+    TestFan();
 }

@@ -684,6 +684,23 @@ private:
     wxLongLong m_ahead_rendered = 0;
     bool m_ahead_sailing = false; // a recent fix and some speed
     void ComputeAhead();
+    double AheadRange() const;
+
+    // The fan of Vooruit: at least this wide on either side of the course,
+    // widening at m_ahead_angle degrees on either side (setting "Breedte
+    // van Vooruit": 15, 30 or 45), with a circle of this radius round the
+    // boat at its foot. With "Vooruit op de kaart tonen" it is
+    // drawn on the chart, very light, while the boat sails and the legend
+    // is open.
+    static constexpr double kAheadMinHalfWidth = 0.12;
+    int m_ahead_angle = 30;
+    bool m_ahead_fan_shown = true;
+    bool m_ahead_fan_was_visible = false; // at the last fix: erase it once
+    bool AheadFanVisible() const;
+    std::vector<wxPoint> AheadFanPixels(PlugIn_ViewPort *vp) const;
+    bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
+    void SetAheadAngle(int angle);
 
     // Setting "Afstand en peiling vanaf de boot": under every row the
     // distance and true bearing from the boat to the nearest object of the

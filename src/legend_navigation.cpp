@@ -44,6 +44,12 @@ void legend_pi::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix)
     CheckVhfAreaChange();
     CheckNotePlaces();
 
+    // The fan of Vooruit follows the boat; once more when it goes away.
+    const bool fan = AheadFanVisible();
+    if (fan || m_ahead_fan_was_visible)
+        RefreshAllCanvases();
+    m_ahead_fan_was_visible = fan;
+
     if (!IsDynamicLegendVisible() || m_loading || m_showing_loading_page ||
         m_reorder_mode)
         return;
@@ -111,9 +117,18 @@ void legend_pi::SortFromBoat(DynamicGroup &group) const
                      });
 }
 
+// How far Vooruit looks: as far as the boat goes in half an hour, at least
+// 0.3 and at most 8 sea miles.
+double legend_pi::AheadRange() const
+{
+    return std::min(8.0, std::max(0.3, m_ship_sog * 0.5));
+}
+
 // The objects of the list in a fan ahead of the boat: a strip that widens
-// with the distance (at least 0.12 sea mile on either side, widening at
-// 15 degrees), as far as the boat goes in half an hour.
+// with the distance (at least 0.12 sea mile on either side, widening at the
+// angle of the setting), as far as AheadRange(), with a circle of 0.12 sea
+// mile round the boat at its foot for what lies beside it or was just
+// passed (minutes below zero).
 void legend_pi::ComputeAhead()
 {
     m_ahead.clear();
@@ -126,11 +141,8 @@ void legend_pi::ComputeAhead()
         return;
     }
 
-    const double kPi = 3.14159265358979323846;
-    const double course = m_ship_cog * kPi / 180.0;
-    const double range = std::min(8.0, std::max(0.3, m_ship_sog * 0.5));
-    const double cosLat = std::cos(m_ship_lat * kPi / 180.0);
-    const double widen = std::tan(15.0 * kPi / 180.0);
+    const double range = AheadRange();
+    EnsureVhfAreas();
 
     struct Found
     {
@@ -146,22 +158,19 @@ void legend_pi::ComputeAhead()
         // Lights under a row come with their row; flares double a buoy.
         if (!group.parentKey.IsEmpty() || group.lightSymbol)
             continue;
+        // The signs of the VHF layer mark an area, not something in the
+        // water; Vooruit tells the areas themselves apart.
+        if (!group.chartSymbol &&
+            m_vhf_areas.Icons().count(group.iconName.IsEmpty() ? group.key : group.iconName) > 0)
+            continue;
 
         for (size_t j = 0; j < group.positions.size(); ++j) {
             const double lat = group.positions[j].first;
             const double lon = group.positions[j].second;
-            const double dy = (lat - m_ship_lat) * 60.0;
-            double dlon = lon - m_ship_lon;
-            while (dlon > 180.0)
-                dlon -= 360.0;
-            while (dlon < -180.0)
-                dlon += 360.0;
-            const double dx = dlon * 60.0 * cosLat;
-
-            const double along = dx * std::sin(course) + dy * std::cos(course);
-            const double cross = dx * std::cos(course) - dy * std::sin(course);
-            if (along < 0.01 || along > range ||
-                std::fabs(cross) > std::max(0.12, along * widen))
+            double along = 0.0;
+            double cross = 0.0;
+            AlongAndAcross(m_ship_lat, m_ship_lon, m_ship_cog, lat, lon, &along, &cross);
+            if (!InFan(along, cross, range, m_ahead_angle, kAheadMinHalfWidth))
                 continue;
 
             Found f;
@@ -228,17 +237,13 @@ void legend_pi::ComputeAhead()
     // Notes whose place lies in the same fan, up to three.
     m_ahead_notes.clear();
     for (const NotePlace &place : m_note_places) {
-        const double dy = (place.lat - m_ship_lat) * 60.0;
-        double dlon = place.lon - m_ship_lon;
-        while (dlon > 180.0)
-            dlon -= 360.0;
-        while (dlon < -180.0)
-            dlon += 360.0;
-        const double dx = dlon * 60.0 * cosLat;
-        const double along = dx * std::sin(course) + dy * std::cos(course);
-        const double cross = dx * std::cos(course) - dy * std::sin(course);
-        if (along < 0.01 || along > range ||
-            std::fabs(cross) > std::max(0.12, along * widen) + place.radius)
+        double along = 0.0;
+        double cross = 0.0;
+        AlongAndAcross(m_ship_lat, m_ship_lon, m_ship_cog, place.lat, place.lon, &along,
+                       &cross);
+        // Its circle reaching into the fan is enough.
+        if (!InFan(along, std::max(0.0, std::fabs(cross) - place.radius), range,
+                   m_ahead_angle, kAheadMinHalfWidth))
             continue;
         AheadNote note;
         note.minutes = along / m_ship_sog * 60.0;
@@ -265,8 +270,9 @@ void legend_pi::ComputeAhead()
         const int steps = 120;
         for (int step = 1; step <= steps && m_ahead_vhf.size() < 2; ++step) {
             const double along = range * step / steps;
-            const double lat = m_ship_lat + along * std::cos(course) / 60.0;
-            const double lon = m_ship_lon + along * std::sin(course) / (60.0 * cosLat);
+            double lat = 0.0;
+            double lon = 0.0;
+            PositionAt(m_ship_lat, m_ship_lon, m_ship_cog, along, 0.0, &lat, &lon);
             for (const VhfArea *area : m_vhf_areas.At(lat, lon)) {
                 if (!seen.insert(area->name + "|" + area->description).second)
                     continue;
