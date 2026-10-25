@@ -3042,6 +3042,9 @@ void legend_pi::DeleteNoteFile(const wxString &path)
     }
 }
 
+// The legend window: the header with the choice of item and the note
+// buttons, the bars for editing notes, the search field, the pages
+// (image, legend or note, note editor) and the navigation at the foot.
 void legend_pi::CreateLegendWindow()
 {
     if (m_legend_window)
@@ -3058,6 +3061,102 @@ void legend_pi::CreateLegendWindow()
     auto *panel = new wxPanel(m_legend_window);
     auto *mainSizer = new wxBoxSizer(wxVERTICAL);
 
+    mainSizer->Add(
+        CreateHeaderRow(panel),
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    mainSizer->Add(
+        CreateFormatBar(panel),
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    mainSizer->Add(
+        CreatePlaceBar(panel),
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    mainSizer->Add(
+        CreateSearchField(panel),
+        0,
+        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
+        10);
+
+    m_content_book = new wxSimplebook(
+        panel,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize);
+
+    CreateImagePage();
+    CreateMarkdownView(panel->GetFont());
+    CreateNoteEditor();
+
+    m_content_book->AddPage(m_image_page, "Afbeelding");
+    m_content_book->AddPage(m_markdown_view, "Markdown");
+    m_content_book->AddPage(m_editor, "Notitie");
+
+    mainSizer->Add(
+        m_content_book,
+        1,
+        wxEXPAND | wxALL,
+        8);
+
+    auto *separator = new wxStaticLine(
+        panel,
+        wxID_ANY,
+        wxDefaultPosition,
+        wxDefaultSize,
+        wxLI_HORIZONTAL);
+
+    mainSizer->Add(
+        separator,
+        0,
+        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
+
+    mainSizer->Add(
+        CreateNavigation(panel),
+        0,
+        wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
+
+    mainSizer->Add(
+        CreateEditFooter(panel),
+        0,
+        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
+        10);
+
+    m_save_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { SaveNote(); });
+
+    m_previous_button->Bind(
+        wxEVT_BUTTON,
+        &legend_pi::OnPreviousLegend,
+        this);
+
+    m_next_button->Bind(
+        wxEVT_BUTTON,
+        &legend_pi::OnNextLegend,
+        this);
+
+    // Until the first scan completes, there is nothing to navigate.
+    m_previous_button->Disable();
+    m_next_button->Disable();
+
+    panel->SetSizer(mainSizer);
+
+    RestoreWindowState();
+    BindWindowEvents();
+}
+
+// The header row: the choice of item, with buttons for notes: edit,
+// rename, delete (into the folder "Verwijderd") and a new one; while
+// editing, Opslaan.
+wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
+{
     m_header_book = new wxSimplebook(
         panel,
         wxID_ANY,
@@ -3130,9 +3229,11 @@ void legend_pi::CreateLegendWindow()
     m_header_book->SetSelection(0);
     m_header_book->Hide();
 
-    // The header row: the choice of item, with buttons for notes: edit,
-    // rename, delete (into the folder "Verwijderd") and a new one; while
-    // editing, Opslaan.
+    m_legend_choice->Bind(
+        wxEVT_CHOICE,
+        &legend_pi::OnLegendSelected,
+        this);
+
     auto *headerRow = new wxBoxSizer(wxHORIZONTAL);
     headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
 
@@ -3156,12 +3257,6 @@ void legend_pi::CreateLegendWindow()
     m_save_button->Hide();
     headerRow->Add(m_save_button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
 
-    mainSizer->Add(
-        headerRow,
-        0,
-        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
-        10);
-
     m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
     m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
     m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
@@ -3183,9 +3278,14 @@ void legend_pi::CreateLegendWindow()
             NewNoteAtBoat();
     });
 
-    // Buttons that put Markdown into the note, for those who do not know
-    // it by heart and on a tablet, where # and * are hard to reach. They
-    // wrap to a second line in a narrow window.
+    return headerRow;
+}
+
+// Buttons that put Markdown into the note, for those who do not know it by
+// heart and on a tablet, where # and * are hard to reach. They wrap to a
+// second line in a narrow window.
+wxWindow *legend_pi::CreateFormatBar(wxPanel *panel)
+{
     m_format_bar = new wxPanel(panel);
     auto *formatSizer = new wxWrapSizer(wxHORIZONTAL);
     auto formatButton = [&](const wxString &icon, const wxString &tip,
@@ -3262,15 +3362,13 @@ void legend_pi::CreateLegendWindow()
     });
     m_format_bar->SetSizer(formatSizer);
     m_format_bar->Hide();
+    return m_format_bar;
+}
 
-    mainSizer->Add(
-        m_format_bar,
-        0,
-        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
-        10);
-
-    // "Vastgepind op ...": where the note being edited is pinned, with its
-    // radius.
+// "Vastgepind op ...": where the note being edited is pinned, with its
+// radius.
+wxWindow *legend_pi::CreatePlaceBar(wxPanel *panel)
+{
     m_place_bar = new wxPanel(panel);
     auto *placeSizer = new wxBoxSizer(wxHORIZONTAL);
     m_place_text = new wxStaticText(m_place_bar, wxID_ANY, wxEmptyString);
@@ -3294,21 +3392,14 @@ void legend_pi::CreateLegendWindow()
         m_note_has_place = false;
         NotePlaceChanged();
     });
+    return m_place_bar;
+}
 
-    mainSizer->Add(
-        m_place_bar,
-        0,
-        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
-        10);
-
-    m_legend_choice->Bind(
-        wxEVT_CHOICE,
-        &legend_pi::OnLegendSelected,
-        this);
-
-    // Search field of the dynamic legend; hidden for other legend items.
-    // The list follows the text after a short pause in typing, Enter
-    // applies it at once.
+// Search field of the dynamic legend; hidden for other legend items. The
+// list follows the text after a short pause in typing, Enter applies it at
+// once.
+wxWindow *legend_pi::CreateSearchField(wxPanel *panel)
+{
     m_search = new wxSearchCtrl(
         panel,
         wxID_ANY,
@@ -3322,12 +3413,6 @@ void legend_pi::CreateLegendWindow()
         "Toont alleen de symbolen waarvan de naam, het kopje of de icoonnaam "
         "alle getypte woorden bevat (Cmd+F)");
     m_search->Hide();
-
-    mainSizer->Add(
-        m_search,
-        0,
-        wxEXPAND | wxTOP | wxLEFT | wxRIGHT,
-        10);
 
     m_search->Bind(
         wxEVT_TEXT,
@@ -3348,12 +3433,12 @@ void legend_pi::CreateLegendWindow()
         wxEVT_SEARCHCTRL_CANCEL_BTN,
         [this](wxCommandEvent &) { SetFilter(wxEmptyString); });
 
-    m_content_book = new wxSimplebook(
-        panel,
-        wxID_ANY,
-        wxDefaultPosition,
-        wxDefaultSize);
+    return m_search;
+}
 
+// The page of a PNG legend: the image, scaled to the window.
+void legend_pi::CreateImagePage()
+{
     m_image_page = new wxPanel(
         m_content_book,
         wxID_ANY,
@@ -3381,7 +3466,12 @@ void legend_pi::CreateLegendWindow()
         10);
 
     m_image_page->SetSizer(imageSizer);
+}
 
+// The page of Markdown notes and of the dynamic legend, in the font of the
+// surrounding OpenCPN user interface.
+void legend_pi::CreateMarkdownView(const wxFont &uiFont)
+{
     TapClockModule clockModule;
     wxHtmlWinParser::AddModule(&clockModule);
     m_markdown_view = new LegendHtmlWindow(
@@ -3408,7 +3498,7 @@ void legend_pi::CreateLegendWindow()
     // Use the surrounding OpenCPN UI font as the basis for Markdown.
     // The seven values correspond to HTML font sizes 1 through 7.
     const int baseFontSize =
-        wxMax(11, panel->GetFont().GetPointSize());
+        wxMax(11, uiFont.GetPointSize());
 
     int htmlFontSizes[7] = {
         wxMax(9, baseFontSize - 2),
@@ -3420,7 +3510,7 @@ void legend_pi::CreateLegendWindow()
         baseFontSize + 10
     };
 
-    wxString normalFace = panel->GetFont().GetFaceName();
+    wxString normalFace = uiFont.GetFaceName();
 
     wxFont fixedFont(
         baseFontSize,
@@ -3435,130 +3525,124 @@ void legend_pi::CreateLegendWindow()
 
     ApplyViewColours();
 
-    // Open normal external Markdown links in the system browser.
-    m_markdown_view->Bind(
-        wxEVT_HTML_LINK_CLICKED,
-        [this](wxHtmlLinkEvent &event) {
-            wxString href = event.GetLinkInfo().GetHref();
+    m_markdown_view->Bind(wxEVT_HTML_LINK_CLICKED, &legend_pi::OnLegendLink, this);
+    BindLegendMouse();
+}
 
-            if (href.StartsWith("legend-reorder-done:")) {
-                m_markdown_view->CallAfter([this]() { SetReorderMode(false); });
-                return;
-            }
+// Links in the page: the commands of the dynamic legend, places in notes,
+// and normal external links, which open in the system browser.
+void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
+{
+    wxString href = event.GetLinkInfo().GetHref();
 
-            if (href.StartsWith("legend-identify-")) {
-                const wxString what = href.Mid(16).BeforeFirst(':');
-                m_markdown_view->CallAfter([this, what]() { RunIdentifyCommand(what); });
-                return;
-            }
+    if (href.StartsWith("legend-reorder-done:")) {
+        m_markdown_view->CallAfter([this]() { SetReorderMode(false); });
+        return;
+    }
 
-            if (href.StartsWith("legend-settings:")) {
-                m_markdown_view->CallAfter([this]() { ShowSettingsMenu(); });
-                return;
-            }
+    if (href.StartsWith("legend-identify-")) {
+        const wxString what = href.Mid(16).BeforeFirst(':');
+        m_markdown_view->CallAfter([this, what]() { RunIdentifyCommand(what); });
+        return;
+    }
 
-            // The settings, also reachable as links: "legend-<command>:".
-            for (const char *command : {"reorder", "collapse-all", "expand-all", "language",
-                                        "lights", "all-lights", "hidden"}) {
-                if (href == wxString("legend-") + command + ":") {
-                    const wxString name(command);
-                    m_markdown_view->CallAfter([this, name]() { RunLegendCommand(name); });
-                    return;
-                }
-            }
+    if (href.StartsWith("legend-settings:")) {
+        m_markdown_view->CallAfter([this]() { ShowSettingsMenu(); });
+        return;
+    }
 
-            if (href.StartsWith("legend-refresh:")) {
-                m_markdown_view->CallAfter([this]() {
-                    m_ocharts.Rescan();
-                    m_s57.Rescan();
-                    m_vhf_loaded = false;
-                    LoadChartNames();
-                    ShowDynamicLegend(true);
-                });
-                return;
-            }
-
-            // A place in a note: the chart goes there and marks it.
-            if (href.StartsWith("geo:")) {
-                double lat = 0.0;
-                double lon = 0.0;
-                if (ParseGeoUri(href, &lat, &lon))
-                    m_markdown_view->CallAfter([this, lat, lon]() { GoToPlace(lat, lon); });
-                return;
-            }
-
-            if (href.StartsWith("http://") ||
-                href.StartsWith("https://") ||
-                href.StartsWith("mailto:") ||
-                href.StartsWith("tel:")) {
-                wxLaunchDefaultBrowser(href);
-                return;
-            }
-
-            event.Skip();
-        });
-
-    // Whole rows of the dynamic legend are clickable, not only the text.
-    // A press and release on the same row counts as a click; dragging to
-    // select text does not.
-    // Headings work the same way and fold their group in or out; in the
-    // order edit mode the arrow buttons move a heading.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button, AheadVhf,
-                         VhfArea, AheadNote, Note };
-    struct Hit
-    {
-        HitKind kind = HitKind::None;
-        int index = -1;
-        bool operator==(const Hit &other) const
-        {
-            return kind == other.kind && index == other.index;
+    // The settings, also reachable as links: "legend-<command>:".
+    for (const char *command : {"reorder", "collapse-all", "expand-all", "language",
+                                "lights", "all-lights", "hidden"}) {
+        if (href == wxString("legend-") + command + ":") {
+            const wxString name(command);
+            m_markdown_view->CallAfter([this, name]() { RunLegendCommand(name); });
+            return;
         }
-    };
+    }
+
+    if (href.StartsWith("legend-refresh:")) {
+        m_markdown_view->CallAfter([this]() {
+            m_ocharts.Rescan();
+            m_s57.Rescan();
+            m_vhf_loaded = false;
+            LoadChartNames();
+            ShowDynamicLegend(true);
+        });
+        return;
+    }
+
+    // A place in a note: the chart goes there and marks it.
+    if (href.StartsWith("geo:")) {
+        double lat = 0.0;
+        double lon = 0.0;
+        if (ParseGeoUri(href, &lat, &lon))
+            m_markdown_view->CallAfter([this, lat, lon]() { GoToPlace(lat, lon); });
+        return;
+    }
+
+    if (href.StartsWith("http://") ||
+        href.StartsWith("https://") ||
+        href.StartsWith("mailto:") ||
+        href.StartsWith("tel:")) {
+        wxLaunchDefaultBrowser(href);
+        return;
+    }
+
+    event.Skip();
+}
+
+// What is at a point of the dynamic legend: the cells carry ids by kind.
+legend_pi::Hit legend_pi::HitAt(const wxPoint &pos) const
+{
+    Hit hit;
+    if (m_current_legend_path != kDynamicGpxId)
+        return hit;
 
     auto *legendView = static_cast<LegendHtmlWindow *>(m_markdown_view);
+    const std::pair<HitKind, int> candidates[] = {
+        {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
+        {HitKind::MoveDown,
+         legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+        {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
+        {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
+        {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
+        {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
+        {HitKind::AheadVhf, legendView->IdNumberAt(pos, kLegendAheadVhfIdPrefix)},
+        {HitKind::AheadNote, legendView->IdNumberAt(pos, kLegendAheadNoteIdPrefix)},
+        {HitKind::Note, legendView->IdNumberAt(pos, kLegendNoteIdPrefix)},
+        {HitKind::VhfArea, legendView->IdNumberAt(pos, kLegendVhfAreaIdPrefix)},
+        {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
+        {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
+        {HitKind::Row, legendView->RowAt(pos)},
+        {HitKind::Section, legendView->SectionAt(pos)}};
 
-    auto hitAt = [this, legendView](const wxPoint &pos) {
-        Hit hit;
-        if (m_current_legend_path != kDynamicGpxId)
-            return hit;
-
-        const std::pair<HitKind, int> candidates[] = {
-            {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
-            {HitKind::MoveDown,
-             legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
-            {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
-            {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
-            {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
-            {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
-            {HitKind::AheadVhf, legendView->IdNumberAt(pos, kLegendAheadVhfIdPrefix)},
-            {HitKind::AheadNote, legendView->IdNumberAt(pos, kLegendAheadNoteIdPrefix)},
-            {HitKind::Note, legendView->IdNumberAt(pos, kLegendNoteIdPrefix)},
-            {HitKind::VhfArea, legendView->IdNumberAt(pos, kLegendVhfAreaIdPrefix)},
-            {HitKind::Ahead, legendView->IdNumberAt(pos, kLegendAheadIdPrefix)},
-            {HitKind::All, legendView->IdNumberAt(pos, kLegendAllIdPrefix)},
-            {HitKind::Row, legendView->RowAt(pos)},
-            {HitKind::Section, legendView->SectionAt(pos)}};
-
-        for (const auto &candidate : candidates) {
-            if (candidate.second >= 0) {
-                hit.kind = candidate.first;
-                hit.index = candidate.second;
-                break;
-            }
+    for (const auto &candidate : candidates) {
+        if (candidate.second >= 0) {
+            hit.kind = candidate.first;
+            hit.index = candidate.second;
+            break;
         }
-        return hit;
-    };
+    }
+    return hit;
+}
 
-    auto pressed = std::make_shared<Hit>();
+// Whole rows of the dynamic legend are clickable, not only the text. A
+// press and release on the same row counts as a click; dragging to select
+// text does not. Headings work the same way and fold their group in or
+// out; in the order edit mode the arrow buttons move a heading.
+void legend_pi::BindLegendMouse()
+{
+    auto *legendView = static_cast<LegendHtmlWindow *>(m_markdown_view);
 
     m_markdown_view->Bind(
         wxEVT_LEFT_DOWN,
-        [this, hitAt, pressed](wxMouseEvent &event) {
-            *pressed = hitAt(event.GetPosition());
+        [this](wxMouseEvent &event) {
+            m_pressed_hit = HitAt(event.GetPosition());
             // The pad of "Licht herkennen": the light shines while held.
-            if (pressed->kind == HitKind::Tap) {
+            if (m_pressed_hit.kind == HitKind::Tap) {
                 TapDown();
-                *pressed = Hit();
+                m_pressed_hit = Hit();
                 return;
             }
             event.Skip();
@@ -3566,7 +3650,7 @@ void legend_pi::CreateLegendWindow()
 
     m_markdown_view->Bind(
         wxEVT_LEFT_UP,
-        [this, hitAt, pressed](wxMouseEvent &event) {
+        [this](wxMouseEvent &event) {
             event.Skip();
 
             if (m_tap_down) {
@@ -3574,181 +3658,26 @@ void legend_pi::CreateLegendWindow()
                 return;
             }
 
-            const Hit hit = *pressed;
-            *pressed = Hit();
+            const Hit hit = m_pressed_hit;
+            m_pressed_hit = Hit();
 
-            if (hit.kind == HitKind::None || !(hitAt(event.GetPosition()) == hit))
+            if (hit.kind == HitKind::None || !(HitAt(event.GetPosition()) == hit))
                 return;
 
-            m_markdown_view->CallAfter([this, hit]() {
-                switch (hit.kind) {
-                case HitKind::Row:
-                    GoToDynamicGroup(static_cast<size_t>(hit.index));
-                    break;
-                case HitKind::All:
-                    MarkAllOfDynamicGroup(static_cast<size_t>(hit.index));
-                    break;
-                case HitKind::Section:
-                    ToggleSection(static_cast<size_t>(hit.index));
-                    break;
-                case HitKind::MoveUp:
-                    MoveSection(hit.index, -1);
-                    break;
-                case HitKind::MoveDown:
-                    MoveSection(hit.index, +1);
-                    break;
-                case HitKind::Ahead:
-                    ShowAheadItem(static_cast<size_t>(hit.index));
-                    break;
-                case HitKind::AheadNote:
-                    if (static_cast<size_t>(hit.index) < m_ahead_notes.size())
-                        OpenNote(m_ahead_notes[hit.index].path);
-                    break;
-                case HitKind::Note:
-                    if (static_cast<size_t>(hit.index) < m_note_rows.size() &&
-                        m_note_rows[hit.index] < m_note_places.size()) {
-                        const size_t index = m_note_rows[hit.index];
-                        const NotePlace place = m_note_places[index];
-                        // Hidden at this scale: zoom in to just past its limit
-                        // and show its sign, as for a hidden buoy.
-                        if (NoteHiddenAtScale(place)) {
-                            const double zoom = ViewScaleForLimit(place.scamin);
-                            if (zoom > 0.0)
-                                JumpTo(place.lat, place.lon, zoom);
-                            m_note_selected = static_cast<int>(index);
-                            ShowMarker(place.lat, place.lon);
-                            RefreshAllCanvases();
-                        }
-                        else {
-                            OpenNote(place.path);
-                        }
-                    }
-                    break;
-                case HitKind::AheadVhf:
-                    if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
-                        const AheadVhf &next = m_ahead_vhf[hit.index];
-                        m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(next.lat, next.lon));
-                    }
-                    break;
-                case HitKind::VhfArea:
-                    if (static_cast<size_t>(hit.index) < m_vhf_rows.size())
-                        m_vhf_highlight.Show(
-                            m_vhf_areas.PartsOf(m_vhf_rows[hit.index].description));
-                    break;
-                case HitKind::Match:
-                    if (static_cast<size_t>(hit.index) < m_identify_matches.size())
-                        GoToDynamicGroup(m_identify_matches[hit.index]);
-                    break;
-                case HitKind::Button: {
-                    static const char *const colours[] = {"any", "W", "R", "G", "Y"};
-                    if (hit.index == 0)
-                        RunIdentifyCommand("reset");
-                    else if (hit.index == 1)
-                        RunIdentifyCommand("stop");
-                    else if (hit.index >= 10 && hit.index < 15)
-                        RunIdentifyCommand(wxString("colour-") + colours[hit.index - 10]);
-                    break;
-                }
-                case HitKind::Tap:
-                case HitKind::Tip: // the link inside does the work
-                case HitKind::None:
-                    break;
-                }
-            });
+            m_markdown_view->CallAfter([this, hit]() { OnLegendClick(hit); });
         });
 
     // Tooltips explain what a click does; they change only when the mouse
     // moves to another kind of target, so they do not flicker.
-    auto shownTip = std::make_shared<wxString>();
-
     m_markdown_view->Bind(
         wxEVT_MOTION,
-        [this, hitAt, legendView, shownTip](wxMouseEvent &event) {
-            const Hit hit = hitAt(event.GetPosition());
+        [this, legendView](wxMouseEvent &event) {
+            const Hit hit = HitAt(event.GetPosition());
             legendView->SetRowCursor(hit.kind != HitKind::None);
 
-            wxString tip;
-            switch (hit.kind) {
-            case HitKind::All:
-                tip = "Alle exemplaren in beeld tegelijk aanwijzen";
-                if (hit.index >= 0 &&
-                    static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
-                    m_dynamic_groups[hit.index].lightCharacter)
-                    tip = "Alle lichten met dit karakter in beeld laten branden, "
-                          "in hun ritme";
-                break;
-            case HitKind::Row:
-                tip = "Naar het dichtstbijzijnde exemplaar; nog een klik gaat "
-                      "naar het volgende";
-                // The symbol name is what symbolen.txt needs for a chart
-                // symbol; the list itself shows only the description.
-                if (hit.index >= 0 &&
-                    static_cast<size_t>(hit.index) < m_dynamic_groups.size()) {
-                    const DynamicGroup &group = m_dynamic_groups[hit.index];
-                    if (group.hiddenAtScale) {
-                        tip = "Op deze schaal niet getekend";
-                        if (group.visibleFrom > 0)
-                            tip << ", zichtbaar vanaf " << FormatScaleShort(group.visibleFrom);
-                        tip << "; een klik zoomt in tot het dichtstbijzijnde "
-                               "exemplaar zichtbaar is";
-                    }
-                    if (group.chartSymbol)
-                        tip = "Kaartsymbool " + group.symbol + ". " + tip;
-                    if (group.lightCharacter)
-                        tip = "Het dichtstbijzijnde licht met dit karakter gaat op "
-                              "de kaart branden in zijn ritme; nog een klik gaat "
-                              "naar het volgende. Periode en groepen komen uit de "
-                              "kaart, de duur van een schittering of verduistering "
-                              "is een gangbare waarde";
-                }
-                break;
-            case HitKind::Section:
-                tip = hit.index >= 0 &&
-                              static_cast<size_t>(hit.index) <
-                                  m_rendered_headings.size() &&
-                              m_collapsed_sections.count(
-                                  m_rendered_headings[hit.index]) > 0
-                          ? "Groep uitklappen"
-                          : "Groep inklappen";
-                break;
-            case HitKind::MoveUp:
-                tip = "Kopje omhoog";
-                break;
-            case HitKind::MoveDown:
-                tip = "Kopje omlaag";
-                break;
-            case HitKind::Ahead:
-                tip = "Op de kaart aanwijzen";
-                break;
-            case HitKind::AheadVhf:
-            case HitKind::VhfArea:
-                tip = "Het marifoongebied op de kaart laten oplichten";
-                break;
-            case HitKind::AheadNote:
-            case HitKind::Note:
-                tip = "De notitie openen";
-                break;
-            case HitKind::Tap:
-                tip = "Ingedrukt houden zolang het licht brandt (of de spatiebalk)";
-                break;
-            case HitKind::Match:
-                tip = "Dit licht op de kaart laten branden";
-                break;
-            case HitKind::Button:
-                tip = hit.index == 0   ? "Het getikte ritme weggooien en opnieuw beginnen"
-                      : hit.index == 1 ? "Licht herkennen sluiten; het menu opent het weer"
-                                       : "Alleen lichten van deze kleur vergelijken";
-                break;
-            case HitKind::Tip:
-                tip = hit.index == 0 ? "Instellingen: wat de legenda toont"
-                                     : "Ververs: kaarten en lagen opnieuw inlezen";
-                break;
-            case HitKind::None:
-                break;
-            }
-
-            if (tip != *shownTip) {
-                *shownTip = tip;
+            const wxString tip = LegendTip(hit);
+            if (tip != m_shown_tip) {
+                m_shown_tip = tip;
                 if (tip.IsEmpty())
                     m_markdown_view->UnsetToolTip();
                 else
@@ -3760,20 +3689,186 @@ void legend_pi::CreateLegendWindow()
 
     m_markdown_view->Bind(
         wxEVT_LEAVE_WINDOW,
-        [this, legendView, shownTip](wxMouseEvent &event) {
+        [this, legendView](wxMouseEvent &event) {
             // A press on the pad that ends outside the window ends there.
             if (m_tap_down)
                 TapUp();
             legendView->SetRowCursor(false);
-            if (!shownTip->IsEmpty()) {
-                shownTip->Clear();
+            if (!m_shown_tip.IsEmpty()) {
+                m_shown_tip.Clear();
                 m_markdown_view->UnsetToolTip();
             }
             event.Skip();
         });
+}
 
-    // A note while it is edited, as it looks; saved as Markdown a moment
-    // after typing stops.
+// A click on something in the dynamic legend.
+void legend_pi::OnLegendClick(const Hit &hit)
+{
+    switch (hit.kind) {
+    case HitKind::Row:
+        GoToDynamicGroup(static_cast<size_t>(hit.index));
+        break;
+    case HitKind::All:
+        MarkAllOfDynamicGroup(static_cast<size_t>(hit.index));
+        break;
+    case HitKind::Section:
+        ToggleSection(static_cast<size_t>(hit.index));
+        break;
+    case HitKind::MoveUp:
+        MoveSection(hit.index, -1);
+        break;
+    case HitKind::MoveDown:
+        MoveSection(hit.index, +1);
+        break;
+    case HitKind::Ahead:
+        ShowAheadItem(static_cast<size_t>(hit.index));
+        break;
+    case HitKind::AheadNote:
+        if (static_cast<size_t>(hit.index) < m_ahead_notes.size())
+            OpenNote(m_ahead_notes[hit.index].path);
+        break;
+    case HitKind::Note:
+        if (static_cast<size_t>(hit.index) < m_note_rows.size() &&
+            m_note_rows[hit.index] < m_note_places.size()) {
+            const size_t index = m_note_rows[hit.index];
+            const NotePlace place = m_note_places[index];
+            // Hidden at this scale: zoom in to just past its limit
+            // and show its sign, as for a hidden buoy.
+            if (NoteHiddenAtScale(place)) {
+                const double zoom = ViewScaleForLimit(place.scamin);
+                if (zoom > 0.0)
+                    JumpTo(place.lat, place.lon, zoom);
+                m_note_selected = static_cast<int>(index);
+                ShowMarker(place.lat, place.lon);
+                RefreshAllCanvases();
+            }
+            else {
+                OpenNote(place.path);
+            }
+        }
+        break;
+    case HitKind::AheadVhf:
+        if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
+            const AheadVhf &next = m_ahead_vhf[hit.index];
+            m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(next.lat, next.lon));
+        }
+        break;
+    case HitKind::VhfArea:
+        if (static_cast<size_t>(hit.index) < m_vhf_rows.size())
+            m_vhf_highlight.Show(
+                m_vhf_areas.PartsOf(m_vhf_rows[hit.index].description));
+        break;
+    case HitKind::Match:
+        if (static_cast<size_t>(hit.index) < m_identify_matches.size())
+            GoToDynamicGroup(m_identify_matches[hit.index]);
+        break;
+    case HitKind::Button: {
+        static const char *const colours[] = {"any", "W", "R", "G", "Y"};
+        if (hit.index == 0)
+            RunIdentifyCommand("reset");
+        else if (hit.index == 1)
+            RunIdentifyCommand("stop");
+        else if (hit.index >= 10 && hit.index < 15)
+            RunIdentifyCommand(wxString("colour-") + colours[hit.index - 10]);
+        break;
+    }
+    case HitKind::Tap:
+    case HitKind::Tip: // the link inside does the work
+    case HitKind::None:
+        break;
+    }
+}
+
+// What a click on something in the dynamic legend does, as a tooltip.
+wxString legend_pi::LegendTip(const Hit &hit) const
+{
+    wxString tip;
+    switch (hit.kind) {
+    case HitKind::All:
+        tip = "Alle exemplaren in beeld tegelijk aanwijzen";
+        if (hit.index >= 0 &&
+            static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
+            m_dynamic_groups[hit.index].lightCharacter)
+            tip = "Alle lichten met dit karakter in beeld laten branden, "
+                  "in hun ritme";
+        break;
+    case HitKind::Row:
+        tip = "Naar het dichtstbijzijnde exemplaar; nog een klik gaat "
+              "naar het volgende";
+        // The symbol name is what symbolen.txt needs for a chart
+        // symbol; the list itself shows only the description.
+        if (hit.index >= 0 &&
+            static_cast<size_t>(hit.index) < m_dynamic_groups.size()) {
+            const DynamicGroup &group = m_dynamic_groups[hit.index];
+            if (group.hiddenAtScale) {
+                tip = "Op deze schaal niet getekend";
+                if (group.visibleFrom > 0)
+                    tip << ", zichtbaar vanaf " << FormatScaleShort(group.visibleFrom);
+                tip << "; een klik zoomt in tot het dichtstbijzijnde "
+                       "exemplaar zichtbaar is";
+            }
+            if (group.chartSymbol)
+                tip = "Kaartsymbool " + group.symbol + ". " + tip;
+            if (group.lightCharacter)
+                tip = "Het dichtstbijzijnde licht met dit karakter gaat op "
+                      "de kaart branden in zijn ritme; nog een klik gaat "
+                      "naar het volgende. Periode en groepen komen uit de "
+                      "kaart, de duur van een schittering of verduistering "
+                      "is een gangbare waarde";
+        }
+        break;
+    case HitKind::Section:
+        tip = hit.index >= 0 &&
+                      static_cast<size_t>(hit.index) <
+                          m_rendered_headings.size() &&
+                      m_collapsed_sections.count(
+                          m_rendered_headings[hit.index]) > 0
+                  ? "Groep uitklappen"
+                  : "Groep inklappen";
+        break;
+    case HitKind::MoveUp:
+        tip = "Kopje omhoog";
+        break;
+    case HitKind::MoveDown:
+        tip = "Kopje omlaag";
+        break;
+    case HitKind::Ahead:
+        tip = "Op de kaart aanwijzen";
+        break;
+    case HitKind::AheadVhf:
+    case HitKind::VhfArea:
+        tip = "Het marifoongebied op de kaart laten oplichten";
+        break;
+    case HitKind::AheadNote:
+    case HitKind::Note:
+        tip = "De notitie openen";
+        break;
+    case HitKind::Tap:
+        tip = "Ingedrukt houden zolang het licht brandt (of de spatiebalk)";
+        break;
+    case HitKind::Match:
+        tip = "Dit licht op de kaart laten branden";
+        break;
+    case HitKind::Button:
+        tip = hit.index == 0   ? "Het getikte ritme weggooien en opnieuw beginnen"
+              : hit.index == 1 ? "Licht herkennen sluiten; het menu opent het weer"
+                               : "Alleen lichten van deze kleur vergelijken";
+        break;
+    case HitKind::Tip:
+        tip = hit.index == 0 ? "Instellingen: wat de legenda toont"
+                             : "Ververs: kaarten en lagen opnieuw inlezen";
+        break;
+    case HitKind::None:
+        break;
+    }
+    return tip;
+}
+
+// A note while it is edited, as it looks; saved as Markdown a moment after
+// typing stops.
+void legend_pi::CreateNoteEditor()
+{
     m_editor = new NoteEditor(m_content_book, wxID_ANY);
     m_editor->SetPlaceHandler([this](const wxString &uri) {
         double lat = 0.0;
@@ -3789,30 +3884,11 @@ void legend_pi::CreateLegendWindow()
             m_save_status->SetLabel(wxString::FromUTF8("Nog niet bewaard\u2026"));
         m_save_timer.StartOnce(1500);
     });
+}
 
-    m_content_book->AddPage(m_image_page, "Afbeelding");
-    m_content_book->AddPage(m_markdown_view, "Markdown");
-    m_content_book->AddPage(m_editor, "Notitie");
-
-    mainSizer->Add(
-        m_content_book,
-        1,
-        wxEXPAND | wxALL,
-        8);
-
-    auto *separator = new wxStaticLine(
-        panel,
-        wxID_ANY,
-        wxDefaultPosition,
-        wxDefaultSize,
-        wxLI_HORIZONTAL);
-
-    mainSizer->Add(
-        separator,
-        0,
-        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
-        10);
-
+// Vorige / Volgende at the foot of the window.
+wxWindow *legend_pi::CreateNavigation(wxPanel *panel)
+{
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     m_nav_panel = new wxPanel(panel);
 
@@ -3831,47 +3907,24 @@ void legend_pi::CreateLegendWindow()
     buttonSizer->Add(m_previous_button, 0, wxRIGHT, 8);
     buttonSizer->Add(m_next_button, 0, wxLEFT, 8);
     m_nav_panel->SetSizer(buttonSizer);
+    return m_nav_panel;
+}
 
-    mainSizer->Add(
-        m_nav_panel,
-        0,
-        wxALIGN_CENTER | wxLEFT | wxRIGHT | wxBOTTOM,
-        10);
-
-    // While a note is edited: whether it has been saved.
+// While a note is edited: whether it has been saved.
+wxWindow *legend_pi::CreateEditFooter(wxPanel *panel)
+{
     m_edit_footer = new wxPanel(panel);
     auto *footerSizer = new wxBoxSizer(wxHORIZONTAL);
     m_save_status = new wxStaticText(m_edit_footer, wxID_ANY, "Bewaard");
     footerSizer->Add(m_save_status, 1, wxALIGN_CENTER_VERTICAL);
     m_edit_footer->SetSizer(footerSizer);
     m_edit_footer->Hide();
+    return m_edit_footer;
+}
 
-    mainSizer->Add(
-        m_edit_footer,
-        0,
-        wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM,
-        10);
-
-    m_save_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { SaveNote(); });
-
-    m_previous_button->Bind(
-        wxEVT_BUTTON,
-        &legend_pi::OnPreviousLegend,
-        this);
-
-    m_next_button->Bind(
-        wxEVT_BUTTON,
-        &legend_pi::OnNextLegend,
-        this);
-
-    // Until the first scan completes, there is nothing to navigate.
-    m_previous_button->Disable();
-    m_next_button->Disable();
-
-    panel->SetSizer(mainSizer);
-
-    RestoreWindowState();
-
+// Closing (the window only hides), light and dark mode, and the keys.
+void legend_pi::BindWindowEvents()
+{
     m_legend_window->Bind(
         wxEVT_CLOSE_WINDOW,
         [this](wxCloseEvent &event) {
@@ -3911,98 +3964,102 @@ void legend_pi::CreateLegendWindow()
     m_legend_choice->Bind(wxEVT_KEY_UP, spaceUp);
     m_legend_window->Bind(wxEVT_KEY_UP, spaceUp);
 
-    m_legend_window->Bind(
-        wxEVT_CHAR_HOOK,
-        [this](wxKeyEvent &event) {
-            const bool plainKey =
-                !event.ControlDown() &&
-                !event.AltDown() &&
-                !event.MetaDown();
+    m_legend_window->Bind(wxEVT_CHAR_HOOK, &legend_pi::OnLegendKey, this);
+}
 
-            // While a note is edited the keys are for the text: Escape and
-            // Cmd+B are the only ones the legend takes.
-            if (m_editing) {
-                if (event.GetKeyCode() == WXK_ESCAPE && plainKey) {
-                    StopEditing();
-                    return;
-                }
-                if (event.GetModifiers() == wxMOD_CMD && m_editor) {
-                    if (event.GetKeyCode() == 'B') {
-                        m_editor->ToggleBold();
-                        return;
-                    }
-                    if (event.GetKeyCode() == 'I') {
-                        m_editor->ToggleItalic();
-                        return;
-                    }
-                }
-                event.Skip();
+// The keys of the legend window: Escape closes it, the arrows go to the
+// previous or next item, Cmd+F to the search field, and the space bar is
+// the pad of "Licht herkennen".
+void legend_pi::OnLegendKey(wxKeyEvent &event)
+{
+    const bool plainKey =
+        !event.ControlDown() &&
+        !event.AltDown() &&
+        !event.MetaDown();
+
+    // While a note is edited the keys are for the text: Escape and
+    // Cmd+B are the only ones the legend takes.
+    if (m_editing) {
+        if (event.GetKeyCode() == WXK_ESCAPE && plainKey) {
+            StopEditing();
+            return;
+        }
+        if (event.GetModifiers() == wxMOD_CMD && m_editor) {
+            if (event.GetKeyCode() == 'B') {
+                m_editor->ToggleBold();
                 return;
             }
-
-            // The space bar is the pad of "Licht herkennen", outside the
-            // search field.
-            if (m_identify_on && event.GetKeyCode() == WXK_SPACE && plainKey &&
-                !(m_search && wxWindow::FindFocus() == m_search)) {
-                if (!m_tap_down)
-                    TapDown();
+            if (event.GetKeyCode() == 'I') {
+                m_editor->ToggleItalic();
                 return;
             }
+        }
+        event.Skip();
+        return;
+    }
 
-            // Cmd+F (Ctrl+F elsewhere) goes to the search field.
-            if (event.GetKeyCode() == 'F' && event.GetModifiers() == wxMOD_CMD &&
-                m_search && m_search->IsShown()) {
-                m_search->SetFocus();
-                m_search->SelectAll();
-                return;
-            }
+    // The space bar is the pad of "Licht herkennen", outside the
+    // search field.
+    if (m_identify_on && event.GetKeyCode() == WXK_SPACE && plainKey &&
+        !(m_search && wxWindow::FindFocus() == m_search)) {
+        if (!m_tap_down)
+            TapDown();
+        return;
+    }
 
-            // In the search field the arrows move the cursor, and Escape
-            // first empties the field before it closes the window.
-            wxWindow *focus = wxWindow::FindFocus();
-            const bool inSearch =
-                m_search && focus &&
-                (focus == m_search || focus->GetParent() == m_search);
+    // Cmd+F (Ctrl+F elsewhere) goes to the search field.
+    if (event.GetKeyCode() == 'F' && event.GetModifiers() == wxMOD_CMD &&
+        m_search && m_search->IsShown()) {
+        m_search->SetFocus();
+        m_search->SelectAll();
+        return;
+    }
 
-            if (inSearch && plainKey &&
-                (event.GetKeyCode() == WXK_LEFT || event.GetKeyCode() == WXK_RIGHT)) {
-                event.Skip();
-                return;
-            }
+    // In the search field the arrows move the cursor, and Escape
+    // first empties the field before it closes the window.
+    wxWindow *focus = wxWindow::FindFocus();
+    const bool inSearch =
+        m_search && focus &&
+        (focus == m_search || focus->GetParent() == m_search);
 
-            if (inSearch && plainKey && event.GetKeyCode() == WXK_ESCAPE &&
-                !m_search->GetValue().IsEmpty()) {
-                SetFilter(wxEmptyString);
-                return;
-            }
+    if (inSearch && plainKey &&
+        (event.GetKeyCode() == WXK_LEFT || event.GetKeyCode() == WXK_RIGHT)) {
+        event.Skip();
+        return;
+    }
 
-            if (plainKey &&
-                event.GetKeyCode() == WXK_ESCAPE) {
-                SaveCurrentMarkdownScroll();
-                SaveWindowState();
-                SaveConfig();
-                m_legend_window->Hide();
-                return;
-            }
+    if (inSearch && plainKey && event.GetKeyCode() == WXK_ESCAPE &&
+        !m_search->GetValue().IsEmpty()) {
+        SetFilter(wxEmptyString);
+        return;
+    }
 
-            if (plainKey &&
-                m_legend_files.GetCount() > 1) {
+    if (plainKey &&
+        event.GetKeyCode() == WXK_ESCAPE) {
+        SaveCurrentMarkdownScroll();
+        SaveWindowState();
+        SaveConfig();
+        m_legend_window->Hide();
+        return;
+    }
 
-                if (event.GetKeyCode() == WXK_LEFT) {
-                    wxCommandEvent commandEvent;
-                    OnPreviousLegend(commandEvent);
-                    return;
-                }
+    if (plainKey &&
+        m_legend_files.GetCount() > 1) {
 
-                if (event.GetKeyCode() == WXK_RIGHT) {
-                    wxCommandEvent commandEvent;
-                    OnNextLegend(commandEvent);
-                    return;
-                }
-            }
+        if (event.GetKeyCode() == WXK_LEFT) {
+            wxCommandEvent commandEvent;
+            OnPreviousLegend(commandEvent);
+            return;
+        }
 
-            event.Skip();
-        });
+        if (event.GetKeyCode() == WXK_RIGHT) {
+            wxCommandEvent commandEvent;
+            OnNextLegend(commandEvent);
+            return;
+        }
+    }
+
+    event.Skip();
 }
 
 void legend_pi::ApplyViewColours()
@@ -7390,7 +7447,7 @@ void legend_pi::RenderNotesBlock(DynamicPage &page)
         if (!place.snippet.IsEmpty()) {
             wxString snippet = place.snippet;
             if (snippet.length() > 70)
-                snippet = snippet.Left(68) + wxString::FromUTF8("…");
+                snippet = snippet.Left(68) + wxString::FromUTF8("\u2026");
             html << " &middot; " << EscapeHtml(snippet);
         }
         html << "</font></td></tr>";
