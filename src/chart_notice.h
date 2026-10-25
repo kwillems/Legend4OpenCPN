@@ -29,9 +29,10 @@ public:
     ChartNotice();
     ~ChartNotice();
 
-    // With an action, a click on the notice runs it; with an action label
-    // as well, the action is a button next to "Sluiten" and only that
-    // button runs it. With sound, OpenCPN's short beep sounds six times.
+    // Every notice has a button "Sluiten". With an action, a click
+    // elsewhere on the notice runs it; with an action label as well, the
+    // action is a button next to "Sluiten" and only that button runs it.
+    // With sound, OpenCPN's short beep sounds six times.
     void Show(const wxString &title,
               const wxString &text,
               bool sound,

@@ -55,7 +55,8 @@ void ChartNotice::Create(wxWindow *canvas)
     m_text = new wxStaticText(m_panel, wxID_ANY, wxEmptyString);
     sizer->Add(m_title, 0, wxLEFT | wxRIGHT | wxTOP, 12);
     sizer->Add(m_text, 0, wxALL, 12);
-    // With an action label: the action as a button, and one that closes.
+    // Sluiten on every notice; with an action label the action as a
+    // button beside it.
     m_buttons = new wxPanel(m_panel);
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     m_action_button = new wxButton(m_buttons, wxID_ANY, wxEmptyString);
@@ -75,11 +76,11 @@ void ChartNotice::Create(wxWindow *canvas)
         m_action = std::function<void()>();
         Hide();
     });
-    // A click closes it, and opens what it is about, if anything; with
-    // buttons only those do the action.
+    // A click elsewhere closes it, and opens what it is about, if anything;
+    // with an action button only that button does the action.
     auto close = [this](wxMouseEvent &) {
         Hide();
-        if (m_buttons && m_buttons->IsShown())
+        if (m_action_button && m_action_button->IsShown())
             return;
         RunAction();
     };
@@ -111,7 +112,8 @@ void ChartNotice::Show(const wxString &title,
     m_text->SetLabel(text);
     m_buttons->SetBackgroundColour(background);
     m_action_button->SetLabel(actionLabel);
-    m_buttons->Show(!actionLabel.IsEmpty());
+    m_action_button->Show(!actionLabel.IsEmpty());
+    m_buttons->Layout();
     m_panel->GetSizer()->Layout();
     m_panel->GetSizer()->Fit(m_panel);
     m_frame->SetClientSize(m_panel->GetBestSize());
