@@ -113,5 +113,6 @@ void TestVhfAreas();
 void TestNotePlaces();
 void TestSymbolMeanings();
 void TestLayerWaypoints();
+void TestGeo();
 
 #endif

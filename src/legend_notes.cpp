@@ -16,6 +16,8 @@
 
 #include "legend_pi.h"
 
+#include "geo.h"
+
 #include "legend_shared.h"
 
 #include <wx/glcanvas.h>
@@ -566,20 +568,6 @@ void legend_pi::RefreshNotePlaces()
     }
     m_note_hover = -1;
     RefreshAllCanvases();
-}
-
-// Sea miles between two positions, flat: the distances here are short.
-double legend_pi::SeaMiles(double lat1, double lon1, double lat2, double lon2) const
-{
-    const double kPi = 3.14159265358979323846;
-    const double dy = (lat2 - lat1) * 60.0;
-    double dlon = lon2 - lon1;
-    while (dlon > 180.0)
-        dlon -= 360.0;
-    while (dlon < -180.0)
-        dlon += 360.0;
-    const double dx = dlon * 60.0 * std::cos((lat1 + lat2) / 2.0 * kPi / 180.0);
-    return std::sqrt(dx * dx + dy * dy);
 }
 
 // The scale of the status bar, as the chart uses it for scale limits; worked

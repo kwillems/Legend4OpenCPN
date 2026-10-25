@@ -630,7 +630,6 @@ private:
     wxString m_pending_note_path;
     std::vector<size_t> m_note_rows;     // rows of the heading "Notities"
     void RefreshNotePlaces();
-    double SeaMiles(double lat1, double lon1, double lat2, double lon2) const;
     void OpenNote(const wxString &path);
     int NotePlaceAt(const wxPoint &pixel, double tolerancePx);
     double CurrentDisplayedScale();
@@ -685,6 +684,20 @@ private:
     wxLongLong m_ahead_rendered = 0;
     bool m_ahead_sailing = false; // a recent fix and some speed
     void ComputeAhead();
+
+    // Setting "Afstand en peiling vanaf de boot": under every row the
+    // distance and true bearing from the boat to the nearest object of the
+    // row ("0,3 NM · 045°"), and a click starts at the object nearest to
+    // the boat. Only with a position fix of the last minute.
+    bool m_show_distance = false;
+    bool DistanceFromBoatShown() const;
+    wxString DistanceText(const DynamicGroup &group) const;
+    // All distance texts together, to tell whether the list needs drawing
+    // again after a fix; and what the list shows.
+    wxString DistanceKey() const;
+    wxString m_distance_drawn_key;
+    // The positions of a row from near to far, measured from the boat.
+    void SortFromBoat(DynamicGroup &group) const;
     void ShowAheadItem(size_t index);
 
     // "Licht herkennen": the user holds a pad or the space bar while a light

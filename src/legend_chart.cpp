@@ -547,6 +547,14 @@ void legend_pi::GoToDynamicGroup(size_t index)
     if (group.positions.empty())
         return;
 
+    // Distance from the boat shown: a first click on this row, or one
+    // after a click on another row, starts at the object nearest to the
+    // boat; further clicks go on from there.
+    if (DistanceFromBoatShown() && (group.current < 0 || m_active_group_key != group.key)) {
+        SortFromBoat(group);
+        group.current = -1;
+    }
+
     group.current =
         (group.current + 1) % static_cast<int>(group.positions.size());
     m_active_group_key = group.key;

@@ -565,6 +565,7 @@ void legend_pi::LoadConfig()
         m_window_height = 300;
 
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
+    config.Read("ShowDistanceFromBoat", &m_show_distance, false);
     config.Read("ShowLights", &m_show_lights, true);
     config.Read("VhfKeepLit", &m_vhf_keep_lit, false);
     m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
@@ -609,6 +610,7 @@ void legend_pi::SaveConfig() const
         collapsed.Add(name);
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
+    config.Write("ShowDistanceFromBoat", m_show_distance);
     config.Write("ShowLights", m_show_lights);
     config.Write("VhfKeepLit", m_vhf_keep_lit);
     config.Write("VhfNotice", m_vhf_notice_on);
