@@ -187,6 +187,31 @@ private:
     // Layers can be hidden or shown without the waypoint list changing.
     void CheckVisibilityChanges();
     void RenderDynamicLegend(bool keepScroll = false);
+    // The page of the dynamic legend, built block by block; DynamicPage
+    // holds what the blocks share.
+    struct DynamicPage;
+    wxString BuildDynamicPage();
+    void PrepareDynamicRows(DynamicPage &page);
+    void LoadRowIcons(DynamicPage &page);
+    void RenderTitleBar(DynamicPage &page);
+    bool RenderExtraHeading(DynamicPage &page, const wxString &key,
+                            const wxString &title, const wxString &summary);
+    void RenderVhfBlock(DynamicPage &page);
+    void RenderAheadBlock(DynamicPage &page);
+    void RenderNotesBlock(DynamicPage &page);
+    void RenderIdentifyBlock(DynamicPage &page);
+    void RenderReorderList(DynamicPage &page);
+    void RenderNoMatches(DynamicPage &page);
+    void RenderRows(DynamicPage &page);
+    void RenderSectionHeading(DynamicPage &page, size_t i, bool atTop);
+    void RenderRow(DynamicPage &page, size_t i);
+    void RenderLightsOfRow(DynamicPage &page, size_t i);
+    void RenderFooter(DynamicPage &page);
+    wxString AddDynamicImage(const wxString &name, const wxImage &image,
+                             const wxImage &doubled);
+    wxString LightRowLabel(const DynamicPage &page, const DynamicGroup &group,
+                           size_t index, const wxColour &rowColour);
+    bool IsActiveRow(const DynamicGroup &group) const;
     void GoToDynamicGroup(size_t index);
     void MarkAllOfDynamicGroup(size_t index);
     // The row of the object nearest to a position, within tolerancePx
