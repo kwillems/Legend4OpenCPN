@@ -898,10 +898,10 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
                              HtmlColour(fill).Mid(1) + ".png";
         if (m_pin_images.insert(pin).second) {
             const wxBitmapBundle bundle = NoteToolIcon("place", ink);
-            const wxImage small = FlattenImage(bundle.GetBitmap(wxSize(16, 16)).ConvertToImage(), fill);
-            const wxImage large = FlattenImage(bundle.GetBitmap(wxSize(32, 32)).ConvertToImage(), fill);
-            wxMemoryFSHandler::AddFile(pin, small, wxBITMAP_TYPE_PNG);
-            wxMemoryFSHandler::AddFile(pin.Left(pin.length() - 4) + "@2x.png", large,
+            const wxImage image1x = FlattenImage(bundle.GetBitmap(wxSize(16, 16)).ConvertToImage(), fill);
+            const wxImage image2x = FlattenImage(bundle.GetBitmap(wxSize(32, 32)).ConvertToImage(), fill);
+            wxMemoryFSHandler::AddFile(pin, image1x, wxBITMAP_TYPE_PNG);
+            wxMemoryFSHandler::AddFile(pin.Left(pin.length() - 4) + "@2x.png", image2x,
                                        wxBITMAP_TYPE_PNG);
         }
         wxString line;

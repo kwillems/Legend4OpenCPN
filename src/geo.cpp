@@ -101,12 +101,12 @@ std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, doub
     // (when that is before its far end), and the far end.
     const double widen = std::tan(halfAngle * kPi / 180.0);
     const double bend = widen > 0.0 ? minHalfWidth / widen : range;
-    const double far = std::max(minHalfWidth, range * widen);
+    const double farHalfWidth = std::max(minHalfWidth, range * widen);
     std::vector<std::pair<double, double>> corners = {{0.0, -minHalfWidth}};
     if (bend < range)
         corners.push_back({bend, -minHalfWidth});
-    corners.push_back({range, -far});
-    corners.push_back({range, far});
+    corners.push_back({range, -farHalfWidth});
+    corners.push_back({range, farHalfWidth});
     if (bend < range)
         corners.push_back({bend, minHalfWidth});
     corners.push_back({0.0, minHalfWidth});

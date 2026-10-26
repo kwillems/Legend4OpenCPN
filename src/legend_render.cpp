@@ -1141,7 +1141,7 @@ void legend_pi::RenderReorderList(DynamicPage &page)
             if (symbols > kStripIcons || !page.icons[j].IsOk())
                 continue;
 
-            const wxImage small = NormalizeIcon(
+            const wxImage icon1x = NormalizeIcon(
                 page.icons[j],
                 rowColour,
                 20,
@@ -1150,7 +1150,7 @@ void legend_pi::RenderReorderList(DynamicPage &page)
 
             const wxString name = AddDynamicImage(
                 wxString::Format("legend_dyn_%d_order_%zu.png", m_dynamic_generation, j),
-                small,
+                icon1x,
                 NormalizeIcon(page.icons2[j], rowColour, 40,
                               palette.iconTiles ? &palette.tile : nullptr,
                               palette.iconTiles ? 4 : 0));
@@ -1297,7 +1297,7 @@ void legend_pi::RenderSectionHeading(DynamicPage &page, size_t i, bool atTop)
         if (!folded || symbols > kStripIcons || !page.icons[j].IsOk())
             continue;
 
-        const wxImage small = NormalizeIcon(
+        const wxImage icon1x = NormalizeIcon(
             page.icons[j],
             background,
             20,
@@ -1306,7 +1306,7 @@ void legend_pi::RenderSectionHeading(DynamicPage &page, size_t i, bool atTop)
 
         const wxString name = AddDynamicImage(
             wxString::Format("legend_dyn_%d_strip_%zu.png", m_dynamic_generation, j),
-            small,
+            icon1x,
             NormalizeIcon(page.icons2[j], background, 40,
                           palette.iconTiles ? &palette.tile : nullptr,
                           palette.iconTiles ? 4 : 0));

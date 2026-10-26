@@ -803,20 +803,20 @@ bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
 // note waits until that one is gone.
 void legend_pi::CheckNotePlaces()
 {
-    std::set<wxString> near;
+    std::set<wxString> nearby;
     std::vector<const NotePlace *> entered;
     for (const NotePlace &place : m_note_places) {
         const double distance = SeaMiles(m_ship_lat, m_ship_lon, place.lat, place.lon);
         if (distance > place.radius)
             continue;
-        near.insert(place.path);
+        nearby.insert(place.path);
         // The note being written is no news.
         if (m_editing && place.path == m_editing_path)
             continue;
         if (m_note_places_known && m_notes_near.count(place.path) == 0)
             entered.push_back(&place);
     }
-    m_notes_near = near;
+    m_notes_near = nearby;
     m_note_places_known = true;
 
     if (entered.empty() || !m_note_notice_on)
