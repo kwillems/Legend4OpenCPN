@@ -20,3 +20,9 @@ before_build:
 
 build_script:
   - call ci\appveyor.bat
+
+# Legend4OpenCPN: keep the tarballs, there is no Cloudsmith upload yet
+# (re-add after update-templates).
+artifacts:
+  - path: build\*.tar.gz
+  - path: build\*.xml
