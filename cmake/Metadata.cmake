@@ -70,8 +70,16 @@ else ()
 endif ()
 
 if (WIN32)
-  set(_pkg_arch "x86")
-  set(target_arch "x86")
+  # Legend4OpenCPN: x86_64 for the 64-bit Windows build, from ShipDriver
+  # 990f809 "Update windows target-arch metadata - #670" (re-add after
+  # update-templates until ShipDriver has it).
+  if (CMAKE_SIZEOF_VOID_P MATCHES "8")
+    set(_pkg_arch "x86_64")
+    set(target_arch "x86_64")
+  else ()
+    set(_pkg_arch "x86")
+    set(target_arch "x86")
+  endif ()
 elseif (APPLE AND CMAKE_OSX_ARCHITECTURES)
   string(REPLACE ";" "-" _pkg_arch "${CMAKE_OSX_ARCHITECTURES}")
   set(target_arch "${CMAKE_OSX_ARCHITECTURES}")
