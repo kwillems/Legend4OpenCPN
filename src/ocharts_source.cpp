@@ -20,6 +20,14 @@
 #include <wx/textfile.h>
 #include <wx/tokenzr.h>
 
+// wxWidgets 3.3 keeps a wxList in a std::list, with a helper that OpenCPN
+// does not export to plugins on Windows: the plugin defines its own. It only
+// deletes objects when DeleteContents is on, and the objects stay the chart's.
+#if wxUSE_STD_CONTAINERS
+#include <wx/listimpl.cpp>
+WX_DEFINE_LIST(ListOfPI_S57Obj);
+#endif
+
 namespace {
 
 // Chart classes of the o-charts plugin for .oesu cells; the first one that

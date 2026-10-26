@@ -98,6 +98,7 @@ set(SRC
     src/symbol_meanings.cpp
     src/geo.h
     src/geo.cpp
+    src/msvc_wx_vector.cpp
 
     third_party/md4c/src/md4c.c
     third_party/md4c/src/md4c-html.c
