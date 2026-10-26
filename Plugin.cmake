@@ -127,6 +127,12 @@ macro(add_plugin_libraries)
         find_package(wxWidgets REQUIRED richtext)
         target_link_libraries(${PACKAGE_NAME} ${wxWidgets_LIBRARIES})
 
+        # Without /utf-8 MSVC turns "·" into the Windows code page
+        # instead of UTF-8, and wxString::FromUTF8 then gives nothing.
+        if (MSVC)
+            target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
+        endif ()
+
         # Unit tests of the parts that do without OpenCPN: built with
         # "make legend-tests", run with "ctest" in the build folder.
         enable_testing()
@@ -148,6 +154,9 @@ macro(add_plugin_libraries)
         )
         target_include_directories(legend-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
         target_link_libraries(legend-tests ${wxWidgets_LIBRARIES})
+        if (MSVC)
+            target_compile_options(legend-tests PRIVATE /utf-8)
+        endif ()
         add_test(NAME legend COMMAND legend-tests)
     endif ()
 endmacro()
