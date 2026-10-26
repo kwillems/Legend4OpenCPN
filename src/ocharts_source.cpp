@@ -431,7 +431,7 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
         if (!list)
             continue;
 
-        for (ListOfPI_S57Obj::Node *node = list->GetFirst(); node;
+        for (ListOfPI_S57Obj::compatibility_iterator node = list->GetFirst(); node;
              node = node->GetNext()) {
             const PI_S57Obj *obj = node->GetData();
             if (!obj || obj->Primitive_type != ChartObject::Point)
