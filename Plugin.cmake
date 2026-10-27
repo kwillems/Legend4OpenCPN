@@ -134,6 +134,14 @@ macro(add_plugin_libraries)
             target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
         endif ()
 
+        # ocpn_plugin.h only makes DECL_EXP __declspec(dllexport) when
+        # __WXMSW__ is defined, and the sources include it before any wx
+        # header defines it. Without this create_pi and destroy_pi are not
+        # exported and OpenCPN cannot load legend_pi.dll.
+        if (MSVC)
+            target_compile_definitions(${PACKAGE_NAME} PRIVATE __WXMSW__)
+        endif ()
+
         # Unit tests of the parts that do without OpenCPN: built with
         # "make legend-tests", run with "ctest" in the build folder.
         enable_testing()
