@@ -12,6 +12,7 @@
 
 #include "legend_pi.h"
 
+#include "geo.h"
 #include "legend_html_window.h"
 #include "legend_shared.h"
 
@@ -20,17 +21,20 @@
 #include <wx/file.h>
 #include <wx/log.h>
 #include <wx/menu.h>
+#include <wx/msgdlg.h>
 #include <wx/panel.h>
 #include <wx/statline.h>
 #include <wx/sizer.h>
 #include <wx/statbmp.h>
 #include <wx/stattext.h>
+#include <wx/textdlg.h>
 #include <wx/textfile.h>
 #include <wx/wrapsizer.h>
 #include <wx/tokenzr.h>
 #include <wx/utils.h>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 #ifdef __WXOSX__
@@ -1385,13 +1389,45 @@ void legend_pi::SetAheadAngle(int angle)
     RefreshAllCanvases();
 }
 
-// "Uitkijkbundel: lengte": how many minutes ahead the list and the fan reach.
-void legend_pi::SetAheadMinutes(int minutes)
+// "Uitkijkbundel: lengte": how many sea miles ahead the list and the fan reach.
+void legend_pi::SetAheadMiles(double miles)
 {
-    m_ahead_minutes = minutes;
+    m_ahead_miles = miles;
     SaveConfig();
     RenderDynamicLegend(true);
     RefreshAllCanvases();
+}
+
+// "Uitkijkbundel: lengte ▸ Anders…": a length of the user's own, in sea
+// miles, rounded to half a mile; a comma or a point both do.
+void legend_pi::AskAheadMiles()
+{
+    wxString text = FormatMiles(m_ahead_miles);
+    text.Replace(" NM", "");
+    for (;;) {
+        wxTextEntryDialog dialog(m_legend_window,
+                                 wxString::FromUTF8("Lengte van de uitkijkbundel in zeemijlen "
+                                                    "(0,5 tot 50):"),
+                                 "Uitkijkbundel: lengte", text);
+        if (dialog.ShowModal() != wxID_OK)
+            return;
+        text = dialog.GetValue();
+        wxString value = text;
+        value.Trim(true).Trim(false);
+        value.Replace(",", ".");
+        if (value.Lower().EndsWith("nm"))
+            value = value.Left(value.length() - 2).Trim(true);
+        double miles = 0.0;
+        if (value.ToCDouble(&miles)) {
+            miles = std::round(miles * 2.0) / 2.0;
+            if (miles >= kAheadMinMiles && miles <= kAheadMaxMiles) {
+                SetAheadMiles(miles);
+                return;
+            }
+        }
+        wxMessageBox("Vul een lengte in van 0,5 tot 50 zeemijl, bijvoorbeeld 3 of 12,5.",
+                     "Uitkijkbundel: lengte", wxOK | wxICON_INFORMATION, m_legend_window);
+    }
 }
 
 // The menu behind "Instellingen": what is shown, with a tick when it is on,
@@ -1405,7 +1441,7 @@ void legend_pi::ShowSettingsMenu()
     {
         kLights = 1000, kHidden, kDistance, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep,
         kVhfNotice, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
-        kAheadMin10, kAheadMin15, kAheadMin30, kAheadMin60,
+        kAheadNm1, kAheadNm2, kAheadNm5, kAheadNm10, kAheadNm20, kAheadOwn,
         kFold, kReorder
     };
 
@@ -1447,10 +1483,28 @@ void legend_pi::ShowSettingsMenu()
         ->Check(m_ahead_angle == 45);
     menu.AppendSubMenu(width, "Uitkijkbundel: breedte");
     auto *ahead = new wxMenu;
-    ahead->AppendRadioItem(kAheadMin10, "10 minuten varen")->Check(m_ahead_minutes == 10);
-    ahead->AppendRadioItem(kAheadMin15, "15 minuten varen")->Check(m_ahead_minutes == 15);
-    ahead->AppendRadioItem(kAheadMin30, "30 minuten varen")->Check(m_ahead_minutes == 30);
-    ahead->AppendRadioItem(kAheadMin60, "60 minuten varen")->Check(m_ahead_minutes == 60);
+    // Each length with the time it takes at the present speed.
+    // A length of the user's own is ticked at "Anders…", with its length.
+    const double lengths[] = {1.0, 2.0, 5.0, 10.0, 20.0};
+    bool own = true;
+    for (int n = 0; n < 5; ++n) {
+        wxString label = FormatMiles(lengths[n]);
+        const wxString time = AheadTimeText(lengths[n]);
+        if (!time.IsEmpty())
+            label << "  (" << time << ")";
+        const bool chosen = m_ahead_miles == lengths[n];
+        own = own && !chosen;
+        ahead->AppendRadioItem(kAheadNm1 + n, label)->Check(chosen);
+    }
+    wxString ownLabel = wxString::FromUTF8("Anders\u2026");
+    if (own) {
+        ownLabel << " (" << FormatMiles(m_ahead_miles);
+        const wxString time = AheadTimeText(m_ahead_miles);
+        if (!time.IsEmpty())
+            ownLabel << ", " << time;
+        ownLabel << ")";
+    }
+    ahead->AppendRadioItem(kAheadOwn, ownLabel)->Check(own);
     menu.AppendSubMenu(ahead, "Uitkijkbundel: lengte");
     if (m_menu_has_headings) {
         menu.AppendSeparator();
@@ -1504,14 +1558,19 @@ void legend_pi::ShowSettingsMenu()
     case kAhead45:
         SetAheadAngle(selection == kAhead15 ? 15 : selection == kAhead30 ? 30 : 45);
         break;
-    case kAheadMin10:
-    case kAheadMin15:
-    case kAheadMin30:
-    case kAheadMin60:
-        SetAheadMinutes(selection == kAheadMin10   ? 10
-                        : selection == kAheadMin15 ? 15
-                        : selection == kAheadMin30 ? 30
-                                                   : 60);
+    case kAheadNm1:
+    case kAheadNm2:
+    case kAheadNm5:
+    case kAheadNm10:
+    case kAheadNm20:
+        SetAheadMiles(selection == kAheadNm1    ? 1.0
+                      : selection == kAheadNm2  ? 2.0
+                      : selection == kAheadNm5  ? 5.0
+                      : selection == kAheadNm10 ? 10.0
+                                                : 20.0);
+        break;
+    case kAheadOwn:
+        AskAheadMiles();
         break;
     case kFold:
         RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");

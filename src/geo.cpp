@@ -62,6 +62,27 @@ wxString FormatDistance(double seaMiles)
     return text;
 }
 
+wxString FormatMiles(double seaMiles)
+{
+    const long halves = std::lround(seaMiles * 2.0);
+    if (halves % 2 == 0)
+        return wxString::Format("%ld NM", halves / 2);
+    return wxString::Format("%ld,5 NM", halves / 2);
+}
+
+wxString FormatDuration(double minutes, bool dutch)
+{
+    if (minutes < 9.5)
+        return wxString::Format("%ld min", std::max(1L, std::lround(minutes)));
+    const long rounded = std::lround(minutes / 5.0) * 5;
+    if (rounded < 60)
+        return wxString::Format("%ld min", rounded);
+    const wxString hour = dutch ? "u" : "h";
+    if (rounded % 60 == 0)
+        return wxString::Format("%ld %s", rounded / 60, hour);
+    return wxString::Format("%ld %s %02ld", rounded / 60, hour, rounded % 60);
+}
+
 void AlongAndAcross(double lat0, double lon0, double course, double lat, double lon,
                     double *along, double *across)
 {

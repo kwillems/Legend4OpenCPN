@@ -651,8 +651,9 @@ private:
     double m_ship_cog = NAN;      // course over ground, degrees true
     double m_ship_sog = NAN;      // speed over ground, knots
 
-    // "Uitkijk": what the boat meets in the coming m_ahead_minutes along
-    // its course (setting "Uitkijkbundel: lengte": 10, 15, 30 or 60),
+    // "Uitkijk": what the boat meets in the coming m_ahead_miles along its
+    // course (setting "Uitkijkbundel: lengte": 1, 2, 5, 10 or 20 sea miles,
+    // or a length of the user's own from 0.5 up to 50 in halves),
     // among the objects of the list, in order of arrival.
     struct AheadItem
     {
@@ -702,8 +703,14 @@ private:
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
-    int m_ahead_minutes = 30;
-    void SetAheadMinutes(int minutes);
+    static constexpr double kAheadMinMiles = 0.5;
+    static constexpr double kAheadMaxMiles = 50.0;
+    double m_ahead_miles = 2.0;
+    void SetAheadMiles(double miles);
+    void AskAheadMiles();
+    // "± 20 min": how long the boat takes at its speed to sail `miles`;
+    // empty while it does not sail.
+    wxString AheadTimeText(double miles) const;
 
     // Setting "Afstand en peiling vanaf de boot": under every row the
     // distance and true bearing from the boat to the nearest object of the

@@ -117,11 +117,19 @@ void legend_pi::SortFromBoat(DynamicGroup &group) const
                      });
 }
 
-// How far the Uitkijk looks: as far as the boat goes in the minutes of the
-// setting "Uitkijkbundel: lengte", at least 0.3 sea mile.
+// How far the Uitkijk looks: the sea miles of the setting
+// "Uitkijkbundel: lengte", whatever the speed.
 double legend_pi::AheadRange() const
 {
-    return std::max(0.3, m_ship_sog * m_ahead_minutes / 60.0);
+    return m_ahead_miles;
+}
+
+wxString legend_pi::AheadTimeText(double miles) const
+{
+    if (!m_ahead_sailing)
+        return wxEmptyString;
+    return wxString::FromUTF8("\u00b1 ") +
+           FormatDuration(miles / m_ship_sog * 60.0, m_dutch_names);
 }
 
 // The objects of the list in a fan ahead of the boat: a strip that widens
@@ -255,7 +263,7 @@ void legend_pi::ComputeAhead()
     for (const AheadNote &note : m_ahead_notes)
         key << "note:" << note.path << '/' << static_cast<int>(note.minutes) << ';';
 
-    // The VHF areas the course enters in the same time, up to two:
+    // The VHF areas the course enters as far ahead, up to two:
     // points along the course line, a few hundred metres apart.
     m_ahead_vhf.clear();
     EnsureVhfAreas();

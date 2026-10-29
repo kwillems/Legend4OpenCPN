@@ -28,6 +28,13 @@ double BearingDegrees(double lat1, double lon1, double lat2, double lon2);
 // "150 m" below a tenth of a sea mile, "0,3 NM" below ten, "12 NM" beyond.
 wxString FormatDistance(double seaMiles);
 
+// A length the user chose, to half a sea mile: "2 NM", "0,5 NM", "12,5 NM".
+wxString FormatMiles(double seaMiles);
+
+// The time to sail somewhere, roughly: "7 min" below ten minutes, then to
+// five minutes ("25 min", "1 u 05" / "1 h 05"), whole hours as "2 u" / "2 h".
+wxString FormatDuration(double minutes, bool dutch);
+
 // "045°": whole degrees, three digits; 359.6 becomes "000°".
 wxString FormatBearing(double degrees);
 
