@@ -1408,6 +1408,17 @@ void legend_pi::SetAheadAngle(int angle)
     RefreshAllCanvases();
 }
 
+const char *const legend_pi::kAheadColourNames[kAheadColourCount] = {
+    "amber", "geel", "rood", "groen", "paars", "grijs"};
+
+// "Uitkijkbundel: kleur": the fan on the chart changes at once.
+void legend_pi::SetAheadColour(int colour)
+{
+    m_ahead_colour = colour;
+    SaveConfig();
+    RefreshAllCanvases();
+}
+
 // "Uitkijkbundel: lengte": how many sea miles ahead the list and the fan reach.
 void legend_pi::SetAheadMiles(double miles)
 {
@@ -1461,6 +1472,7 @@ void legend_pi::ShowSettingsMenu()
         kLights = 1000, kHidden, kDistance, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep,
         kVhfNotice, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
         kAheadNm1, kAheadNm2, kAheadNm5, kAheadNm10, kAheadNm20, kAheadOwn,
+        kAheadColour0, kAheadColourLast = kAheadColour0 + kAheadColourCount - 1,
         kFold, kReorder
     };
 
@@ -1525,6 +1537,12 @@ void legend_pi::ShowSettingsMenu()
     }
     ahead->AppendRadioItem(kAheadOwn, ownLabel)->Check(own);
     menu.AppendSubMenu(ahead, "Uitkijkbundel: lengte");
+    auto *colours = new wxMenu;
+    const char *const colourLabels[kAheadColourCount] = {"Amber", "Geel",  "Rood",
+                                                         "Groen", "Paars", "Grijs"};
+    for (int n = 0; n < kAheadColourCount; ++n)
+        colours->AppendRadioItem(kAheadColour0 + n, colourLabels[n])->Check(m_ahead_colour == n);
+    menu.AppendSubMenu(colours, "Uitkijkbundel: kleur");
     if (m_menu_has_headings) {
         menu.AppendSeparator();
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
@@ -1532,6 +1550,10 @@ void legend_pi::ShowSettingsMenu()
     }
 
     const int selection = m_markdown_view->GetPopupMenuSelectionFromUser(menu);
+    if (selection >= kAheadColour0 && selection <= kAheadColourLast) {
+        SetAheadColour(selection - kAheadColour0);
+        return;
+    }
     switch (selection) {
     case kLights:
         RunLegendCommand("lights");

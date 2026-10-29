@@ -32,12 +32,24 @@
 
 namespace {
 
-// The fan of the Uitkijk: a soft amber, as the beam of a searchlight, just
-// visible over the chart. In dusk and night the chart is dark: the beam is
+// The fan of the Uitkijk: by default a soft amber, as the beam of a
+// searchlight, just visible over the chart; the setting "Uitkijkbundel:
+// kleur" picks another of the colours of kAheadColours. In dusk and night the chart is dark: the beam is
 // dimmed less than the other signs and a little more opaque, so it still
 // shows, in a warm colour that spares night vision.
-void AheadFanColours(wxColour *fill, wxColour *edge)
+void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
 {
+    // Fill and edge: the edge a darker shade of the fill.
+    static const unsigned char kColours[][6] = {
+        {239, 159, 39, 186, 117, 23},   // amber
+        {240, 208, 40, 168, 142, 10},   // yellow
+        {222, 62, 50, 160, 32, 26},     // red
+        {64, 172, 84, 30, 122, 52},     // green
+        {152, 84, 204, 106, 52, 152},   // purple
+        {0, 0, 0, 0, 0, 0},             // grey: black, seen through
+    };
+    const int count = static_cast<int>(sizeof(kColours) / sizeof(kColours[0]));
+    const unsigned char *c = kColours[colour >= 0 && colour < count ? colour : 0];
     double dim = 1.0;
     int fillAlpha = 28;
     int edgeAlpha = 110;
@@ -56,8 +68,8 @@ void AheadFanColours(wxColour *fill, wxColour *edge)
         break;
     }
     auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
-    *fill = wxColour(shade(239), shade(159), shade(39), fillAlpha);
-    *edge = wxColour(shade(186), shade(117), shade(23), edgeAlpha);
+    *fill = wxColour(shade(c[0]), shade(c[1]), shade(c[2]), fillAlpha);
+    *edge = wxColour(shade(c[3]), shade(c[4]), shade(c[5]), edgeAlpha);
 }
 
 } // namespace
@@ -1077,7 +1089,7 @@ bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
 
     wxColour fill;
     wxColour edge;
-    AheadFanColours(&fill, &edge);
+    AheadFanColours(m_ahead_colour, &fill, &edge);
     wxGraphicsPath path = gc->CreatePath();
     path.MoveToPoint(points[0].x, points[0].y);
     for (size_t i = 1; i < points.size(); ++i)
@@ -1099,7 +1111,7 @@ bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
 
     wxColour fill;
     wxColour edge;
-    AheadFanColours(&fill, &edge);
+    AheadFanColours(m_ahead_colour, &fill, &edge);
 
     // GL_CURRENT_BIT included, see the marker in RenderGLOverlayMultiCanvas.
     glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |

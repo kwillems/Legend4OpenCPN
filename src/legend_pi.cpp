@@ -569,6 +569,12 @@ void legend_pi::LoadConfig()
     config.Read("ShowHiddenAtScale", &m_show_hidden_at_scale, false);
     config.Read("ShowDistanceFromBoat", &m_show_distance, false);
     config.Read("AheadFanShown", &m_ahead_fan_shown, true);
+    wxString colour;
+    config.Read("AheadFanColour", &colour, kAheadColourNames[0]);
+    m_ahead_colour = 0;
+    for (int n = 0; n < kAheadColourCount; ++n)
+        if (colour == kAheadColourNames[n])
+            m_ahead_colour = n;
     config.Read("AheadAngle", &m_ahead_angle, 30);
     if (m_ahead_angle != 15 && m_ahead_angle != 45)
         m_ahead_angle = 30;
@@ -622,6 +628,7 @@ void legend_pi::SaveConfig() const
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
     config.Write("ShowDistanceFromBoat", m_show_distance);
     config.Write("AheadFanShown", m_ahead_fan_shown);
+    config.Write("AheadFanColour", wxString(kAheadColourNames[m_ahead_colour]));
     config.Write("AheadAngle", m_ahead_angle);
     config.Write("AheadMiles", m_ahead_miles);
     config.Write("ShowLights", m_show_lights);
