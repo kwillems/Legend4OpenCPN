@@ -18,6 +18,7 @@
 #include <wx/log.h>
 
 wxString g_tap_clock_text;
+wxBitmap g_refresh_icon;
 
 namespace {
 
@@ -63,11 +64,66 @@ public:
     }
 };
 
+class RefreshIconCell : public wxHtmlCell
+{
+public:
+    explicit RefreshIconCell(int size)
+    {
+        m_Width = size;
+        m_Height = size;
+    }
+
+    void Draw(wxDC &dc, int x, int y, int, int, wxHtmlRenderingInfo &) override
+    {
+        if (g_refresh_icon.IsOk())
+            dc.DrawBitmap(g_refresh_icon, x + m_PosX, y + m_PosY);
+    }
+};
+
+class RefreshIconTagHandler : public wxHtmlWinTagHandler
+{
+public:
+    wxString GetSupportedTags() override { return "LEGENDREFRESH"; }
+
+    bool HandleTag(const wxHtmlTag &tag) override
+    {
+        int size = 0;
+        tag.GetParamAsInt("size", &size);
+        auto *cell = new RefreshIconCell(size);
+        cell->SetId(tag.GetParam("id"));
+        cell->SetLink(m_WParser->GetLink());
+        m_WParser->GetContainer()->InsertCell(cell);
+        return false;
+    }
+};
+
+class SpacerCell : public wxHtmlCell
+{
+public:
+    explicit SpacerCell(int height) { m_Height = height; }
+};
+
+class SpacerTagHandler : public wxHtmlWinTagHandler
+{
+public:
+    wxString GetSupportedTags() override { return "LEGENDSPACER"; }
+
+    bool HandleTag(const wxHtmlTag &tag) override
+    {
+        int height = 0;
+        tag.GetParamAsInt("height", &height);
+        m_WParser->GetContainer()->InsertCell(new SpacerCell(height));
+        return false;
+    }
+};
+
 } // namespace
 
 void TapClockModule::FillHandlersTable(wxHtmlWinParser *parser)
 {
     parser->AddTagHandler(new TapClockTagHandler);
+    parser->AddTagHandler(new RefreshIconTagHandler);
+    parser->AddTagHandler(new SpacerTagHandler);
 }
 
 LegendHtmlWindow::LegendHtmlWindow(
