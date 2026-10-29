@@ -873,6 +873,27 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     const int padding = page.tilePadding;
     const int cell = box + 2 * padding + 10;
 
+    // As in the rest of the legend, what is known besides the meaning comes
+    // first, small, on a line of its own: when and where, and what the
+    // chart does not draw at this scale (a closed eye and the scale at
+    // which it appears); the meaning, grey when hidden, under it.
+    auto twoLines = [&](const wxString &facts, const wxString &text) {
+        return "<font size=\"-1\">" + facts + "</font><br>" + text;
+    };
+    auto hiddenFacts = [&](const wxColour &rowColour, const wxString &eye, int scale) {
+        const wxString eyeName = AddDynamicImage(
+            wxString::Format("legend_dyn_%d_%s.png", m_dynamic_generation, eye),
+            EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
+        wxString out = " &middot; <font color=\"" + HtmlColour(muted) +
+                       "\"><img src=\"memory:" + eyeName + "\">";
+        if (scale > 0)
+            out << " " << FormatScaleShort(scale);
+        return out + "</font>";
+    };
+    auto grey = [&](const wxString &text) {
+        return "<font color=\"" + HtmlColour(muted) + "\">" + text + "</font>";
+    };
+
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"5\">";
     size_t row = 0;
     size_t nextVhf = 0;
@@ -887,24 +908,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
             VhfBadgeImage(next.area.channel, rowColour, 2 * box));
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\"><img src=\"memory:"
-             << image << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
-             << whenMinutes(next.minutes) << "</b> &middot; "
-             << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
+             << image << "\"></td><td id=\"" << id << "\" valign=\"middle\">"
+             << twoLines("<b>" + whenMinutes(next.minutes) + "</b>",
+                         (nl ? "Marifoongebied " : "VHF area ") + vhfText(next))
              << "</td></tr>";
-    };
-    // As in the rest of the legend, what the chart does not draw at this
-    // scale is grey, with a closed eye and the scale at which it appears.
-    auto hiddenText = [&](const wxString &text, const wxColour &rowColour, const wxString &eye,
-                          int scale) {
-        const wxString eyeName = AddDynamicImage(
-            wxString::Format("legend_dyn_%d_%s.png", m_dynamic_generation, eye),
-            EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
-        wxString out = "<font color=\"" + HtmlColour(muted) + "\">" + text +
-                       "</font>&nbsp; <img src=\"memory:" + eyeName + "\">";
-        if (scale > 0)
-            out << " <font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-                << FormatScaleShort(scale) << "</font>";
-        return out;
     };
     // A note ahead.
     auto noteRow = [&](size_t n) {
@@ -924,16 +931,18 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                              ? wxString(nl ? "recht vooruit" : "dead ahead")
                              : note.cross > 0.0 ? wxString(nl ? "stuurboord" : "starboard")
                                                 : wxString(nl ? "bakboord" : "port");
-        wxString title = (nl ? "notitie " : "note ") + EscapeHtml(note.title);
-        if (note.hidden)
-            title = hiddenText(title, rowColour, wxString::Format("aheadnoteeye_%zu", n),
-                               note.scamin);
+        wxString facts = "<b>" + whenMinutes(note.minutes) + "</b> &middot; " + where;
+        wxString title = (nl ? "Notitie " : "Note ") + EscapeHtml(note.title);
+        if (note.hidden) {
+            facts << hiddenFacts(rowColour, wxString::Format("aheadnoteeye_%zu", n),
+                                 note.scamin);
+            title = grey(title);
+        }
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"" << cell
              << "\" align=\"center\" valign=\"middle\"><img src=\"memory:" << image
-             << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
-             << whenMinutes(note.minutes) << "</b> &middot; " << where << " &middot; "
-             << title << "</td></tr>";
+             << "\"></td><td id=\"" << id << "\" valign=\"middle\">"
+             << twoLines(facts, title) << "</td></tr>";
     };
     size_t nextNote = 0;
     for (size_t k = 0; k < m_ahead.size(); ++k) {
@@ -973,23 +982,25 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                 icon, icon2);
             html << "<img src=\"memory:" << image << "\">";
         }
-        html << "</td><td id=\"" << id << "\" valign=\"middle\">"
-             << "<b>" << when(item) << "</b> &middot; " << side(item);
+        wxString facts = "<b>" + when(item) + "</b> &middot; " + side(item);
         // Setting "Afstand en peiling vanaf de boot": to this object.
         if (DistanceFromBoatShown() && item.position < group.positions.size()) {
             const auto &at = group.positions[item.position];
-            html << " &middot; "
-                 << FormatDistance(SeaMiles(m_ship_lat, m_ship_lon, at.first, at.second))
-                 << " &middot; "
-                 << FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, at.first, at.second));
+            facts << " &middot; "
+                  << FormatDistance(SeaMiles(m_ship_lat, m_ship_lon, at.first, at.second))
+                  << " &middot; "
+                  << FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, at.first, at.second));
         }
         wxString what = name(item);
         if (!item.light.IsEmpty() && !group.lightCharacter)
             what << " &middot; <b>" << EscapeHtml(item.light) << "</b>";
-        if (group.hiddenAtScale)
-            what = hiddenText(what, rowColour, wxString::Format("aheadeye_%zu", k),
-                              group.visibleFrom);
-        html << " &middot; " << what << "</td></tr>";
+        if (group.hiddenAtScale) {
+            facts << hiddenFacts(rowColour, wxString::Format("aheadeye_%zu", k),
+                                 group.visibleFrom);
+            what = grey(what);
+        }
+        html << "</td><td id=\"" << id << "\" valign=\"middle\">" << twoLines(facts, what)
+             << "</td></tr>";
     }
     while (nextVhf < m_ahead_vhf.size() || nextNote < m_ahead_notes.size()) {
         const double v = nextVhf < m_ahead_vhf.size() ? m_ahead_vhf[nextVhf].minutes
@@ -1085,30 +1096,34 @@ void legend_pi::RenderNotesBlock(DynamicPage &page)
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_note_%zu.png", m_dynamic_generation, k),
             sign, sign2);
+        // As in the rest of the legend: first, small, how far it is and,
+        // when its sign is not drawn at this scale, a closed eye and the
+        // scale at which it appears (a click zooms in); then the title,
+        // grey when hidden, and the first words of the note.
+        wxString facts;
         wxString title = EscapeHtml(place.title);
         if (hidden) {
-            // Not drawn at this scale: grey, a closed eye and the
-            // scale at which it appears; a click zooms in.
             const wxString eye = AddDynamicImage(
                 wxString::Format("legend_dyn_%d_noteeye_%zu.png",
                                  m_dynamic_generation, k),
                 EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
-            title = "<font color=\"" + HtmlColour(muted) + "\">" + title +
-                    "</font>&nbsp; <img src=\"memory:" + eye + "\"> <font size=\"-1\" color=\"" +
-                    HtmlColour(muted) + "\">" + FormatScaleShort(place.scamin) + "</font>";
+            facts << "<img src=\"memory:" << eye << "\"> " << FormatScaleShort(place.scamin)
+                  << " &middot; ";
+            title = "<font color=\"" + HtmlColour(muted) + "\">" + title + "</font>";
         }
+        facts << miles(distance);
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"34\" align=\"center\" valign=\"top\"><img src=\"memory:"
-             << image << "\"></td><td id=\"" << id << "\">" << title
-             << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-             << miles(distance);
+             << image << "\"></td><td id=\"" << id << "\"><font size=\"-1\" color=\""
+             << HtmlColour(muted) << "\">" << facts << "</font><br>" << title;
         if (!place.snippet.IsEmpty()) {
             wxString snippet = place.snippet;
             if (snippet.length() > 70)
                 snippet = snippet.Left(68) + wxString::FromUTF8("\u2026");
-            html << " &middot; " << EscapeHtml(snippet);
+            html << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
+                 << EscapeHtml(snippet) << "</font>";
         }
-        html << "</font></td></tr>";
+        html << "</td></tr>";
     }
     html << "</table>";
 }
@@ -1585,9 +1600,13 @@ void legend_pi::RenderRow(DynamicPage &page, size_t i)
         label = "<font color=\"" + HtmlColour(muted) + "\">" + label +
                 "</font>";
     }
+    // What is known about the row besides its meaning comes first, small,
+    // on a line of its own above it: a closed eye with the scale at which
+    // it appears when the chart does not draw it at this scale (a click
+    // zooms in), and with the setting "Afstand en peiling vanaf de boot"
+    // the distance and bearing of the nearest one.
+    wxString facts;
     if (group.hiddenAtScale) {
-        // Not drawn on the chart at this scale: a closed eye and the
-        // scale at which it appears; a click zooms in.
         label = "<font color=\"" + HtmlColour(muted) + "\">" + label +
                 "</font>";
 
@@ -1596,21 +1615,21 @@ void legend_pi::RenderRow(DynamicPage &page, size_t i)
             EyeIcon(false, muted, rowColour),
             EyeIcon(false, muted, rowColour, 2));
 
-        label << "&nbsp; <img src=\"memory:" << eyeName << "\">";
-        if (group.visibleFrom > 0) {
-            label << " <font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-                  << FormatScaleShort(group.visibleFrom) << "</font>";
-        }
+        facts << "<img src=\"memory:" << eyeName << "\">";
+        if (group.visibleFrom > 0)
+            facts << " " << FormatScaleShort(group.visibleFrom);
+    }
+    const wxString distance = DistanceText(group);
+    if (!distance.IsEmpty()) {
+        if (!facts.IsEmpty())
+            facts << " &middot; ";
+        facts << distance;
     }
     if (isActive)
         label = "<b>" + label + "</b>";
-
-    // Setting "Afstand en peiling vanaf de boot": the nearest one, small,
-    // under the text.
-    const wxString distance = DistanceText(group);
-    if (!distance.IsEmpty()) {
-        label << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-              << distance << "</font>";
+    if (!facts.IsEmpty()) {
+        label = "<font size=\"-1\" color=\"" + HtmlColour(muted) + "\">" + facts +
+                "</font><br>" + label;
     }
 
     // Every cell of the row carries the row id, so a click anywhere
