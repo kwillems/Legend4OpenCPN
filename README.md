@@ -58,11 +58,11 @@ routebeschrijvingen.
 
 **Uitkijk**
 
-- Tijdens het varen: wat je het komende half uur op koers tegenkomt, op
-  volgorde van aankomst, met de kant waar het ligt, de afstand en zijn licht,
-  en het volgende marifoongebied. Ook wat je op dit moment passeert.
-- Het blikveld staat als lichte bundel op de kaart, zodat je ziet waar de
-  uitkijk kijkt; smal, middel of breed.
+- Tijdens het varen: wat je de komende 10, 15, 30 of 60 minuten op koers
+  tegenkomt (jij kiest), op volgorde van aankomst, met de kant waar het ligt,
+  de afstand en zijn licht, en het volgende marifoongebied. Ook wat je op dit moment passeert.
+- De uitkijkbundel staat licht op de kaart, zodat je ziet waar de uitkijk
+  kijkt; smal, middel of breed. Alles wat in de bundel ligt, staat in de lijst.
 
 **Marifoon**
 
@@ -171,8 +171,9 @@ In het menu Instellingen:
 | Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
 | Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
 | Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
-| Uitkijk op de kaart tonen | Het blikveld van de uitkijk als lichte bundel op de kaart; standaard aan |
-| Blikveld van de uitkijk ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
+| Uitkijkbundel op de kaart | De uitkijkbundel licht getekend op de kaart; standaard aan |
+| Uitkijkbundel: breedte ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
+| Uitkijkbundel: lengte ▸ | 10, 15, 30 of 60 minuten varen; standaard 30 |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -310,10 +311,10 @@ is uit te zetten met *Melding bij nieuw marifoongebied*.
 Het kopje **Uitkijk** laat zien wat je de komende tijd op koers tegenkomt.
 Het verschijnt zodra de boot vaart: een recente GPS-positie en minstens een
 halve knoop. Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld
-*komende 30 minuten, tot 2,5 NM · blikveld 30°*, en *niets in het blikveld*
+*komende 30 minuten, tot 2,5 NM · breedte 30°*, en *niets in de bundel*
 als er niets ligt.
 
-- Tot acht objecten uit de legenda, op volgorde van aankomst, bijvoorbeeld
+- Alle objecten uit de legenda in de bundel, op volgorde van aankomst, bijvoorbeeld
   *over 4 min · stuurboord · 0,6 NM · 038° · Rode spitse ton*, met het
   lichtkarakter erbij. Afstand en peiling staan erbij als *Afstand en peiling
   vanaf de boot* aan staat.
@@ -325,22 +326,25 @@ als er niets ligt.
   melden*. Een klik laat het gebied oplichten. De tekens van de laag
   *VHFinfo Nederland* zelf tellen niet als object; echte marifoonborden langs
   het water (B11, E23) wel.
-- Tot drie vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
+- De vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
   stuurboord · notitie Ondiepte bij de Ketelbrug*. Een klik opent de notitie.
 - Een klik op een regel wijst het object aan op de kaart, of laat zijn licht
   branden.
 
-**Het blikveld.** De uitkijk kijkt vanuit een cirkel van 0,12 zeemijl om de
-boot in een waaier vooruit: dichtbij minstens 0,12 zeemijl breed aan elke
-kant, verderop breder, tot zo ver als je in een half uur komt (hooguit 8
-zeemijl). Hoe breed de waaier uitloopt, kies je met **Blikveld van de
-uitkijk**: smal (15°), middel (30°, standaard) of breed (45°) aan weerszijden
-van de koers.
+**De uitkijkbundel.** De uitkijk kijkt vanuit een cirkel van 0,12 zeemijl om
+de boot in een waaier vooruit: dichtbij minstens 0,12 zeemijl breed aan elke
+kant, verderop breder. Hoe ver hij reikt, kies je met **Uitkijkbundel:
+lengte**: zo ver als je in 10, 15, 30 (standaard) of 60 minuten vaart, en
+minstens 0,3 zeemijl. Op druk vaarwater houdt een korte lengte de lijst
+overzichtelijk. Hoe breed de waaier uitloopt, kies je met **Uitkijkbundel:
+breedte**: smal (15°), middel (30°, standaard) of breed (45°) aan
+weerszijden van de koers.
 
-Met **Uitkijk op de kaart tonen** (standaard aan) staat het blikveld als heel
-lichte, amberkleurige bundel op de kaart, zolang de legenda open is en de
-boot vaart. Zo zie je waarom een ton wel of niet in de lijst staat. Bij
-schemer en nacht wordt de bundel gedimd, maar blijft hij zichtbaar.
+Met **Uitkijkbundel op de kaart** (standaard aan) staat de bundel heel licht
+en amberkleurig op de kaart, zolang de legenda open is en de boot vaart. Zo
+zie je waarom een ton wel of niet in de lijst staat. Uitzetten verbergt
+alleen de tekening; de lijst blijft. Bij schemer en nacht wordt de bundel
+gedimd, maar blijft hij zichtbaar.
 
 Testen zonder te varen kan met de plugin ShipDriver.
 
@@ -596,7 +600,8 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
   als kaartsymbool.
 - Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
-- De uitkijk kijkt alleen naar wat in beeld is.
+- De uitkijk kijkt alleen naar wat in beeld is: zoom zo ver uit dat de
+  bundel op het scherm past.
 - De markering op de kaart is getest met **OpenGL aan**.
 - Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
   het bestand, dan kan het icoon op macOS leeg blijven.
@@ -653,8 +658,8 @@ grep "Legend:" ~/Library/Logs/opencpn.log | tail -20
 
 De onderdelen die zonder OpenCPN werken, hebben unit tests in `test/`:
 lichtkarakters, marifoongebieden, notities met een plek, `symbolen.txt`, het
-inlezen van laagwaypoints en afstanden, peilingen en het blikveld van de
-uitkijk. Bouwen en draaien in de map `build/`:
+inlezen van laagwaypoints en afstanden, peilingen en de uitkijkbundel.
+Bouwen en draaien in de map `build/`:
 
 ```bash
 make legend-tests
@@ -683,7 +688,7 @@ Legend4OpenCPN/
 │   ├── legend_icons.*          # iconen inlezen en tekenen
 │   ├── legend_shared.*         # kleuren en hulpjes die alle delen gebruiken
 │   ├── symbol_meanings.*       # symbolen.txt lezen en opzoeken
-│   ├── geo.*                   # afstand, peiling en het blikveld
+│   ├── geo.*                   # afstand, peiling en de uitkijkbundel
 │   ├── chart_symbols.*         # S-52-symbolen en S-57-catalogus van OpenCPN
 │   ├── ocharts_source.*        # kaartobjecten via de o-charts-plugin
 │   ├── s57_source.*            # kaartobjecten uit ENC-cellen (S-57)
