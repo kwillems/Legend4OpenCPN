@@ -504,9 +504,9 @@ void legend_pi::StartRefreshSpin()
     m_refresh_state_since = wxGetLocalTimeMillis();
     m_refresh_turn = 0;
     m_refresh_message.Clear();
-    m_refresh_keys_before.clear();
+    m_refresh_rows_before.clear();
     for (const DynamicGroup &group : m_dynamic_groups)
-        m_refresh_keys_before.insert(group.key);
+        m_refresh_rows_before[group.key] = {group.label, group.section};
     m_refresh_icon_timer.Start(50);
     if (IsDynamicLegendVisible() && !m_showing_loading_page) {
         // The empty page keeps the height of the list: a scroll bar that
@@ -560,26 +560,34 @@ void legend_pi::OnRefreshIconTimer()
         static_cast<LegendHtmlWindow *>(m_markdown_view)->RefreshCell(kRefreshIconId);
 }
 
-// Rows that came and went with Ververs, in a few words; empty when the
-// list stayed the same.
+// Rows that came, went or changed their text or heading with Ververs (an
+// edited symbolen.txt), in a few words; empty when the list stayed the
+// same.
 wxString legend_pi::RefreshChangeMessage() const
 {
-    std::set<wxString> after;
-    for (const DynamicGroup &group : m_dynamic_groups)
-        after.insert(group.key);
-
     int added = 0;
-    for (const wxString &key : after)
-        added += m_refresh_keys_before.count(key) == 0 ? 1 : 0;
+    int changed = 0;
+    std::set<wxString> after;
+    for (const DynamicGroup &group : m_dynamic_groups) {
+        after.insert(group.key);
+        auto before = m_refresh_rows_before.find(group.key);
+        if (before == m_refresh_rows_before.end())
+            ++added;
+        else if (before->second != std::make_pair(group.label, group.section))
+            ++changed;
+    }
     int gone = 0;
-    for (const wxString &key : m_refresh_keys_before)
-        gone += after.count(key) == 0 ? 1 : 0;
+    for (const auto &before : m_refresh_rows_before)
+        gone += after.count(before.first) == 0 ? 1 : 0;
 
     wxString message;
-    if (added > 0)
-        message << added << " nieuw";
-    if (gone > 0)
-        message << (message.IsEmpty() ? "" : ", ") << gone << " weg";
+    auto part = [&message](int count, const char *what) {
+        if (count > 0)
+            message << (message.IsEmpty() ? "" : ", ") << count << " " << what;
+    };
+    part(added, "nieuw");
+    part(changed, "gewijzigd");
+    part(gone, "weg");
     return message;
 }
 
