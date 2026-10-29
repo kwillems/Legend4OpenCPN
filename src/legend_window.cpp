@@ -1376,7 +1376,7 @@ void legend_pi::RunLegendCommand(const wxString &command)
     }
 }
 
-// "Blikveld van de uitkijk": the list and the fan on the chart follow at once.
+// "Uitkijkbundel: breedte": the list and the fan on the chart follow at once.
 void legend_pi::SetAheadAngle(int angle)
 {
     m_ahead_angle = angle;
@@ -1385,7 +1385,7 @@ void legend_pi::SetAheadAngle(int angle)
     RefreshAllCanvases();
 }
 
-// "Vooruitkijken": how many minutes ahead the list and the fan reach.
+// "Uitkijkbundel: tijd vooruit": how many minutes ahead the list and the fan reach.
 void legend_pi::SetAheadMinutes(int minutes)
 {
     m_ahead_minutes = minutes;
@@ -1437,7 +1437,7 @@ void legend_pi::ShowSettingsMenu()
             ->Check(m_note_notice_on);
 
     menu.AppendSeparator();
-    menu.AppendCheckItem(kAheadFan, "Uitkijk op de kaart tonen")->Check(m_ahead_fan_shown);
+    menu.AppendCheckItem(kAheadFan, "Uitkijkbundel op de kaart")->Check(m_ahead_fan_shown);
     auto *width = new wxMenu;
     width->AppendRadioItem(kAhead15, wxString::FromUTF8("Smal (15\u00b0)"))
         ->Check(m_ahead_angle == 15);
@@ -1445,14 +1445,15 @@ void legend_pi::ShowSettingsMenu()
         ->Check(m_ahead_angle == 30);
     width->AppendRadioItem(kAhead45, wxString::FromUTF8("Breed (45\u00b0)"))
         ->Check(m_ahead_angle == 45);
-    menu.AppendSubMenu(width, "Blikveld van de uitkijk");
+    menu.AppendSubMenu(width, "Uitkijkbundel: breedte");
     auto *ahead = new wxMenu;
     ahead->AppendRadioItem(kAheadMin10, "10 minuten")->Check(m_ahead_minutes == 10);
     ahead->AppendRadioItem(kAheadMin15, "15 minuten")->Check(m_ahead_minutes == 15);
     ahead->AppendRadioItem(kAheadMin30, "30 minuten")->Check(m_ahead_minutes == 30);
     ahead->AppendRadioItem(kAheadMin60, "60 minuten")->Check(m_ahead_minutes == 60);
-    menu.AppendSubMenu(ahead, "Vooruitkijken");
+    menu.AppendSubMenu(ahead, "Uitkijkbundel: tijd vooruit");
     if (m_menu_has_headings) {
+        menu.AppendSeparator();
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
     }

@@ -118,7 +118,7 @@ void legend_pi::SortFromBoat(DynamicGroup &group) const
 }
 
 // How far the Uitkijk looks: as far as the boat goes in the minutes of the
-// setting "Vooruitkijken", at least 0.3 sea mile.
+// setting "Uitkijkbundel: tijd vooruit", at least 0.3 sea mile.
 double legend_pi::AheadRange() const
 {
     return std::max(0.3, m_ship_sog * m_ahead_minutes / 60.0);
