@@ -237,7 +237,8 @@ void legend_pi::ComputeAhead()
 
     for (const AheadItem &item : m_ahead) {
         key << m_dynamic_groups[item.group].key << '@' << item.position << '/'
-            << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
+            << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p')
+            << (m_dynamic_groups[item.group].hiddenAtScale ? "h" : "") << ';';
     }
 
     // Notes whose place lies in the same fan.
@@ -251,7 +252,14 @@ void legend_pi::ComputeAhead()
         if (!InFan(along, std::max(0.0, std::fabs(cross) - place.radius), range,
                    m_ahead_angle, kAheadMinHalfWidth))
             continue;
+        // As in the list: a sign the chart does not draw at this scale
+        // only with the setting for those, and then in grey.
+        const bool hidden = NoteHiddenAtScale(place);
+        if (hidden && !m_show_hidden_at_scale)
+            continue;
         AheadNote note;
+        note.hidden = hidden;
+        note.scamin = place.scamin;
         note.minutes = along / m_ship_sog * 60.0;
         note.cross = cross;
         note.title = place.title;
@@ -261,7 +269,8 @@ void legend_pi::ComputeAhead()
     std::sort(m_ahead_notes.begin(), m_ahead_notes.end(),
               [](const AheadNote &a, const AheadNote &b) { return a.minutes < b.minutes; });
     for (const AheadNote &note : m_ahead_notes)
-        key << "note:" << note.path << '/' << static_cast<int>(note.minutes) << ';';
+        key << "note:" << note.path << '/' << static_cast<int>(note.minutes)
+            << (note.hidden ? "h" : "") << ';';
 
     // The VHF areas the course enters as far ahead, up to two:
     // points along the course line, a few hundred metres apart.
@@ -413,7 +422,9 @@ void legend_pi::TapUp()
         m_markdown_view->CallAfter([this]() { RenderDynamicLegend(true); });
 }
 
-// A click on a line of the "Uitkijk" block: that object on the chart.
+// A click on a line of the "Uitkijk" block: that object on the chart; when
+// it is hidden at this scale, zoomed in to just past its limit first, as
+// for a grey row of the list.
 void legend_pi::ShowAheadItem(size_t index)
 {
     if (index >= m_ahead.size())
@@ -430,6 +441,11 @@ void legend_pi::ShowAheadItem(size_t index)
     m_active_light_key.Clear();
 
     const auto position = group.positions[item.position];
+    if (group.hiddenAtScale) {
+        const double zoom = ViewScaleForLimit(group.visibleFrom);
+        if (zoom > 0.0)
+            JumpTo(position.first, position.second, zoom);
+    }
     LightCharacter light;
     if (!item.light.IsEmpty() && light.Parse(item.light))
         ShowLightMarkers(light, {position});

@@ -821,8 +821,27 @@ void legend_pi::OnLegendClick(const Hit &hit)
         ShowAheadItem(static_cast<size_t>(hit.index));
         break;
     case HitKind::AheadNote:
-        if (static_cast<size_t>(hit.index) < m_ahead_notes.size())
-            OpenNote(m_ahead_notes[hit.index].path);
+        if (static_cast<size_t>(hit.index) < m_ahead_notes.size()) {
+            const AheadNote note = m_ahead_notes[hit.index];
+            if (!note.hidden) {
+                OpenNote(note.path);
+                break;
+            }
+            // Hidden at this scale: zoom in to just past its limit and
+            // show its sign, as in the block Notities.
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                const NotePlace &place = m_note_places[i];
+                if (place.path != note.path)
+                    continue;
+                const double zoom = ViewScaleForLimit(place.scamin);
+                if (zoom > 0.0)
+                    JumpTo(place.lat, place.lon, zoom);
+                m_note_selected = static_cast<int>(i);
+                ShowMarker(place.lat, place.lon);
+                RefreshAllCanvases();
+                break;
+            }
+        }
         break;
     case HitKind::Note:
         if (static_cast<size_t>(hit.index) < m_note_rows.size() &&

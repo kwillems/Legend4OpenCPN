@@ -791,6 +791,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     const bool nl = m_dutch_names;
     const wxColour &background = page.palette.background;
     const wxColour &stripe = page.palette.stripe;
+    const wxColour &muted = page.palette.muted;
     wxString &html = page.html;
 
     ComputeAhead();
@@ -891,24 +892,48 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
              << (nl ? "marifoongebied " : "VHF area ") << vhfText(next)
              << "</td></tr>";
     };
+    // As in the rest of the legend, what the chart does not draw at this
+    // scale is grey, with a closed eye and the scale at which it appears.
+    auto hiddenText = [&](const wxString &text, const wxColour &rowColour, const wxString &eye,
+                          int scale) {
+        const wxString eyeName = AddDynamicImage(
+            wxString::Format("legend_dyn_%d_%s.png", m_dynamic_generation, eye),
+            EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
+        wxString out = "<font color=\"" + HtmlColour(muted) + "\">" + text +
+                       "</font>&nbsp; <img src=\"memory:" + eyeName + "\">";
+        if (scale > 0)
+            out << " <font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
+                << FormatScaleShort(scale) << "</font>";
+        return out;
+    };
     // A note ahead.
     auto noteRow = [&](size_t n) {
         const AheadNote &note = m_ahead_notes[n];
         const wxString id = wxString::Format("%s%zu", kLegendAheadNoteIdPrefix, n);
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
+        wxImage sign = NoteSignImage(rowColour, box);
+        wxImage sign2 = NoteSignImage(rowColour, 2 * box);
+        if (note.hidden) {
+            sign = FadeImage(sign, rowColour, 0.55);
+            sign2 = FadeImage(sign2, rowColour, 0.55);
+        }
         const wxString image = AddDynamicImage(
             wxString::Format("legend_dyn_%d_aheadnote_%zu.png", m_dynamic_generation, n),
-            NoteSignImage(rowColour, box), NoteSignImage(rowColour, 2 * box));
+            sign, sign2);
         wxString where = std::fabs(note.cross) < 0.02
                              ? wxString(nl ? "recht vooruit" : "dead ahead")
                              : note.cross > 0.0 ? wxString(nl ? "stuurboord" : "starboard")
                                                 : wxString(nl ? "bakboord" : "port");
+        wxString title = (nl ? "notitie " : "note ") + EscapeHtml(note.title);
+        if (note.hidden)
+            title = hiddenText(title, rowColour, wxString::Format("aheadnoteeye_%zu", n),
+                               note.scamin);
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"" << cell
              << "\" align=\"center\" valign=\"middle\"><img src=\"memory:" << image
              << "\"></td><td id=\"" << id << "\" valign=\"middle\"><b>"
              << whenMinutes(note.minutes) << "</b> &middot; " << where << " &middot; "
-             << (nl ? "notitie " : "note ") << EscapeHtml(note.title) << "</td></tr>";
+             << title << "</td></tr>";
     };
     size_t nextNote = 0;
     for (size_t k = 0; k < m_ahead.size(); ++k) {
@@ -934,11 +959,18 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\">";
         if (page.icons[item.group].IsOk()) {
+            wxImage icon = NormalizeIcon(page.icons[item.group], rowColour, box, tile, padding);
+            wxImage icon2 =
+                NormalizeIcon(page.icons2[item.group], rowColour, 2 * box, tile, 2 * padding);
+            if (group.hiddenAtScale) {
+                icon = FadeImage(icon, rowColour, 0.55);
+                if (icon2.IsOk())
+                    icon2 = FadeImage(icon2, rowColour, 0.55);
+            }
             const wxString image = AddDynamicImage(
                 wxString::Format("legend_dyn_%d_ahead_%zu.png",
                                  m_dynamic_generation, k),
-                NormalizeIcon(page.icons[item.group], rowColour, box, tile, padding),
-                NormalizeIcon(page.icons2[item.group], rowColour, 2 * box, tile, 2 * padding));
+                icon, icon2);
             html << "<img src=\"memory:" << image << "\">";
         }
         html << "</td><td id=\"" << id << "\" valign=\"middle\">"
@@ -951,10 +983,13 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                  << " &middot; "
                  << FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, at.first, at.second));
         }
-        html << " &middot; " << name(item);
+        wxString what = name(item);
         if (!item.light.IsEmpty() && !group.lightCharacter)
-            html << " &middot; <b>" << EscapeHtml(item.light) << "</b>";
-        html << "</td></tr>";
+            what << " &middot; <b>" << EscapeHtml(item.light) << "</b>";
+        if (group.hiddenAtScale)
+            what = hiddenText(what, rowColour, wxString::Format("aheadeye_%zu", k),
+                              group.visibleFrom);
+        html << " &middot; " << what << "</td></tr>";
     }
     while (nextVhf < m_ahead_vhf.size() || nextNote < m_ahead_notes.size()) {
         const double v = nextVhf < m_ahead_vhf.size() ? m_ahead_vhf[nextVhf].minutes

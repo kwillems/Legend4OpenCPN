@@ -678,6 +678,8 @@ private:
         double cross = 0.0;
         wxString title;
         wxString path;
+        bool hidden = false;  // its sign is not drawn at this scale
+        int scamin = 0;
     };
     std::vector<AheadNote> m_ahead_notes; // notes whose place lies ahead
     std::vector<VhfArea> m_vhf_rows;    // areas of the Marifoon block
