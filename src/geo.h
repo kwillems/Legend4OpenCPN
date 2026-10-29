@@ -48,13 +48,14 @@ void PositionAt(double lat0, double lon0, double course, double along, double ac
                 double *lat, double *lon);
 
 // The fan of the Uitkijk: a circle of `minHalfWidth` sea miles around the
-// boat, for what lies beside it or was just passed, and ahead of it up to
-// `range` sea miles a strip at least `minHalfWidth` wide on either side,
-// widening at `halfAngle` degrees on either side of the course.
+// boat, for what lies beside it or was just passed, and ahead of it a strip
+// at least `minHalfWidth` wide on either side, widening at `halfAngle`
+// degrees on either side of the course, up to `range` sea miles from the
+// boat in every direction: its far end is round.
 bool InFan(double along, double across, double range, double halfAngle, double minHalfWidth);
 
 // Its outline as positions (lat, lon), in order, not closed: the corners
-// ahead and the half circle behind the boat. Where the strip widens the
+// and the arc ahead and the half circle behind the boat. Where the strip widens the
 // outline bends outward, so the fan is not convex; from the boat every
 // point of it is in sight.
 std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, double course,
