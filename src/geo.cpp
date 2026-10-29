@@ -62,6 +62,27 @@ wxString FormatDistance(double seaMiles)
     return text;
 }
 
+wxString FormatMiles(double seaMiles)
+{
+    const long halves = std::lround(seaMiles * 2.0);
+    if (halves % 2 == 0)
+        return wxString::Format("%ld NM", halves / 2);
+    return wxString::Format("%ld,5 NM", halves / 2);
+}
+
+wxString FormatDuration(double minutes, bool dutch)
+{
+    if (minutes < 9.5)
+        return wxString::Format("%ld min", std::max(1L, std::lround(minutes)));
+    const long rounded = std::lround(minutes / 5.0) * 5;
+    if (rounded < 60)
+        return wxString::Format("%ld min", rounded);
+    const wxString hour = dutch ? "u" : "h";
+    if (rounded % 60 == 0)
+        return wxString::Format("%ld %s", rounded / 60, hour);
+    return wxString::Format("%ld %s %02ld", rounded / 60, hour, rounded % 60);
+}
+
 void AlongAndAcross(double lat0, double lon0, double course, double lat, double lon,
                     double *along, double *across)
 {
@@ -89,7 +110,7 @@ bool InFan(double along, double across, double range, double halfAngle, double m
     if (along * along + across * across <= minHalfWidth * minHalfWidth)
         return true;
     const double widen = std::tan(halfAngle * kPi / 180.0);
-    return along >= 0.0 && along <= range &&
+    return along >= 0.0 && along * along + across * across <= range * range &&
            std::fabs(across) <= std::max(minHalfWidth, along * widen);
 }
 
@@ -98,16 +119,25 @@ std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, doub
                                                   double minHalfWidth)
 {
     // Along and across: the boat's end, where the fan starts to widen
-    // (when that is before its far end), and the far end.
-    const double widen = std::tan(halfAngle * kPi / 180.0);
+    // (when that is inside its range), and the far end: an arc at `range`
+    // from the boat, from port round to starboard. Its sides meet the arc
+    // at the angle of the fan, or where the strip near the boat does when
+    // the fan is too short to widen.
+    const double angle = halfAngle * kPi / 180.0;
+    const double widen = std::tan(angle);
     const double bend = widen > 0.0 ? minHalfWidth / widen : range;
-    const double farHalfWidth = std::max(minHalfWidth, range * widen);
+    const bool widens = bend * bend + minHalfWidth * minHalfWidth < range * range;
+    const double side =
+        std::max(angle, std::asin(std::min(1.0, minHalfWidth / std::max(range, 1e-9))));
     std::vector<std::pair<double, double>> corners = {{0.0, -minHalfWidth}};
-    if (bend < range)
+    if (widens)
         corners.push_back({bend, -minHalfWidth});
-    corners.push_back({range, -farHalfWidth});
-    corners.push_back({range, farHalfWidth});
-    if (bend < range)
+    const int kFarSteps = 24;
+    for (int step = 0; step <= kFarSteps; ++step) {
+        const double a = -side + 2.0 * side * step / kFarSteps;
+        corners.push_back({range * std::cos(a), range * std::sin(a)});
+    }
+    if (widens)
         corners.push_back({bend, minHalfWidth});
     corners.push_back({0.0, minHalfWidth});
 

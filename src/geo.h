@@ -28,6 +28,13 @@ double BearingDegrees(double lat1, double lon1, double lat2, double lon2);
 // "150 m" below a tenth of a sea mile, "0,3 NM" below ten, "12 NM" beyond.
 wxString FormatDistance(double seaMiles);
 
+// A length the user chose, to half a sea mile: "2 NM", "0,5 NM", "12,5 NM".
+wxString FormatMiles(double seaMiles);
+
+// The time to sail somewhere, roughly: "7 min" below ten minutes, then to
+// five minutes ("25 min", "1 u 05" / "1 h 05"), whole hours as "2 u" / "2 h".
+wxString FormatDuration(double minutes, bool dutch);
+
 // "045°": whole degrees, three digits; 359.6 becomes "000°".
 wxString FormatBearing(double degrees);
 
@@ -41,13 +48,14 @@ void PositionAt(double lat0, double lon0, double course, double along, double ac
                 double *lat, double *lon);
 
 // The fan of the Uitkijk: a circle of `minHalfWidth` sea miles around the
-// boat, for what lies beside it or was just passed, and ahead of it up to
-// `range` sea miles a strip at least `minHalfWidth` wide on either side,
-// widening at `halfAngle` degrees on either side of the course.
+// boat, for what lies beside it or was just passed, and ahead of it a strip
+// at least `minHalfWidth` wide on either side, widening at `halfAngle`
+// degrees on either side of the course, up to `range` sea miles from the
+// boat in every direction: its far end is round.
 bool InFan(double along, double across, double range, double halfAngle, double minHalfWidth);
 
 // Its outline as positions (lat, lon), in order, not closed: the corners
-// ahead and the half circle behind the boat. Where the strip widens the
+// and the arc ahead and the half circle behind the boat. Where the strip widens the
 // outline bends outward, so the fan is not convex; from the boat every
 // point of it is in sight.
 std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, double course,
