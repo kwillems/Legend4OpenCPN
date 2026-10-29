@@ -649,12 +649,17 @@ void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
     }
 
     if (href.StartsWith("legend-refresh:")) {
+        // The page is not replaced inside its own link click; the empty list
+        // shows before the work starts.
         m_markdown_view->CallAfter([this]() {
-            m_ocharts.Rescan();
-            m_s57.Rescan();
-            m_vhf_loaded = false;
-            LoadChartNames();
-            ShowDynamicLegend(true);
+            StartRefreshSpin();
+            m_markdown_view->CallAfter([this]() {
+                m_ocharts.Rescan();
+                m_s57.Rescan();
+                m_vhf_loaded = false;
+                LoadChartNames();
+                ShowDynamicLegend(true);
+            });
         });
         return;
     }

@@ -68,6 +68,12 @@ wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int s
 
 // The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
 // drawn rather than taken from a font, so their size is certain.
-wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size);
+// The arrow can be turned by `turn` radians, so it can spin while Ververs
+// works.
+wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size,
+                   double turn = 0.0);
+
+// A check mark in the place of the Ververs arrow, once it is done.
+wxImage CheckIcon(const wxColour &colour, const wxColour &background, int size);
 
 #endif

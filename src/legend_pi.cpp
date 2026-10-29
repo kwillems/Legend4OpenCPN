@@ -201,6 +201,7 @@ legend_pi::legend_pi(void *ppimgr)
         [this](wxTimerEvent &) { UpdateTapClock(); });
 
     m_cell_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OpenNextChartCell(); });
+    m_refresh_icon_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OnRefreshIconTimer(); });
 
     m_fill_window_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
         if (!m_legend_window || !m_legend_window->IsShown())
@@ -342,6 +343,7 @@ bool legend_pi::DeInit()
     m_night_preview = false;
     g_night_preview = false;
     m_tap_clock_timer.Stop();
+    m_refresh_icon_timer.Stop();
     m_loading = false;
 
     // Charts of the o-charts plugin must go before this plugin is unloaded.

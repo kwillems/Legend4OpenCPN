@@ -396,7 +396,8 @@ wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int s
     return bitmap.ConvertToImage();
 }
 
-wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size)
+wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size,
+                   double turn)
 {
     wxBitmap bitmap(size, size, 24);
     {
@@ -438,7 +439,7 @@ wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background
                 // Most of a circle with an arrowhead at its end.
                 const double r = size * 0.33;
                 const double width = std::max(1.5, size * 0.11);
-                const double start = -kPi * 0.35;
+                const double start = -kPi * 0.35 + turn;
                 const double end = start + kPi * 1.6;
                 gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(width)));
                 gc->SetBrush(*wxTRANSPARENT_BRUSH);
@@ -461,6 +462,31 @@ wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background
                 gc->SetBrush(wxBrush(colour));
                 gc->FillPath(arrow);
             }
+            delete gc;
+        }
+        dc.SelectObject(wxNullBitmap);
+    }
+    return bitmap.ConvertToImage();
+}
+
+wxImage CheckIcon(const wxColour &colour, const wxColour &background, int size)
+{
+    wxBitmap bitmap(size, size, 24);
+    {
+        wxMemoryDC dc(bitmap);
+        dc.SetBackground(wxBrush(background));
+        dc.Clear();
+        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
+        if (gc) {
+            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+            const double width = std::max(1.5, size * 0.11);
+            gc->SetPen(gc->CreatePen(
+                wxGraphicsPenInfo(colour).Width(width).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+            wxGraphicsPath path = gc->CreatePath();
+            path.MoveToPoint(size * 0.22, size * 0.52);
+            path.AddLineToPoint(size * 0.42, size * 0.72);
+            path.AddLineToPoint(size * 0.78, size * 0.30);
+            gc->StrokePath(path);
             delete gc;
         }
         dc.SelectObject(wxNullBitmap);

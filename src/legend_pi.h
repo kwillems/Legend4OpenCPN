@@ -728,6 +728,18 @@ private:
     wxString m_identify_colour;   // "W", "R", "G", "Y" or empty: any
     std::vector<size_t> m_identify_matches; // rows shown as matches
     wxTimer m_tap_clock_timer;    // the seconds of light and dark in the pad
+
+    // The Ververs icon: it spins while the legend is read again, at least
+    // a moment, then shows a check mark for a while.
+    enum class RefreshIconState { Idle, Spinning, Done };
+    RefreshIconState m_refresh_state = RefreshIconState::Idle;
+    wxTimer m_refresh_icon_timer;
+    wxLongLong m_refresh_state_since = 0; // milliseconds
+    int m_refresh_turn = 0;               // steps of the spin
+    int m_refresh_page_height = 0;        // pixels of the list before it
+    void StartRefreshSpin();
+    void OnRefreshIconTimer();
+    void UpdateRefreshIcon();
     int m_rhythm_width = 180;     // pixels, as RhythmWidth() at the last render
     int RhythmWidth() const;
     void SetIdentify(bool on);
