@@ -737,6 +737,9 @@ private:
     wxLongLong m_refresh_state_since = 0; // milliseconds
     int m_refresh_turn = 0;               // steps of the spin
     int m_refresh_page_height = 0;        // pixels of the list before it
+    std::set<wxString> m_refresh_keys_before; // rows before Ververs
+    wxString m_refresh_message;           // what changed, next to the check
+    wxString RefreshChangeMessage() const;
     void StartRefreshSpin();
     void OnRefreshIconTimer();
     void UpdateRefreshIcon();

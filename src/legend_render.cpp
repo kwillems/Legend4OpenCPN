@@ -493,6 +493,7 @@ const int kRefreshIconSize = 30;     // pixels, as the settings icon
 const int kRefreshSpinSteps = 16;    // per turn
 const long kRefreshMinSpinMs = 900;  // so a quick Ververs is still seen
 const long kRefreshCheckMs = 1500;
+const long kRefreshMessageMs = 4000; // a check with words, to read them
 } // namespace
 
 // Ververs clicked: the list empties and the arrow starts to turn at once,
@@ -502,6 +503,10 @@ void legend_pi::StartRefreshSpin()
     m_refresh_state = RefreshIconState::Spinning;
     m_refresh_state_since = wxGetLocalTimeMillis();
     m_refresh_turn = 0;
+    m_refresh_message.Clear();
+    m_refresh_keys_before.clear();
+    for (const DynamicGroup &group : m_dynamic_groups)
+        m_refresh_keys_before.insert(group.key);
     m_refresh_icon_timer.Start(50);
     if (IsDynamicLegendVisible() && !m_showing_loading_page) {
         // The empty page keeps the height of the list: a scroll bar that
@@ -527,6 +532,7 @@ void legend_pi::OnRefreshIconTimer()
             m_refresh_state = RefreshIconState::Done;
             m_refresh_state_since = wxGetLocalTimeMillis();
             m_refresh_page_height = 0;
+            m_refresh_message = RefreshChangeMessage();
             if (IsDynamicLegendVisible() && !m_showing_loading_page) {
                 RenderDynamicLegend(false);
                 return;
@@ -536,14 +542,45 @@ void legend_pi::OnRefreshIconTimer()
             ++m_refresh_turn;
         }
     }
-    else if (m_refresh_state == RefreshIconState::Done && elapsed >= kRefreshCheckMs) {
+    else if (m_refresh_state == RefreshIconState::Done &&
+             elapsed >= (m_refresh_message.IsEmpty() ? kRefreshCheckMs : kRefreshMessageMs)) {
         m_refresh_state = RefreshIconState::Idle;
         m_refresh_icon_timer.Stop();
+        if (!m_refresh_message.IsEmpty()) {
+            m_refresh_message.Clear();
+            if (IsDynamicLegendVisible() && !m_showing_loading_page) {
+                RenderDynamicLegend(true);
+                return;
+            }
+        }
     }
 
     UpdateRefreshIcon();
     if (m_markdown_view && IsDynamicLegendVisible())
         static_cast<LegendHtmlWindow *>(m_markdown_view)->RefreshCell(kRefreshIconId);
+}
+
+// Rows that came and went with Ververs, in a few words; empty when the
+// list stayed the same.
+wxString legend_pi::RefreshChangeMessage() const
+{
+    std::set<wxString> after;
+    for (const DynamicGroup &group : m_dynamic_groups)
+        after.insert(group.key);
+
+    int added = 0;
+    for (const wxString &key : after)
+        added += m_refresh_keys_before.count(key) == 0 ? 1 : 0;
+    int gone = 0;
+    for (const wxString &key : m_refresh_keys_before)
+        gone += after.count(key) == 0 ? 1 : 0;
+
+    wxString message;
+    if (added > 0)
+        message << added << " nieuw";
+    if (gone > 0)
+        message << (message.IsEmpty() ? "" : ", ") << gone << " weg";
+    return message;
 }
 
 // The picture of the Ververs cell for the present state, sharp on a Retina
@@ -615,6 +652,12 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
         };
         // Cells with an id carry the tooltip; the link does the work.
         html << "<table cellspacing=\"0\" cellpadding=\"2\"><tr>";
+        // What Ververs changed, beside the check mark while it shows.
+        if (m_refresh_state == RefreshIconState::Done && !m_refresh_message.IsEmpty()) {
+            html << "<td valign=\"middle\"><font size=\"-1\" color=\"" << HtmlColour(muted)
+                 << "\">" << EscapeHtml(m_refresh_message) << "</font></td>"
+                 << "<td width=\"10\"></td>";
+        }
         if (m_viewport_valid) {
             html << "<td id=\"" << kLegendTipIdPrefix << "0\"><a href=\"legend-settings:\">"
                  << icon(true) << "</a></td><td width=\"10\"></td>";
