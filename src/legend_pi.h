@@ -651,8 +651,8 @@ private:
     double m_ship_cog = NAN;      // course over ground, degrees true
     double m_ship_sog = NAN;      // speed over ground, knots
 
-    // "Uitkijk": what the boat meets in the coming half hour along its
-    // course, among the objects of the list, in order of arrival.
+    // "Uitkijk": what the boat meets in the coming m_ahead_minutes along
+    // its course (setting "Vooruitkijken": 10, 15, 30 or 60), among the objects of the list, in order of arrival.
     struct AheadItem
     {
         size_t group = 0;        // index in m_dynamic_groups
@@ -701,6 +701,8 @@ private:
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
+    int m_ahead_minutes = 30;
+    void SetAheadMinutes(int minutes);
 
     // Setting "Afstand en peiling vanaf de boot": under every row the
     // distance and true bearing from the boat to the nearest object of the
