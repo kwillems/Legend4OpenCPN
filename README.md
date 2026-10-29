@@ -34,8 +34,9 @@ routebeschrijvingen.
 - Klik op een rij en de plugin wijst het symbool aan op de kaart; klik op de
   kaart en de plugin wijst de rij aan. De teller ◎ wijst alle exemplaren
   tegelijk aan.
-- Onderweg desgewenst onder elke rij de **afstand en peiling vanaf de boot**
-  naar het dichtstbijzijnde exemplaar, zoals *0,3 NM · 045°*.
+- Onderweg desgewenst boven de betekenis van elke rij de **afstand en
+  peiling vanaf de boot** naar het dichtstbijzijnde exemplaar, zoals
+  *0,3 NM · 045°*.
 - Zelf in te delen onder kopjes, in te klappen en te ordenen, met een
   zoekveld.
 - Eigen betekenissen in één tekstbestand; iconen als PNG of SVG.
@@ -58,11 +59,13 @@ routebeschrijvingen.
 
 **Uitkijk**
 
-- Tijdens het varen: wat je de komende 10, 15, 30 of 60 minuten op koers
-  tegenkomt (jij kiest), op volgorde van aankomst, met de kant waar het ligt,
-  de afstand en zijn licht, en het volgende marifoongebied. Ook wat je op dit moment passeert.
+- Tijdens het varen: wat je de komende 1, 2, 5, 10 of 20 zeemijl op koers
+  tegenkomt, of zo ver als je zelf invult (jij kiest), op volgorde van
+  aankomst, met wanneer je er bent, de kant waar het ligt, de afstand en zijn
+  licht, en het volgende marifoongebied. Ook wat je op dit moment passeert.
 - De uitkijkbundel staat licht op de kaart, zodat je ziet waar de uitkijk
-  kijkt; smal, middel of breed. Alles wat in de bundel ligt, staat in de lijst.
+  kijkt; smal, middel of breed, in een kleur naar keuze. Alles wat in de
+  bundel ligt, staat in de lijst.
 
 **Marifoon**
 
@@ -163,7 +166,7 @@ In het menu Instellingen:
 |---|---|
 | Lichten | Lichtrijen tonen of verbergen |
 | Ook op deze schaal verborgen tonen | Ook symbolen die de kaart op deze schaal niet tekent (zie hieronder) |
-| Afstand en peiling vanaf de boot | Onder elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
+| Afstand en peiling vanaf de boot | Boven de betekenis van elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
 | Engelse namen | Betekenissen in het Engels in plaats van het Nederlands |
 | Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
 | Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
@@ -173,7 +176,8 @@ In het menu Instellingen:
 | Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
 | Uitkijkbundel op de kaart | De uitkijkbundel licht getekend op de kaart; standaard aan |
 | Uitkijkbundel: breedte ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
-| Uitkijkbundel: lengte ▸ | 10, 15, 30 of 60 minuten varen; standaard 30 |
+| Uitkijkbundel: lengte ▸ | 1, 2, 5, 10 of 20 zeemijl, of *Anders…* om zelf een lengte in te vullen (0,5 tot 50 zeemijl); standaard 2. Tijdens het varen staat erachter hoe lang je erover doet |
+| Uitkijkbundel: kleur ▸ | Amber (standaard), Geel, Rood, Groen, Paars of Grijs |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -207,17 +211,17 @@ De lijst is verdeeld in kopjes, die je zelf maakt in `symbolen.txt` (zie
 ### Verborgen op deze schaal
 
 Sommige symbolen tekent de kaart pas als je ver genoeg inzoomt. Met **Ook op
-deze schaal verborgen tonen** krijgen ze een grijze rij met een gesloten oogje
-en de schaal waarop ze verschijnen (`1:200k`). Een klik zoomt in tot het
+deze schaal verborgen tonen** krijgen ze een grijze rij. Boven de betekenis
+staan klein een gesloten oogje en de schaal waarop ze verschijnen (`1:200k`). Een klik zoomt in tot het
 dichtstbijzijnde exemplaar zichtbaar is. Wat je zelf hebt uitgezet bij
 *Gebruikers standaard* in OpenCPN blijft weg.
 
 ### Afstand en peiling vanaf de boot
 
-Met **Afstand en peiling vanaf de boot** staat onder elke rij klein en grijs
-hoe ver het dichtstbijzijnde exemplaar van de boot af ligt en in welke
-richting: *0,3 NM · 045°* (ware peiling), of in meters onder een tiende
-zeemijl, zoals *150 m*. In de Uitkijk staat het bij elk object.
+Met **Afstand en peiling vanaf de boot** staat boven de betekenis van elke
+rij klein en grijs hoe ver het dichtstbijzijnde exemplaar van de boot af ligt
+en in welke richting: *0,3 NM · 045°* (ware peiling), of in meters onder een
+tiende zeemijl, zoals *150 m*. In de Uitkijk staat het bij elk object.
 
 - Een klik op een rij gaat dan naar het exemplaar dat het dichtst bij de boot
   ligt; nog een klik naar het volgende, steeds verder weg. Klik je eerst een
@@ -308,40 +312,50 @@ is uit te zetten met *Melding bij nieuw marifoongebied*.
 
 ### Uitkijk
 
-Het kopje **Uitkijk** laat zien wat je de komende tijd op koers tegenkomt.
-Het verschijnt zodra de boot vaart: een recente GPS-positie en minstens een
-halve knoop. Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld
-*komende 30 minuten, tot 2,5 NM · breedte 30°*, en *niets in de bundel*
-als er niets ligt.
+Het kopje **Uitkijk** laat zien wat je op koers tegenkomt. Het verschijnt
+zodra de boot vaart: een recente GPS-positie en minstens een halve knoop.
+Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld *tot 2 NM,
+± 20 min · breedte 30°*, en *niets in de bundel* als er niets ligt. De tijd
+is een schatting bij je snelheid van dit moment.
 
-- Alle objecten uit de legenda in de bundel, op volgorde van aankomst, bijvoorbeeld
-  *over 4 min · stuurboord · 0,6 NM · 038° · Rode spitse ton*, met het
-  lichtkarakter erbij. Afstand en peiling staan erbij als *Afstand en peiling
-  vanaf de boot* aan staat.
+Elke regel begint klein met wanneer en waar, met de beschrijving eronder:
+
+- Alle objecten uit de legenda in de bundel, op volgorde van aankomst,
+  bijvoorbeeld *over 4 min · stuurboord · 0,6 NM · 038°* met daaronder *Rode
+  spitse ton* en het lichtkarakter. Afstand en peiling staan erbij als
+  *Afstand en peiling vanaf de boot* aan staat.
+- Met *Ook op deze schaal verborgen tonen* staan ook tonnen die de kaart op
+  deze schaal nog niet tekent erin, grijs, met het gesloten oogje en de
+  schaal, net als in de rest van de legenda. Een klik zoomt erheen.
 - Ook wat je op dit moment passeert: wat binnen 0,12 zeemijl (zo'n 220 meter)
   naast of net achter je ligt, staat bovenaan als *nu*, tot het achter je uit
   die cirkel valt.
 - Tot twee marifoongebieden waar de koers in gaat, op hun plek in de tijd,
-  bijvoorbeeld *over 12 min · marifoongebied kanaal 22 · Houtribsluizen ·
-  melden*. Een klik laat het gebied oplichten. De tekens van de laag
+  bijvoorbeeld *over 12 min* met daaronder *Marifoongebied kanaal 22 ·
+  Houtribsluizen · melden*. Een klik laat het gebied oplichten. De tekens van de laag
   *VHFinfo Nederland* zelf tellen niet als object; echte marifoonborden langs
   het water (B11, E23) wel.
 - De vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
-  stuurboord · notitie Ondiepte bij de Ketelbrug*. Een klik opent de notitie.
+  stuurboord* met daaronder *Notitie Ondiepte bij de Ketelbrug*. Een klik
+  opent de notitie; is hij op deze schaal verborgen, dan zoomt de klik erheen.
 - Een klik op een regel wijst het object aan op de kaart, of laat zijn licht
   branden.
 
 **De uitkijkbundel.** De uitkijk kijkt vanuit een cirkel van 0,12 zeemijl om
 de boot in een waaier vooruit: dichtbij minstens 0,12 zeemijl breed aan elke
-kant, verderop breder. Hoe ver hij reikt, kies je met **Uitkijkbundel:
-lengte**: zo ver als je in 10, 15, 30 (standaard) of 60 minuten vaart, en
-minstens 0,3 zeemijl. Op druk vaarwater houdt een korte lengte de lijst
-overzichtelijk. Hoe breed de waaier uitloopt, kies je met **Uitkijkbundel:
+kant, verderop breder. Het eind is rond: elk punt van de rand ligt even ver
+van de boot. Hoe ver hij reikt, kies je met **Uitkijkbundel: lengte**: 1, 2
+(standaard), 5, 10 of 20 zeemijl, of met *Anders…* een eigen lengte van 0,5
+tot 50 zeemijl. De lengte hangt niet af van je snelheid; in het menu staat
+achter elke keuze hoe lang je er bij je snelheid van nu over doet. Op druk
+vaarwater houdt een korte lengte de lijst overzichtelijk. Hoe breed de waaier uitloopt, kies je met **Uitkijkbundel:
 breedte**: smal (15°), middel (30°, standaard) of breed (45°) aan
 weerszijden van de koers.
 
 Met **Uitkijkbundel op de kaart** (standaard aan) staat de bundel heel licht
-en amberkleurig op de kaart, zolang de legenda open is en de boot vaart. Zo
+op de kaart, zolang de legenda open is en de boot vaart. De kleur kies je met
+**Uitkijkbundel: kleur**: amber (standaard), geel, rood, groen, paars of
+grijs. Zo
 zie je waarom een ton wel of niet in de lijst staat. Uitzetten verbergt
 alleen de tekening; de lijst blijft. Bij schemer en nacht wordt de bundel
 gedimd, maar blijft hij zichtbaar.
@@ -521,7 +535,8 @@ Een vastgepinde notitie:
   rechtsklikmenu, voor de laatst verplaatste notitie. Net als tonnen en bakens verdwijnt het blaadje als je verder
   uitzoomt dan 1:200 000;
 - staat onder het kopje **Notities** in de legenda zolang de plek in beeld
-  is, de dichtstbijzijnde eerst, met de afstand en de eerste regel tekst. Met
+  is, de dichtstbijzijnde eerst: klein de afstand, daaronder de titel en de
+  eerste regel tekst. Met
   *Ook op deze schaal verborgen tonen* blijft een notitie voorbij zijn
   schaalgrens er grijs staan, met een dicht oogje en de schaal; een klik zoomt
   erheen;
@@ -601,7 +616,8 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
 - Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
 - De uitkijk kijkt alleen naar wat in beeld is: zoom zo ver uit dat de
-  bundel op het scherm past.
+  bundel op het scherm past. Wat de kaart op die schaal niet meer tekent,
+  staat er alleen in met *Ook op deze schaal verborgen tonen*.
 - De markering op de kaart is getest met **OpenGL aan**.
 - Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
   het bestand, dan kan het icoon op macOS leeg blijven.
