@@ -509,9 +509,12 @@ void legend_pi::StartRefreshSpin()
         m_refresh_rows_before[group.key] = {group.label, group.section};
     m_refresh_icon_timer.Start(50);
     if (IsDynamicLegendVisible() && !m_showing_loading_page) {
-        // The empty page keeps the height of the list: a scroll bar that
-        // went away would make the title bar wider.
-        m_refresh_page_height = m_markdown_view->GetVirtualSize().y;
+        // With a scroll bar, the empty page keeps the height of the list:
+        // a scroll bar that went away would make the title bar wider.
+        // Without one, it gets none either.
+        const int height = m_markdown_view->GetVirtualSize().y;
+        m_refresh_page_height =
+            height > m_markdown_view->GetClientSize().y ? height : 0;
         RenderDynamicLegend(false);
         m_markdown_view->Update();
     }
