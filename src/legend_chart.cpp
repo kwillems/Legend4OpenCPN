@@ -22,6 +22,7 @@
 
 #include <wx/glcanvas.h>
 #include <wx/dc.h>
+#include <wx/dcmemory.h>
 #include <wx/graphics.h>
 #include <wx/log.h>
 #include <wx/menu.h>
@@ -58,6 +59,73 @@ void AheadFanColours(wxColour *fill, wxColour *edge)
     auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
     *fill = wxColour(shade(239), shade(159), shade(39), fillAlpha);
     *edge = wxColour(shade(186), shade(117), shade(23), edgeAlpha);
+}
+
+// Where a label of the fan goes: beyond its anchor in the direction
+// (dx, dy), a few pixels clear of it, whatever side of the text faces it.
+wxPoint AheadLabelCorner(const wxPoint &anchor, double dx, double dy, const wxSize &size,
+                         double gap)
+{
+    const double reach = gap + std::fabs(dx) * size.x / 2.0 + std::fabs(dy) * size.y / 2.0;
+    return wxPoint(static_cast<int>(std::lround(anchor.x + dx * reach - size.x / 2.0)),
+                   static_cast<int>(std::lround(anchor.y + dy * reach - size.y / 2.0)));
+}
+
+// OpenGL has no text: the text drawn white on black in a bitmap, its
+// brightness as the opacity of a texture in `colour`. The size comes back.
+wxSize DrawTextGL(const wxString &text, const wxFont &font, const wxColour &colour,
+                  const wxPoint &anchor, double dx, double dy, double gap)
+{
+    wxBitmap probe(1, 1, 24);
+    wxMemoryDC dc(probe);
+    dc.SetFont(font);
+    const wxSize size = dc.GetTextExtent(text);
+    if (size.x <= 0 || size.y <= 0)
+        return size;
+    wxBitmap bitmap(size.x, size.y, 24);
+    dc.SelectObject(bitmap);
+    dc.SetBackground(*wxBLACK_BRUSH);
+    dc.Clear();
+    dc.SetTextForeground(*wxWHITE);
+    dc.DrawText(text, 0, 0);
+    dc.SelectObject(wxNullBitmap);
+
+    const wxImage image = bitmap.ConvertToImage();
+    const int width = image.GetWidth();
+    const int height = image.GetHeight();
+    std::vector<unsigned char> pixels(static_cast<size_t>(width) * height * 4, 255);
+    const unsigned char *rgb = image.GetData();
+    for (int i = 0; i < width * height; ++i)
+        pixels[i * 4 + 3] = std::max({rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]});
+
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 pixels.data());
+    glEnable(GL_TEXTURE_2D);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), colour.Alpha());
+
+    const wxPoint at = AheadLabelCorner(anchor, dx, dy, wxSize(width, height), gap);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f);
+    glVertex2i(at.x, at.y);
+    glTexCoord2f(1.0f, 0.0f);
+    glVertex2i(at.x + width, at.y);
+    glTexCoord2f(1.0f, 1.0f);
+    glVertex2i(at.x + width, at.y + height);
+    glTexCoord2f(0.0f, 1.0f);
+    glVertex2i(at.x, at.y + height);
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDeleteTextures(1, &texture);
+    return size;
 }
 
 } // namespace
@@ -1065,6 +1133,69 @@ std::vector<wxPoint> legend_pi::AheadFanPixels(PlugIn_ViewPort *vp) const
     return points;
 }
 
+void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp,
+                              std::vector<std::pair<wxPoint, wxPoint>> *ticks,
+                              std::vector<AheadFanLabel> *labels) const
+{
+    if (!AheadFanVisible())
+        return;
+    auto pixel = [this, vp](double along, double across) {
+        double lat = 0.0;
+        double lon = 0.0;
+        PositionAt(m_ship_lat, m_ship_lon, m_ship_cog, along, across, &lat, &lon);
+        wxPoint at;
+        GetCanvasPixLL(vp, &at, lat, lon);
+        return at;
+    };
+    auto unit = [](const wxPoint &from, const wxPoint &to, double *dx, double *dy) {
+        const double length = std::hypot(to.x - from.x, to.y - from.y);
+        *dx = length > 0.0 ? (to.x - from.x) / length : 0.0;
+        *dy = length > 0.0 ? (to.y - from.y) / length : -1.0;
+    };
+
+    // Only when the fan is large enough on the screen to carry words.
+    const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
+    const double range = AheadRange();
+    const wxPoint boat = pixel(0.0, 0.0);
+    const wxPoint end = pixel(range, 0.0);
+    const double length = std::hypot(end.x - boat.x, end.y - boat.y);
+    if (length < 80.0 * scale)
+        return;
+
+    const double kPi = 3.14159265358979323846;
+    const double widen = std::tan(m_ahead_angle * kPi / 180.0);
+    const double minutes = range / m_ship_sog * 60.0;
+    const int step = m_ahead_minutes <= 15 ? 5 : 10;
+    // Lines too close together say nothing: none then.
+    const bool spaced = step / minutes * length >= 30.0 * scale;
+    for (int t = step; spaced && t < minutes - step / 2.0; t += step) {
+        const double along = m_ship_sog * t / 60.0;
+        const double half = std::max(kAheadMinHalfWidth, along * widen);
+        const wxPoint port = pixel(along, -half);
+        const wxPoint starboard = pixel(along, half);
+        ticks->emplace_back(port, starboard);
+        AheadFanLabel label;
+        label.text = wxString::Format("%d", t);
+        label.anchor = starboard;
+        unit(port, starboard, &label.dx, &label.dy);
+        labels->push_back(label);
+    }
+
+    AheadFanLabel label;
+    label.text = wxString::Format("%ld min", std::lround(minutes)) +
+                 wxString::FromUTF8(" \u00b7 ") + FormatDistance(range);
+    label.anchor = end;
+    unit(boat, end, &label.dx, &label.dy);
+    labels->push_back(label);
+}
+
+wxFont legend_pi::AheadFanFont() const
+{
+    const int height =
+        static_cast<int>(std::lround(12.0 * std::max(1.0, ViewportPixelsPerWindowPixel())));
+    return wxFont(wxFontInfo(wxSize(0, height)).Family(wxFONTFAMILY_SWISS));
+}
+
 bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
 {
     const std::vector<wxPoint> points = AheadFanPixels(vp);
@@ -1085,9 +1216,28 @@ bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
     path.CloseSubpath();
     gc->SetBrush(wxBrush(fill));
     gc->FillPath(path);
-    gc->SetPen(gc->CreatePen(
-        wxGraphicsPenInfo(edge).Width(1.5 * std::max(1.0, ViewportPixelsPerWindowPixel()))));
+    const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
+    gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(edge).Width(1.5 * scale)));
     gc->StrokePath(path);
+
+    std::vector<std::pair<wxPoint, wxPoint>> ticks;
+    std::vector<AheadFanLabel> labels;
+    AheadFanMarks(vp, &ticks, &labels);
+    gc->SetPen(gc->CreatePen(
+        wxGraphicsPenInfo(wxColour(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha() * 2 / 3))
+            .Width(scale)));
+    for (const auto &tick : ticks)
+        gc->StrokeLine(tick.first.x, tick.first.y, tick.second.x, tick.second.y);
+    gc->SetFont(AheadFanFont(), wxColour(edge.Red(), edge.Green(), edge.Blue(), 210));
+    for (const AheadFanLabel &label : labels) {
+        double width = 0.0;
+        double height = 0.0;
+        gc->GetTextExtent(label.text, &width, &height);
+        const wxPoint at = AheadLabelCorner(
+            label.anchor, label.dx, label.dy,
+            wxSize(static_cast<int>(width), static_cast<int>(height)), 4.0 * scale);
+        gc->DrawText(label.text, at.x, at.y);
+    }
     return true;
 }
 
@@ -1103,7 +1253,8 @@ bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
 
     // GL_CURRENT_BIT included, see the marker in RenderGLOverlayMultiCanvas.
     glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-                 GL_HINT_BIT);
+                 GL_HINT_BIT | GL_TEXTURE_BIT);
+    glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1125,14 +1276,32 @@ bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
     glEnd();
 
     glColor4ub(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha());
-    glLineWidth(static_cast<float>(1.5 * std::max(1.0, ViewportPixelsPerWindowPixel())));
+    const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
+    glLineWidth(static_cast<float>(1.5 * scale));
     glBegin(GL_LINE_LOOP);
     for (const wxPoint &point : points)
         glVertex2d(point.x, point.y);
     glEnd();
 
+    std::vector<std::pair<wxPoint, wxPoint>> ticks;
+    std::vector<AheadFanLabel> labels;
+    AheadFanMarks(vp, &ticks, &labels);
+    glColor4ub(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha() * 2 / 3);
+    glLineWidth(static_cast<float>(scale));
+    glBegin(GL_LINES);
+    for (const auto &tick : ticks) {
+        glVertex2d(tick.first.x, tick.first.y);
+        glVertex2d(tick.second.x, tick.second.y);
+    }
+    glEnd();
+    const wxFont font = AheadFanFont();
+    const wxColour text(edge.Red(), edge.Green(), edge.Blue(), 210);
+    for (const AheadFanLabel &label : labels)
+        DrawTextGL(label.text, font, text, label.anchor, label.dx, label.dy, 4.0 * scale);
+
     glColor4ub(255, 255, 255, 255);
     glLineWidth(1.0f);
+    glPopClientAttrib();
     glPopAttrib();
     return true;
 }

@@ -699,6 +699,20 @@ private:
     bool m_ahead_fan_was_visible = false; // at the last fix: erase it once
     bool AheadFanVisible() const;
     std::vector<wxPoint> AheadFanPixels(PlugIn_ViewPort *vp) const;
+    // In the fan, a line across it every 10 minutes (every 5 when it reaches
+    // 10 or 15) with its minutes beside it, and at its far end how far it
+    // reaches ("30 min · 10,0 NM"). A label is set beyond `anchor`, in the
+    // direction (dx, dy).
+    struct AheadFanLabel
+    {
+        wxString text;
+        wxPoint anchor;
+        double dx = 0.0;
+        double dy = 0.0;
+    };
+    void AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::pair<wxPoint, wxPoint>> *ticks,
+                       std::vector<AheadFanLabel> *labels) const;
+    wxFont AheadFanFont() const;
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
