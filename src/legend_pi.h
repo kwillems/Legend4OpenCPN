@@ -652,7 +652,7 @@ private:
     double m_ship_sog = NAN;      // speed over ground, knots
 
     // "Uitkijk": what the boat meets in the coming m_ahead_minutes along
-    // its course (setting "Uitkijkbundel: tijd vooruit": 10, 15, 30 or 60),
+    // its course (setting "Uitkijkbundel: lengte": 10, 15, 30 or 60),
     // among the objects of the list, in order of arrival.
     struct AheadItem
     {

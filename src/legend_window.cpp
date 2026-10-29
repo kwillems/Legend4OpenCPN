@@ -1385,7 +1385,7 @@ void legend_pi::SetAheadAngle(int angle)
     RefreshAllCanvases();
 }
 
-// "Uitkijkbundel: tijd vooruit": how many minutes ahead the list and the fan reach.
+// "Uitkijkbundel: lengte": how many minutes ahead the list and the fan reach.
 void legend_pi::SetAheadMinutes(int minutes)
 {
     m_ahead_minutes = minutes;
@@ -1447,11 +1447,11 @@ void legend_pi::ShowSettingsMenu()
         ->Check(m_ahead_angle == 45);
     menu.AppendSubMenu(width, "Uitkijkbundel: breedte");
     auto *ahead = new wxMenu;
-    ahead->AppendRadioItem(kAheadMin10, "10 minuten")->Check(m_ahead_minutes == 10);
-    ahead->AppendRadioItem(kAheadMin15, "15 minuten")->Check(m_ahead_minutes == 15);
-    ahead->AppendRadioItem(kAheadMin30, "30 minuten")->Check(m_ahead_minutes == 30);
-    ahead->AppendRadioItem(kAheadMin60, "60 minuten")->Check(m_ahead_minutes == 60);
-    menu.AppendSubMenu(ahead, "Uitkijkbundel: tijd vooruit");
+    ahead->AppendRadioItem(kAheadMin10, "10 minuten varen")->Check(m_ahead_minutes == 10);
+    ahead->AppendRadioItem(kAheadMin15, "15 minuten varen")->Check(m_ahead_minutes == 15);
+    ahead->AppendRadioItem(kAheadMin30, "30 minuten varen")->Check(m_ahead_minutes == 30);
+    ahead->AppendRadioItem(kAheadMin60, "60 minuten varen")->Check(m_ahead_minutes == 60);
+    menu.AppendSubMenu(ahead, "Uitkijkbundel: lengte");
     if (m_menu_has_headings) {
         menu.AppendSeparator();
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
