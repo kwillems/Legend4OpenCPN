@@ -1376,10 +1376,19 @@ void legend_pi::RunLegendCommand(const wxString &command)
     }
 }
 
-// "Blikveld van de uitkijk": the list and the fan on the chart follow at once.
+// "Uitkijkbundel: breedte": the list and the fan on the chart follow at once.
 void legend_pi::SetAheadAngle(int angle)
 {
     m_ahead_angle = angle;
+    SaveConfig();
+    RenderDynamicLegend(true);
+    RefreshAllCanvases();
+}
+
+// "Uitkijkbundel: lengte": how many minutes ahead the list and the fan reach.
+void legend_pi::SetAheadMinutes(int minutes)
+{
+    m_ahead_minutes = minutes;
     SaveConfig();
     RenderDynamicLegend(true);
     RefreshAllCanvases();
@@ -1396,6 +1405,7 @@ void legend_pi::ShowSettingsMenu()
     {
         kLights = 1000, kHidden, kDistance, kEnglish, kAllLights, kNight, kIdentify, kVhfKeep,
         kVhfNotice, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
+        kAheadMin10, kAheadMin15, kAheadMin30, kAheadMin60,
         kFold, kReorder
     };
 
@@ -1427,7 +1437,7 @@ void legend_pi::ShowSettingsMenu()
             ->Check(m_note_notice_on);
 
     menu.AppendSeparator();
-    menu.AppendCheckItem(kAheadFan, "Uitkijk op de kaart tonen")->Check(m_ahead_fan_shown);
+    menu.AppendCheckItem(kAheadFan, "Uitkijkbundel op de kaart")->Check(m_ahead_fan_shown);
     auto *width = new wxMenu;
     width->AppendRadioItem(kAhead15, wxString::FromUTF8("Smal (15\u00b0)"))
         ->Check(m_ahead_angle == 15);
@@ -1435,8 +1445,15 @@ void legend_pi::ShowSettingsMenu()
         ->Check(m_ahead_angle == 30);
     width->AppendRadioItem(kAhead45, wxString::FromUTF8("Breed (45\u00b0)"))
         ->Check(m_ahead_angle == 45);
-    menu.AppendSubMenu(width, "Blikveld van de uitkijk");
+    menu.AppendSubMenu(width, "Uitkijkbundel: breedte");
+    auto *ahead = new wxMenu;
+    ahead->AppendRadioItem(kAheadMin10, "10 minuten varen")->Check(m_ahead_minutes == 10);
+    ahead->AppendRadioItem(kAheadMin15, "15 minuten varen")->Check(m_ahead_minutes == 15);
+    ahead->AppendRadioItem(kAheadMin30, "30 minuten varen")->Check(m_ahead_minutes == 30);
+    ahead->AppendRadioItem(kAheadMin60, "60 minuten varen")->Check(m_ahead_minutes == 60);
+    menu.AppendSubMenu(ahead, "Uitkijkbundel: lengte");
     if (m_menu_has_headings) {
+        menu.AppendSeparator();
         menu.Append(kFold, m_menu_any_open ? "Alles inklappen" : "Alles uitklappen");
         menu.Append(kReorder, wxString::FromUTF8("Volgorde wijzigen\u2026"));
     }
@@ -1486,6 +1503,15 @@ void legend_pi::ShowSettingsMenu()
     case kAhead30:
     case kAhead45:
         SetAheadAngle(selection == kAhead15 ? 15 : selection == kAhead30 ? 30 : 45);
+        break;
+    case kAheadMin10:
+    case kAheadMin15:
+    case kAheadMin30:
+    case kAheadMin60:
+        SetAheadMinutes(selection == kAheadMin10   ? 10
+                        : selection == kAheadMin15 ? 15
+                        : selection == kAheadMin30 ? 30
+                                                   : 60);
         break;
     case kFold:
         RunLegendCommand(m_menu_any_open ? "collapse-all" : "expand-all");

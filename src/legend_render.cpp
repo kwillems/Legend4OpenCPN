@@ -784,7 +784,7 @@ void legend_pi::RenderVhfBlock(DynamicPage &page)
     html << "</table>";
 }
 
-// Uitkijk: while sailing, what the boat meets in the coming half hour, in
+// Uitkijk: while sailing, what the boat meets in the coming minutes, in
 // order of arrival.
 void legend_pi::RenderAheadBlock(DynamicPage &page)
 {
@@ -840,18 +840,18 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         return text;
     };
 
-    // Beside the heading, what the Uitkijk covers: the coming half hour at
-    // this speed (less at the most distant 8 sea miles) and the field of
-    // view of the setting; and when nothing lies in it, that too.
+    // Beside the heading, what the Uitkijk covers: the minutes of the
+    // setting at this speed (more at the nearest 0.3 sea mile) and the
+    // width of the setting; and when nothing lies in it, that too.
     const double range = AheadRange();
     const int minutes = static_cast<int>(std::lround(range / m_ship_sog * 60.0));
     wxString summary =
         wxString::Format(nl ? "komende %d minuten, tot %s" : "next %d minutes, up to %s",
                          minutes, FormatDistance(range)) +
-        " &middot; " + (nl ? "blikveld " : "field of view ") +
+        " &middot; " + (nl ? "breedte " : "width ") +
         wxString::Format("%d&deg;", m_ahead_angle);
     if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
-        summary << " &middot; " << (nl ? "niets in het blikveld" : "nothing in view");
+        summary << " &middot; " << (nl ? "niets in de bundel" : "nothing in the beam");
 
     // The key "@vooruit" is the block's name before; the folded state is
     // kept under it.

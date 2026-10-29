@@ -117,11 +117,11 @@ void legend_pi::SortFromBoat(DynamicGroup &group) const
                      });
 }
 
-// How far the Uitkijk looks: as far as the boat goes in half an hour, at least
-// 0.3 and at most 8 sea miles.
+// How far the Uitkijk looks: as far as the boat goes in the minutes of the
+// setting "Uitkijkbundel: lengte", at least 0.3 sea mile.
 double legend_pi::AheadRange() const
 {
-    return std::min(8.0, std::max(0.3, m_ship_sog * 0.5));
+    return std::max(0.3, m_ship_sog * m_ahead_minutes / 60.0);
 }
 
 // The objects of the list in a fan ahead of the boat: a strip that widens
@@ -208,8 +208,8 @@ void legend_pi::ComputeAhead()
               [](const Found &a, const Found &b) { return a.along < b.along; });
 
     // The same buoy from two sources (a waypoint and a chart symbol) once;
-    // the first, or the one that knows its light.
-    const size_t kMaxItems = 8;
+    // the first, or the one that knows its light. All of the fan is listed:
+    // what lies in the beam on the chart is in the list too.
     wxString key;
     for (const Found &f : found) {
         bool duplicate = false;
@@ -224,8 +224,6 @@ void legend_pi::ComputeAhead()
         }
         if (duplicate)
             continue;
-        if (m_ahead.size() >= kMaxItems)
-            break;
         m_ahead.push_back(f.item);
     }
 
@@ -234,7 +232,7 @@ void legend_pi::ComputeAhead()
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p') << ';';
     }
 
-    // Notes whose place lies in the same fan, up to three.
+    // Notes whose place lies in the same fan.
     m_ahead_notes.clear();
     for (const NotePlace &place : m_note_places) {
         double along = 0.0;
@@ -254,12 +252,10 @@ void legend_pi::ComputeAhead()
     }
     std::sort(m_ahead_notes.begin(), m_ahead_notes.end(),
               [](const AheadNote &a, const AheadNote &b) { return a.minutes < b.minutes; });
-    if (m_ahead_notes.size() > 3)
-        m_ahead_notes.resize(3);
     for (const AheadNote &note : m_ahead_notes)
         key << "note:" << note.path << '/' << static_cast<int>(note.minutes) << ';';
 
-    // The VHF areas the course enters in the same half hour, up to two:
+    // The VHF areas the course enters in the same time, up to two:
     // points along the course line, a few hundred metres apart.
     m_ahead_vhf.clear();
     EnsureVhfAreas();

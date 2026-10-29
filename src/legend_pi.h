@@ -651,8 +651,9 @@ private:
     double m_ship_cog = NAN;      // course over ground, degrees true
     double m_ship_sog = NAN;      // speed over ground, knots
 
-    // "Uitkijk": what the boat meets in the coming half hour along its
-    // course, among the objects of the list, in order of arrival.
+    // "Uitkijk": what the boat meets in the coming m_ahead_minutes along
+    // its course (setting "Uitkijkbundel: lengte": 10, 15, 30 or 60),
+    // among the objects of the list, in order of arrival.
     struct AheadItem
     {
         size_t group = 0;        // index in m_dynamic_groups
@@ -688,8 +689,8 @@ private:
 
     // The fan of the Uitkijk: at least this wide on either side of the
     // course, widening at m_ahead_angle degrees on either side (setting
-    // "Blikveld van de uitkijk": 15, 30 or 45), with a circle of this radius
-    // round the boat at its foot. With "Uitkijk op de kaart tonen" it is
+    // "Uitkijkbundel: breedte": 15, 30 or 45), with a circle of this radius
+    // round the boat at its foot. With "Uitkijkbundel op de kaart" it is
     // drawn on the chart, very light, while the boat sails and the legend
     // is open.
     static constexpr double kAheadMinHalfWidth = 0.12;
@@ -701,6 +702,8 @@ private:
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
+    int m_ahead_minutes = 30;
+    void SetAheadMinutes(int minutes);
 
     // Setting "Afstand en peiling vanaf de boot": under every row the
     // distance and true bearing from the boat to the nearest object of the
