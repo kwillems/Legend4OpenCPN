@@ -699,9 +699,10 @@ private:
     static constexpr double kAheadMinHalfWidth = 0.12;
     int m_ahead_angle = 30;
     bool m_ahead_fan_shown = true;
-    // "Uitkijkbundel: kleur": amber (the default), yellow, red, green,
-    // purple or grey; kept in the settings by name, see kAheadColourNames.
-    static constexpr int kAheadColourCount = 6;
+    // "Uitkijkbundel: kleur": amber (the default), orange, yellow, red,
+    // green, purple or grey; kept in the settings by name, see
+    // kAheadColourNames.
+    static constexpr int kAheadColourCount = 7;
     static const char *const kAheadColourNames[kAheadColourCount];
     int m_ahead_colour = 0;
     void SetAheadColour(int colour);
