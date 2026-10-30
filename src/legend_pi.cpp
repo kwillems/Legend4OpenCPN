@@ -593,6 +593,23 @@ void legend_pi::LoadConfig()
     config.Read("Language", &language, "nl");
     m_dutch_names = language != "en";
 
+    // Keys missing from the saved order (a new block) go at the end;
+    // unknown ones are dropped.
+    wxString blockOrder;
+    config.Read("TopBlockOrder", &blockOrder, "");
+    std::vector<wxString> order;
+    for (const wxString &key : wxSplit(blockOrder, '\t', '\0')) {
+        if (std::find(m_top_block_order.begin(), m_top_block_order.end(), key) !=
+                m_top_block_order.end() &&
+            std::find(order.begin(), order.end(), key) == order.end())
+            order.push_back(key);
+    }
+    for (const wxString &key : m_top_block_order) {
+        if (std::find(order.begin(), order.end(), key) == order.end())
+            order.push_back(key);
+    }
+    m_top_block_order = order;
+
     wxString collapsed;
     config.Read("CollapsedSections", &collapsed, "");
     m_collapsed_sections.clear();
@@ -627,6 +644,12 @@ void legend_pi::SaveConfig() const
     for (const wxString &name : m_collapsed_sections)
         collapsed.Add(name);
     config.Write("CollapsedSections", wxJoin(collapsed, '\t', '\0'));
+    {
+        wxArrayString blockOrder;
+        for (const wxString &key : m_top_block_order)
+            blockOrder.Add(key);
+        config.Write("TopBlockOrder", wxJoin(blockOrder, '\t', '\0'));
+    }
     config.Write("ShowHiddenAtScale", m_show_hidden_at_scale);
     config.Write("ShowDistanceFromBoat", m_show_distance);
     config.Write("AheadFanShown", m_ahead_fan_shown);
