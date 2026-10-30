@@ -34,18 +34,21 @@ namespace {
 
 // The fan of the Uitkijk: by default a soft amber, as the beam of a
 // searchlight, just visible over the chart; the setting "Uitkijkbundel:
-// kleur" picks another of the colours of kAheadColours. In dusk and night the chart is dark: the beam is
-// dimmed less than the other signs and a little more opaque, so it still
-// shows, in a warm colour that spares night vision.
+// kleur" picks another of the colours of kColours. In dusk and night the
+// chart is dark: the beam is dimmed less than the other signs and a little
+// more opaque, so it still shows, in a warm colour that spares night vision.
+//
+// Orange is the searchlight: its edge the colour of the mariner's own marks
+// in S-52 (own ship's vector, route), apart from the yellow of special marks
+// and land; inside, by day, a faint white that lights the water without
+// changing the chart's colours below. In dusk and night white would hurt
+// night vision: a dim orange inside then.
 void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
 {
     // Fill and edge: the edge a darker shade of the fill.
     static const unsigned char kColours[][6] = {
         {239, 159, 39, 186, 117, 23},   // amber
-        {240, 208, 40, 168, 142, 10},   // yellow
-        {222, 62, 50, 160, 32, 26},     // red
-        {64, 172, 84, 30, 122, 52},     // green
-        {152, 84, 204, 106, 52, 152},   // purple
+        {230, 120, 40, 224, 112, 32},   // orange
         {0, 0, 0, 0, 0, 0},             // grey: black, seen through
     };
     const int count = static_cast<int>(sizeof(kColours) / sizeof(kColours[0]));
@@ -70,6 +73,12 @@ void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
     auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
     *fill = wxColour(shade(c[0]), shade(c[1]), shade(c[2]), fillAlpha);
     *edge = wxColour(shade(c[3]), shade(c[4]), shade(c[5]), edgeAlpha);
+    if (c == kColours[1]) {
+        *edge = wxColour(edge->Red(), edge->Green(), edge->Blue(), edgeAlpha + 50);
+        if (LegendScheme() == PI_GLOBAL_COLOR_SCHEME_DAY ||
+            LegendScheme() == PI_GLOBAL_COLOR_SCHEME_RGB)
+            *fill = wxColour(255, 255, 255, 56);
+    }
 }
 
 } // namespace

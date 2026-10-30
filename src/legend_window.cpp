@@ -1409,7 +1409,7 @@ void legend_pi::SetAheadAngle(int angle)
 }
 
 const char *const legend_pi::kAheadColourNames[kAheadColourCount] = {
-    "amber", "geel", "rood", "groen", "paars", "grijs"};
+    "amber", "oranje", "grijs"};
 
 // "Uitkijkbundel: kleur": the fan on the chart changes at once.
 void legend_pi::SetAheadColour(int colour)
@@ -1538,8 +1538,8 @@ void legend_pi::ShowSettingsMenu()
     ahead->AppendRadioItem(kAheadOwn, ownLabel)->Check(own);
     menu.AppendSubMenu(ahead, "Uitkijkbundel: lengte");
     auto *colours = new wxMenu;
-    const char *const colourLabels[kAheadColourCount] = {"Amber", "Geel",  "Rood",
-                                                         "Groen", "Paars", "Grijs"};
+    const char *const colourLabels[kAheadColourCount] = {"Amber", "Oranje (zoeklicht)",
+                                                         "Grijs"};
     for (int n = 0; n < kAheadColourCount; ++n)
         colours->AppendRadioItem(kAheadColour0 + n, colourLabels[n])->Check(m_ahead_colour == n);
     menu.AppendSubMenu(colours, "Uitkijkbundel: kleur");
