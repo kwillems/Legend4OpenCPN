@@ -283,6 +283,80 @@ void legend_pi::PrepareDynamicRows(DynamicPage &page)
     }
 }
 
+// The icon of a group on its background, at the scale of the chart's
+// objects, and a version at twice the size for a Retina screen.
+void legend_pi::GroupIcons(const DynamicGroup &group, const wxColour &iconBackground,
+                           const wxColour &muted, double iconScale, wxImage *icon,
+                           wxImage *image2)
+{
+    wxImage image;
+    wxImage doubled; // drawn at twice the size, for a Retina screen
+
+    if (group.lightCharacter) {
+        // A lamp in the colours of the light.
+        LightCharacter light;
+        if (light.Parse(group.lightText)) {
+            image = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim());
+            doubled = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim(), 36);
+        }
+    }
+    else if (group.chartSymbol) {
+        // Chart symbols come from OpenCPN's symbol sheet of the current
+        // colour scheme, which already has dusk and night versions.
+        const wxImage picture =
+            m_chart_symbols.SymbolImage(group.symbol, LegendScheme());
+        if (picture.IsOk())
+            image = FlattenImage(picture, iconBackground);
+    }
+    else {
+        // First choice: the icon's own SVG or PNG file. Fall back to
+        // asking OpenCPN for the bitmap. In dusk and night the icon is
+        // dimmed, the background it sits on is not.
+        const wxString key =
+            group.iconName.IsEmpty() ? group.key : group.iconName;
+        auto flatten = [&key](const wxColour &colour) {
+            wxImage drawn = LoadIconFromFile(key, colour);
+
+            if (!drawn.IsOk()) {
+                wxBitmap bitmap = GetIcon_PlugIn(key);
+
+                if (bitmap.IsOk())
+                    drawn = FlattenIcon(bitmap, colour, key);
+            }
+            return drawn;
+        };
+
+        image = FlattenDimmed(flatten, iconBackground, SchemeDim());
+
+        // An SVG icon is drawn again at twice the size, not enlarged.
+        if (image.IsOk() && !SvgIconPath(key).IsEmpty()) {
+            auto flatten2 = [&key](const wxColour &colour) {
+                return LoadIconFromFile(key, colour, 2);
+            };
+            doubled = FlattenDimmed(flatten2, iconBackground, SchemeDim());
+        }
+    }
+
+    // The version at twice the size comes from the image as loaded, the
+    // file often being larger than it is shown.
+    auto scaled = [](const wxImage &source, double factor) {
+        const int width = std::max(
+            1, static_cast<int>(std::lround(source.GetWidth() * factor)));
+        const int height = std::max(
+            1, static_cast<int>(std::lround(source.GetHeight() * factor)));
+        return source.Scale(width, height, wxIMAGE_QUALITY_HIGH);
+    };
+    if (image.IsOk()) {
+        *image2 = doubled.IsOk() ? (std::fabs(iconScale - 1.0) > 1e-3
+                                        ? scaled(doubled, iconScale)
+                                        : doubled)
+                                 : scaled(image, 2.0 * iconScale);
+    }
+    if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3)
+        image = scaled(image, iconScale);
+    *icon = image;
+}
+
 // The colour and the icon of every row shown. All icons are loaded first:
 // the largest one sets the square every icon gets, so all rows are equally
 // high without shrinking any icon. Very large icons are limited to
@@ -355,70 +429,7 @@ void legend_pi::LoadRowIcons(DynamicPage &page)
             (palette.iconTiles && page.parentOf[i] < 0) ? palette.tile : rowColour;
 
         wxImage image;
-        wxImage doubled; // drawn at twice the size, for a Retina screen
-
-        if (group.lightCharacter) {
-            // A lamp in the colours of the light.
-            LightCharacter light;
-            if (light.Parse(group.lightText)) {
-                image = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim());
-                doubled = LightLampImage(light.Colours(), muted, iconBackground, SchemeDim(), 36);
-            }
-        }
-        else if (group.chartSymbol) {
-            // Chart symbols come from OpenCPN's symbol sheet of the current
-            // colour scheme, which already has dusk and night versions.
-            const wxImage picture =
-                m_chart_symbols.SymbolImage(group.symbol, LegendScheme());
-            if (picture.IsOk())
-                image = FlattenImage(picture, iconBackground);
-        }
-        else {
-            // First choice: the icon's own SVG or PNG file. Fall back to
-            // asking OpenCPN for the bitmap. In dusk and night the icon is
-            // dimmed, the background it sits on is not.
-            const wxString key =
-                group.iconName.IsEmpty() ? group.key : group.iconName;
-            auto flatten = [&key](const wxColour &colour) {
-                wxImage drawn = LoadIconFromFile(key, colour);
-
-                if (!drawn.IsOk()) {
-                    wxBitmap bitmap = GetIcon_PlugIn(key);
-
-                    if (bitmap.IsOk())
-                        drawn = FlattenIcon(bitmap, colour, key);
-                }
-                return drawn;
-            };
-
-            image = FlattenDimmed(flatten, iconBackground, SchemeDim());
-
-            // An SVG icon is drawn again at twice the size, not enlarged.
-            if (image.IsOk() && !SvgIconPath(key).IsEmpty()) {
-                auto flatten2 = [&key](const wxColour &colour) {
-                    return LoadIconFromFile(key, colour, 2);
-                };
-                doubled = FlattenDimmed(flatten2, iconBackground, SchemeDim());
-            }
-        }
-
-        // The version at twice the size comes from the image as loaded, the
-        // file often being larger than it is shown.
-        auto scaled = [](const wxImage &source, double factor) {
-            const int width = std::max(
-                1, static_cast<int>(std::lround(source.GetWidth() * factor)));
-            const int height = std::max(
-                1, static_cast<int>(std::lround(source.GetHeight() * factor)));
-            return source.Scale(width, height, wxIMAGE_QUALITY_HIGH);
-        };
-        if (image.IsOk()) {
-            page.icons2[i] = doubled.IsOk() ? (std::fabs(iconScale - 1.0) > 1e-3
-                                                   ? scaled(doubled, iconScale)
-                                                   : doubled)
-                                            : scaled(image, 2.0 * iconScale);
-        }
-        if (image.IsOk() && std::fabs(iconScale - 1.0) > 1e-3)
-            image = scaled(image, iconScale);
+        GroupIcons(group, iconBackground, muted, iconScale, &image, &page.icons2[i]);
 
         if (image.IsOk() && !page.collapsed[i] && page.shown[i]) {
             page.iconBox = std::max(
@@ -820,7 +831,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         return wxString(nl ? "bakboord" : "port");
     };
     auto name = [&](const AheadItem &item) {
-        const DynamicGroup &group = m_dynamic_groups[item.group];
+        const DynamicGroup &group = m_ahead_groups[item.group];
         return EscapeHtml(group.lightCharacter ? group.lightText : group.label);
     };
 
@@ -851,7 +862,17 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         summary << ", " << EscapeHtml(time);
     summary << " &middot; " << (nl ? "breedte " : "width ") <<
         wxString::Format("%d&deg;", m_ahead_angle);
-    if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
+    // An incomplete list never looks complete: while cells of the beam are
+    // still read, or where no chart covers part of it, the heading says so
+    // instead of "nothing in the beam".
+    if (m_ahead_reading)
+        summary << " &middot; <b>" << (nl ? "Kaarten worden nog gelezen" : "Charts still being read")
+                << "</b>";
+    else if (m_ahead_uncovered)
+        summary << " &middot; <b>"
+                << (nl ? "Geen kaart voor een deel van de bundel" : "No chart for part of the beam")
+                << "</b>";
+    else if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
         summary << " &middot; " << (nl ? "niets in de bundel" : "nothing in the beam");
 
     // The key "@vooruit" is the block's name before; the folded state is
@@ -862,9 +883,21 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     // The icons as large as in the rows of the legend: each its own size,
     // in a square as large as the largest of them, on a tile when the
     // rows have one.
+    // The icons of the Uitkijk's own groups: it lists more than the rows
+    // in view.
+    const wxColour iconBackground =
+        page.palette.iconTiles ? page.palette.tile : page.palette.background;
+    std::map<size_t, std::pair<wxImage, wxImage>> icons;
+    for (const AheadItem &item : m_ahead) {
+        if (icons.count(item.group) > 0)
+            continue;
+        std::pair<wxImage, wxImage> &pair = icons[item.group];
+        GroupIcons(m_ahead_groups[item.group], iconBackground, muted, m_rendered_icon_scale,
+                   &pair.first, &pair.second);
+    }
     int box = page.iconBox;
     for (const AheadItem &item : m_ahead) {
-        const wxImage &icon = page.icons[item.group];
+        const wxImage &icon = icons[item.group].first;
         if (icon.IsOk())
             box = std::max(box, std::min(kMaxIconBox,
                                          std::max(icon.GetWidth(), icon.GetHeight())));
@@ -961,16 +994,16 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
                 break;
         }
         const AheadItem &item = m_ahead[k];
-        const DynamicGroup &group = m_dynamic_groups[item.group];
+        const DynamicGroup &group = m_ahead_groups[item.group];
         const wxString id = wxString::Format("%s%zu", kLegendAheadIdPrefix, k);
         const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
 
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td id=\"" << id
              << "\" width=\"" << cell << "\" align=\"center\" valign=\"middle\">";
-        if (page.icons[item.group].IsOk()) {
-            wxImage icon = NormalizeIcon(page.icons[item.group], rowColour, box, tile, padding);
+        if (icons[item.group].first.IsOk()) {
+            wxImage icon = NormalizeIcon(icons[item.group].first, rowColour, box, tile, padding);
             wxImage icon2 =
-                NormalizeIcon(page.icons2[item.group], rowColour, 2 * box, tile, 2 * padding);
+                NormalizeIcon(icons[item.group].second, rowColour, 2 * box, tile, 2 * padding);
             if (group.hiddenAtScale) {
                 icon = FadeImage(icon, rowColour, 0.55);
                 if (icon2.IsOk())

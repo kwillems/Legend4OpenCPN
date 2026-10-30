@@ -40,8 +40,8 @@ const size_t kMaxCellsPerView = 12;
 // Opened charts kept at the same time. Every open chart holds a decrypted
 // cell in memory, and opening one takes up to a quarter of a second. More
 // than one view's worth, so panning between views does not keep reopening
-// the same cells.
-const size_t kMaxOpenCharts = 16;
+// the same cells, with room for the cells of the Uitkijk.
+const size_t kMaxOpenCharts = 24;
 
 // Cells more detailed than this factor times the view scale are skipped:
 // OpenCPN's quilt does not show them either, and their objects carry scale
@@ -400,6 +400,95 @@ std::vector<wxString> OChartsSource::UnopenedCells(const PlugIn_ViewPort &vp)
             paths.push_back(cell->path);
     }
     return paths;
+}
+
+std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort &area,
+                                                           int maxScale, size_t maxCells,
+                                                           const std::vector<std::pair<double, double>> &samples,
+                                                           std::vector<wxString> *unopened,
+                                                           std::vector<CellExtent> *used)
+{
+    std::vector<ChartObject> objects;
+    if (!m_inventoried)
+        Inventory();
+
+    // Query radius: half the diagonal of the area, in degrees.
+    const double kPi = 3.14159265358979323846;
+    const double cosLat = std::max(0.2, std::cos(area.clat * kPi / 180.0));
+    const double halfLat = (area.lat_max - area.lat_min) / 2.0;
+    const double halfLon = (area.lon_max - area.lon_min) / 2.0 * cosLat;
+    const float radius =
+        static_cast<float>(std::sqrt(halfLat * halfLat + halfLon * halfLon) * 1.05);
+    PlugIn_ViewPort query = area;
+    query.chart_scale = 1.0f;
+
+    std::vector<const Cell *> candidates;
+    for (const Cell &cell : m_cells) {
+        if (cell.extent.NLAT < area.lat_min || cell.extent.SLAT > area.lat_max ||
+            cell.extent.ELON < area.lon_min || cell.extent.WLON > area.lon_max)
+            continue;
+        if (cell.scale <= maxScale)
+            candidates.push_back(&cell);
+    }
+    std::sort(candidates.begin(), candidates.end(),
+              [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
+    std::vector<const Cell *> chosen;
+    auto choose = [&chosen](const Cell *cell) {
+        if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
+            chosen.push_back(cell);
+    };
+    for (const auto &point : samples) {
+        for (const Cell *cell : candidates) {
+            if (point.first >= cell->extent.SLAT && point.first <= cell->extent.NLAT &&
+                point.second >= cell->extent.WLON && point.second <= cell->extent.ELON) {
+                choose(cell);
+                break;
+            }
+        }
+    }
+    for (const Cell *cell : candidates) {
+        if (chosen.size() >= maxCells)
+            break;
+        choose(cell);
+    }
+
+    std::set<wxString> seen;
+    for (const Cell *candidate : chosen) {
+        const Cell &cell = *candidate;
+        if (m_open.find(cell.path) == m_open.end()) {
+            unopened->push_back(cell.path);
+            continue;
+        }
+        PlugInChartBaseExtendedPlus2 *chart = Open(cell.path);
+        if (!chart)
+            continue;
+        used->push_back({cell.extent.SLAT, cell.extent.WLON, cell.extent.NLAT,
+                         cell.extent.ELON, cell.scale});
+
+        ListOfPI_S57Obj *list = chart->GetObjRuleListAtLatLon(
+            static_cast<float>(area.clat), static_cast<float>(area.clon), radius, &query);
+        if (!list)
+            continue;
+        for (ListOfPI_S57Obj::compatibility_iterator node = list->GetFirst(); node;
+             node = node->GetNext()) {
+            const PI_S57Obj *obj = node->GetData();
+            if (!obj || obj->Primitive_type != ChartObject::Point)
+                continue;
+            if (obj->m_lat < area.lat_min || obj->m_lat > area.lat_max ||
+                obj->m_lon < area.lon_min || obj->m_lon > area.lon_max)
+                continue;
+            const wxString key = wxString::Format("%s|%.5f|%.5f|%d", obj->FeatureName,
+                                                  obj->m_lat, obj->m_lon, cell.scale);
+            if (!seen.insert(key).second)
+                continue;
+            objects.push_back(ToChartObject(obj));
+            objects.back().cellScale = cell.scale;
+        }
+        // The objects belong to the chart; only the list is ours.
+        list->Clear();
+        delete list;
+    }
+    return objects;
 }
 
 std::vector<ChartObject> OChartsSource::PointObjectsInView(

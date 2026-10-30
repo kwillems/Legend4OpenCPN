@@ -859,15 +859,44 @@ void legend_pi::CollectChartObjects(
 
     m_chart_sources_available = m_ocharts_available || m_s57.CellCount() > 0;
 
+    size_t probes = 0;
+    int unanswered = 0;
+    GroupChartObjects(objects, vp, groups, false, &probes, &unanswered);
+
+    // The list is rebuilt on every pause of the chart; log only what changed.
+    const wxString summary = wxString::Format(
+        "Legend: chart objects: %s; %s; %d listed, %d hidden, %d hidden by scale "
+        "listed, %zu class probes%s",
+        m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
+        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden,
+        m_chart_objects_scale_hidden, probes,
+        unanswered > 0 ? " (PLIB gave no answer)" : "");
+    if (summary != m_chart_objects_logged) {
+        m_chart_objects_logged = summary;
+        wxLogMessage("%s, %ld ms", summary, watch.Time());
+    }
+}
+
+// The chart objects into groups, one per S-52 symbol, with their lights
+// under them. Whether the chart draws an object is asked for the view `vp`.
+// For the Uitkijk (lookout) the counts and sectors of the legend are left
+// alone.
+void legend_pi::GroupChartObjects(const std::vector<ChartObject> &objects,
+                                  const PlugIn_ViewPort &vp,
+                                  std::map<wxString, DynamicGroup> *groups, bool lookout,
+                                  size_t *probes, int *unanswered)
+{
     const bool simplified = PI_GetPLIBSymbolStyle() != PI_PAPER_CHART;
     m_display_settings.Refresh();
-
 
     // Whether the chart draws objects of a class with a scale limit: asked
     // of OpenCPN once per class and limit, with its configuration file as
     // fallback.
     std::map<wxString, bool> shownCache;
-    int unanswered = 0;
+    int ignoredCount = 0;
+    int &hiddenCount = lookout ? ignoredCount : m_chart_objects_hidden;
+    int &scaleHiddenCount = lookout ? ignoredCount : m_chart_objects_scale_hidden;
+    int &totalCount = lookout ? ignoredCount : m_chart_object_total;
 
     std::vector<PendingLight> lights;
     std::map<std::pair<long, long>, std::vector<Carrier>> carriers;
@@ -890,7 +919,7 @@ void legend_pi::CollectChartObjects(
             shown = m_display_settings.ChartShows(
                 object.className, object.scamin, vp, &answered);
             if (!answered) {
-                ++unanswered;
+                ++*unanswered;
                 shown = m_display_settings.Shows(object.className, resolved.displayCat) &&
                         !(object.scamin > 0 && vp.chart_scale > object.scamin);
             }
@@ -902,7 +931,7 @@ void legend_pi::CollectChartObjects(
         bool hiddenByScale = false;
         if (!shown) {
             if (!m_show_hidden_at_scale || object.scamin <= 0) {
-                ++m_chart_objects_hidden;
+                ++hiddenCount;
                 continue;
             }
 
@@ -924,7 +953,7 @@ void legend_pi::CollectChartObjects(
             }
 
             if (!shownWithoutScale) {
-                ++m_chart_objects_hidden;
+                ++hiddenCount;
                 continue;
             }
             hiddenByScale = true;
@@ -990,9 +1019,9 @@ void legend_pi::CollectChartObjects(
         group.positions.emplace_back(object.lat, object.lon);
 
         if (hiddenByScale)
-            ++m_chart_objects_scale_hidden;
+            ++scaleHiddenCount;
         else
-            ++m_chart_object_total;
+            ++totalCount;
 
         // Lights are placed under the buoy or beacon they stand on, once all
         // objects are known; hidden ones at this scale too, in grey.
@@ -1044,7 +1073,8 @@ void legend_pi::CollectChartObjects(
     // The parts of a sector light share a position and a rhythm and differ
     // in colour: joined into one light, as charts write it ("Iso.WRG.4s"),
     // with its sectors kept by position.
-    m_light_sectors.Clear();
+    if (!lookout)
+        m_light_sectors.Clear();
     {
         std::vector<PendingLight> joined;
         std::map<wxString, size_t> sectorLights;
@@ -1054,8 +1084,9 @@ void legend_pi::CollectChartObjects(
                 continue;
             }
             const std::pair<long, long> cell = LightSectors::Cell(pending.lat, pending.lon);
-            m_light_sectors.Add(pending.lat, pending.lon, pending.light.RhythmAbbreviation(),
-                                pending.part);
+            if (!lookout)
+                m_light_sectors.Add(pending.lat, pending.lon,
+                                    pending.light.RhythmAbbreviation(), pending.part);
 
             const wxString key = wxString::Format(
                 "%ld|%ld|%d|", cell.first, cell.second, pending.hiddenFrom) +
@@ -1114,19 +1145,7 @@ void legend_pi::CollectChartObjects(
         AddLight(*groups, pending.light, pending.lat, pending.lon,
                  best ? best->groupKey : wxString(), pending.hiddenFrom);
     }
-
-    // The list is rebuilt on every pause of the chart; log only what changed.
-    const wxString summary = wxString::Format(
-        "Legend: chart objects: %s; %s; %d listed, %d hidden, %d hidden by scale "
-        "listed, %zu class probes%s",
-        m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
-        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden,
-        m_chart_objects_scale_hidden, shownCache.size(),
-        unanswered > 0 ? " (PLIB gave no answer)" : "");
-    if (summary != m_chart_objects_logged) {
-        m_chart_objects_logged = summary;
-        wxLogMessage("%s, %ld ms", summary, watch.Time());
-    }
+    *probes = shownCache.size();
 }
 
 void legend_pi::AddLight(
@@ -1175,36 +1194,22 @@ void legend_pi::AddLight(
     group.positions.emplace_back(lat, lon);
 }
 
-void legend_pi::CollectDynamicLegend()
+// The waypoints of the layers within the bounds of `area` into groups, one
+// per icon, with their lights under them. Scale limits are compared with
+// scaleForLimits. For the Uitkijk (lookout) the counts of the legend are
+// left alone.
+void legend_pi::CollectWaypointGroups(const PlugIn_ViewPort &area, double scaleForLimits,
+                                      std::map<wxString, DynamicGroup> *groups, bool lookout)
 {
-    m_dynamic_groups.clear();
-    m_dynamic_total = 0;
-    m_dynamic_hidden = 0;
-
-    m_collected_viewport = m_viewport;
-    m_collected_viewport_valid = m_viewport_valid;
-
-    if (!m_viewport_valid)
-        return;
-
-    LoadMeanings();
-
-    const PlugIn_ViewPort vp = m_viewport;
-    m_displayed_scale = DisplayedScale(vp);
-    const double scaleForLimits =
-        m_displayed_scale > 0.0 ? m_displayed_scale : vp.chart_scale;
-
     // Longitudes may be offset by 360 degrees relative to the viewport.
-    auto lonInView = [&vp](double lon) {
+    auto lonInView = [&area](double lon) {
         for (double offset : {0.0, 360.0, -360.0}) {
             const double l = lon + offset;
-            if (l >= vp.lon_min && l <= vp.lon_max)
+            if (l >= area.lon_min && l <= area.lon_max)
                 return true;
         }
         return false;
     };
-
-    std::map<wxString, DynamicGroup> groups;
 
     for (const CachedWaypoint &wp : m_waypoint_cache) {
         if (!wp.visible)
@@ -1216,7 +1221,7 @@ void legend_pi::CollectDynamicLegend()
         if (hiddenByScale && !m_show_hidden_at_scale)
             continue;
 
-        if (wp.lat < vp.lat_min || wp.lat > vp.lat_max)
+        if (wp.lat < area.lat_min || wp.lat > area.lat_max)
             continue;
 
         if (!lonInView(wp.lon))
@@ -1231,7 +1236,7 @@ void legend_pi::CollectDynamicLegend()
         const int limit = hiddenByScale ? static_cast<int>(wp.scamin) : 0;
         const wxString key =
             hiddenByScale ? wxString::Format("%s|hidden|%09d", icon, limit) : icon;
-        DynamicGroup &group = groups[key];
+        DynamicGroup &group = (*groups)[key];
 
         if (group.key.IsEmpty()) {
             group.key = key;
@@ -1243,29 +1248,33 @@ void legend_pi::CollectDynamicLegend()
 
         group.positions.emplace_back(wp.lat, wp.lon);
 
-        if (hiddenByScale)
-            ++m_dynamic_hidden;
-        else
-            ++m_dynamic_total;
+        if (!lookout) {
+            if (hiddenByScale)
+                ++m_dynamic_hidden;
+            else
+                ++m_dynamic_total;
+        }
 
         if (m_show_lights && !wp.light.IsEmpty()) {
             LightCharacter light;
             if (light.Parse(wp.light))
-                AddLight(groups, light, wp.lat, wp.lon, key);
+                AddLight(*groups, light, wp.lat, wp.lon, key);
         }
     }
+}
 
-    m_light_sectors.Clear();
-    CollectChartObjects(vp, &groups);
-
-    // Order the positions of every group from near to far, measured from
-    // the centre of the screen.
+// The groups in the order of the list: headings in file order, each row
+// followed by the lights it carries; the positions of every group from near
+// to far, measured from (clat, clon).
+std::vector<DynamicGroup> legend_pi::OrderGroups(
+    const std::map<wxString, DynamicGroup> &groups, double clat, double clon) const
+{
     const double kPi = 3.14159265358979323846;
-    const double cosLat = std::cos(vp.clat * kPi / 180.0);
+    const double cosLat = std::cos(clat * kPi / 180.0);
 
     auto distance = [&](const std::pair<double, double> &p) {
-        double dlat = p.first - vp.clat;
-        double dlon = p.second - vp.clon;
+        double dlat = p.first - clat;
+        double dlon = p.second - clon;
 
         while (dlon > 180.0)
             dlon -= 360.0;
@@ -1278,6 +1287,7 @@ void legend_pi::CollectDynamicLegend()
 
     // Light sub-rows are kept apart and put under their row afterwards.
     std::map<wxString, std::vector<DynamicGroup>> subRows;
+    std::vector<DynamicGroup> rows;
 
     for (auto &entry : groups) {
         DynamicGroup group = entry.second;
@@ -1299,12 +1309,12 @@ void legend_pi::CollectDynamicLegend()
             group.section = BuiltInSection(-3);
         }
 
-        m_dynamic_groups.push_back(group);
+        rows.push_back(group);
     }
 
     std::sort(
-        m_dynamic_groups.begin(),
-        m_dynamic_groups.end(),
+        rows.begin(),
+        rows.end(),
         [](const DynamicGroup &a, const DynamicGroup &b) {
             // Headings in file order, then "Kaartsymbolen" (-2),
             // "Lichtkarakters" (-3) and "Overig" (-1); within a heading the
@@ -1325,18 +1335,13 @@ void legend_pi::CollectDynamicLegend()
             return a.key.CmpNoCase(b.key) < 0;
         });
 
-    // Lights shining on the chart follow the list, once it is complete:
-    // the lights under their rows are added below.
-    if (subRows.empty()) {
-        if (m_all_lights.IsOn())
-            UpdateAllLights();
-        return;
-    }
+    if (subRows.empty())
+        return rows;
 
     // Each row followed by the lights it carries, the most frequent first.
     std::vector<DynamicGroup> ordered;
-    ordered.reserve(m_dynamic_groups.size() + groups.size());
-    for (DynamicGroup &group : m_dynamic_groups) {
+    ordered.reserve(rows.size() + groups.size());
+    for (DynamicGroup &group : rows) {
         const wxString key = group.key;
         const int section = group.section;
         ordered.push_back(group);
@@ -1345,20 +1350,52 @@ void legend_pi::CollectDynamicLegend()
         if (found == subRows.end())
             continue;
 
-        std::vector<DynamicGroup> &rows = found->second;
-        std::sort(rows.begin(), rows.end(),
+        std::vector<DynamicGroup> &lights = found->second;
+        std::sort(lights.begin(), lights.end(),
                   [](const DynamicGroup &a, const DynamicGroup &b) {
                       if (a.positions.size() != b.positions.size())
                           return a.positions.size() > b.positions.size();
                       return a.lightText.CmpNoCase(b.lightText) < 0;
                   });
-        for (DynamicGroup &row : rows) {
-            row.section = section;
-            ordered.push_back(row);
+        for (DynamicGroup &light : lights) {
+            light.section = section;
+            ordered.push_back(light);
         }
     }
-    m_dynamic_groups.swap(ordered);
+    return ordered;
+}
 
+void legend_pi::CollectDynamicLegend()
+{
+    m_dynamic_groups.clear();
+    m_dynamic_total = 0;
+    m_dynamic_hidden = 0;
+    // The Uitkijk groups its own area again: settings and scale may have
+    // changed.
+    m_ahead_groups_key.Clear();
+
+    m_collected_viewport = m_viewport;
+    m_collected_viewport_valid = m_viewport_valid;
+
+    if (!m_viewport_valid)
+        return;
+
+    LoadMeanings();
+
+    const PlugIn_ViewPort vp = m_viewport;
+    m_displayed_scale = DisplayedScale(vp);
+    const double scaleForLimits =
+        m_displayed_scale > 0.0 ? m_displayed_scale : vp.chart_scale;
+
+    std::map<wxString, DynamicGroup> groups;
+    CollectWaypointGroups(vp, scaleForLimits, &groups, false);
+
+    m_light_sectors.Clear();
+    CollectChartObjects(vp, &groups);
+
+    m_dynamic_groups = OrderGroups(groups, vp.clat, vp.clon);
+
+    // Lights shining on the chart follow the list, once it is complete.
     if (m_all_lights.IsOn())
         UpdateAllLights();
 }

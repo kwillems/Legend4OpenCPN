@@ -660,6 +660,8 @@ void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
             m_markdown_view->CallAfter([this]() {
                 m_ocharts.Rescan();
                 m_s57.Rescan();
+                m_ahead_area_valid = false;
+                m_ahead_cells_tried.clear();
                 m_vhf_loaded = false;
                 LoadChartNames();
                 ShowDynamicLegend(true);

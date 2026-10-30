@@ -201,6 +201,7 @@ legend_pi::legend_pi(void *ppimgr)
         [this](wxTimerEvent &) { UpdateTapClock(); });
 
     m_cell_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OpenNextChartCell(); });
+    m_ahead_cell_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OpenNextAheadCell(); });
     m_refresh_icon_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { OnRefreshIconTimer(); });
 
     m_fill_window_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
@@ -331,6 +332,7 @@ bool legend_pi::DeInit()
     // A cell opened after m_ocharts.Close() below, or what waits for the
     // cells, would reach into charts and a window that are gone.
     m_cell_timer.Stop();
+    m_ahead_cell_timer.Stop();
     m_cells_to_open.clear();
     m_after_cells = std::function<void()>();
     m_visibility_timer.Stop();

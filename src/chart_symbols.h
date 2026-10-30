@@ -32,6 +32,7 @@ struct ChartObject
     double lat = 0.0;
     double lon = 0.0;
     int scamin = 0;       // 0 = no scale limit
+    int cellScale = 0;    // compilation scale of its cell, 0 = unknown
 
     // Acronym and value as text, in chart order. List values are written
     // as "3,4,3", the way the S-52 lookup tables write them.
@@ -39,6 +40,16 @@ struct ChartObject
 
     // Value of an attribute, or nullptr when the object does not have it.
     const wxString *Attribute(const wxString &acronym) const;
+};
+
+// Extent and compilation scale of a chart cell.
+struct CellExtent
+{
+    double latMin = 0.0;
+    double lonMin = 0.0;
+    double latMax = 0.0;
+    double lonMax = 0.0;
+    int scale = 0;
 };
 
 // OpenCPN's presentation data for vector charts, read from its s57data

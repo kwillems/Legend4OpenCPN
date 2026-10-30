@@ -44,6 +44,19 @@ public:
     std::vector<ChartObject> PointObjectsInView(
         const PlugIn_ViewPort &vp, bool ignoreScaleLimits = false);
 
+    // The point objects in an area for the Uitkijk, scale limits ignored,
+    // from the cells already open that overlap it and are not coarser than
+    // maxScale. The cells still to open come back in `unopened`, the cells
+    // used in `used`.
+    // For every point of `samples` the most detailed cell that covers it,
+    // so no part of the area goes without a chart; then other cells, the
+    // most detailed first, up to maxCells.
+    std::vector<ChartObject> PointObjectsInArea(const PlugIn_ViewPort &area, int maxScale,
+                                                size_t maxCells,
+                                                const std::vector<std::pair<double, double>> &samples,
+                                                std::vector<wxString> *unopened,
+                                                std::vector<CellExtent> *used);
+
     // The cells of this view that are not open yet, and one of them opened:
     // each takes a fifth of a second, so the legend opens them one by one,
     // with room for OpenCPN in between, before it asks for the objects.
