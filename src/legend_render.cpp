@@ -142,7 +142,8 @@ void legend_pi::RenderDynamicLegend(bool keepScroll)
 }
 
 // The page of the dynamic legend: the title bar, the blocks at the top
-// (Marifoon, Uitkijk, Notities, Licht herkennen), then the rows under
+// (Marifoon, Uitkijk, Notities, Licht herkennen, in the order the user
+// chose), then the rows under
 // their headings and the counts at the foot.
 wxString legend_pi::BuildDynamicPage()
 {
@@ -170,10 +171,16 @@ wxString legend_pi::BuildDynamicPage()
     // object. Not during a search or the order edit mode.
     m_rendered_headings.clear();
     if (m_viewport_valid && !m_reorder_mode && !page.filtering) {
-        RenderVhfBlock(page);
-        RenderAheadBlock(page);
-        RenderNotesBlock(page);
-        RenderIdentifyBlock(page);
+        for (const wxString &key : m_top_block_order) {
+            if (key == "@marifoon")
+                RenderVhfBlock(page);
+            else if (key == "@vooruit")
+                RenderAheadBlock(page);
+            else if (key == "@notities")
+                RenderNotesBlock(page);
+            else if (key == "@herkennen")
+                RenderIdentifyBlock(page);
+        }
     }
 
     const wxColour &muted = page.palette.muted;
@@ -1348,6 +1355,37 @@ void legend_pi::RenderReorderList(DynamicPage &page)
 
     const int count = static_cast<int>(m_symbol_meanings.Sections().size());
 
+    auto moveButton = [&](const wxString &prefix, int index, const char *arrow,
+                          bool enabled) {
+        wxString cell;
+        cell << "<td width=\"44\" align=\"center\" valign=\"middle\"";
+        if (enabled)
+            cell << " id=\"" << prefix << index << "\"";
+        cell << "><font size=\"+3\"";
+        if (!enabled)
+            cell << " color=\"" << HtmlColour(rule) << "\"";
+        cell << ">" << arrow << "</font></td>";
+        return cell;
+    };
+
+    // The blocks at the top first: they move among themselves and stay
+    // above the headings of symbolen.txt.
+    const int blocks = static_cast<int>(m_top_block_order.size());
+    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\">";
+    for (int block = 0; block < blocks; ++block) {
+        const wxColour rowColour = block % 2 == 1 ? stripe : background;
+        html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\">"
+             << "<td valign=\"middle\"><b>"
+             << EscapeHtml(TopBlockTitle(m_top_block_order[block]))
+             << "</b><br><font size=\"-1\" color=\"" << HtmlColour(muted)
+             << "\">bovenaan de lijst</font></td>"
+             << moveButton(kLegendMoveBlockUpIdPrefix, block, "&#9650;", block > 0)
+             << moveButton(kLegendMoveBlockDownIdPrefix, block, "&#9660;",
+                           block < blocks - 1)
+             << "</tr>";
+    }
+    html << "</table><br>";
+
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\">";
 
     for (int section = 0; section < count; ++section) {
@@ -1387,19 +1425,6 @@ void legend_pi::RenderReorderList(DynamicPage &page)
                   << symbols - kStripIcons << "</font>";
         }
 
-        auto button = [&](const wxString &prefix, const char *arrow,
-                          bool enabled) {
-            wxString cell;
-            cell << "<td width=\"44\" align=\"center\" valign=\"middle\"";
-            if (enabled)
-                cell << " id=\"" << prefix << section << "\"";
-            cell << "><font size=\"+3\"";
-            if (!enabled)
-                cell << " color=\"" << HtmlColour(rule) << "\"";
-            cell << ">" << arrow << "</font></td>";
-            return cell;
-        };
-
         html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\">"
              << "<td valign=\"middle\"><b>"
              << EscapeHtml(SectionTitle(section))
@@ -1414,16 +1439,17 @@ void legend_pi::RenderReorderList(DynamicPage &page)
 
         html << "</font></td><td align=\"right\" valign=\"middle\">"
              << strip << "</td>"
-             << button(kLegendMoveUpIdPrefix, "&#9650;", section > 0)
-             << button(kLegendMoveDownIdPrefix, "&#9660;",
-                       section < count - 1)
+             << moveButton(kLegendMoveUpIdPrefix, section, "&#9650;", section > 0)
+             << moveButton(kLegendMoveDownIdPrefix, section, "&#9660;",
+                           section < count - 1)
              << "</tr>";
     }
 
     html << "</table>"
          << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
          << "Tik of klik op &#9650; of &#9660; om een kopje te verplaatsen. "
-            "De volgorde wordt in symbolen.txt bewaard. 'Overig' staat "
+            "De volgorde van de kopjes wordt in symbolen.txt bewaard, die "
+            "van de blokken bovenaan in de instellingen. 'Overig' staat "
             "altijd onderaan.</font></p>";
 }
 

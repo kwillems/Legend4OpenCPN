@@ -702,6 +702,10 @@ legend_pi::Hit legend_pi::HitAt(const wxPoint &pos) const
         {HitKind::MoveUp, legendView->IdNumberAt(pos, kLegendMoveUpIdPrefix)},
         {HitKind::MoveDown,
          legendView->IdNumberAt(pos, kLegendMoveDownIdPrefix)},
+        {HitKind::MoveBlockUp,
+         legendView->IdNumberAt(pos, kLegendMoveBlockUpIdPrefix)},
+        {HitKind::MoveBlockDown,
+         legendView->IdNumberAt(pos, kLegendMoveBlockDownIdPrefix)},
         {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
         {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
         {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
@@ -818,6 +822,12 @@ void legend_pi::OnLegendClick(const Hit &hit)
         break;
     case HitKind::MoveDown:
         MoveSection(hit.index, +1);
+        break;
+    case HitKind::MoveBlockUp:
+        MoveTopBlock(hit.index, -1);
+        break;
+    case HitKind::MoveBlockDown:
+        MoveTopBlock(hit.index, +1);
         break;
     case HitKind::Ahead:
         ShowAheadItem(static_cast<size_t>(hit.index));
@@ -944,9 +954,11 @@ wxString legend_pi::LegendTip(const Hit &hit) const
                   : "Groep inklappen";
         break;
     case HitKind::MoveUp:
+    case HitKind::MoveBlockUp:
         tip = "Kopje omhoog";
         break;
     case HitKind::MoveDown:
+    case HitKind::MoveBlockDown:
         tip = "Kopje omlaag";
         break;
     case HitKind::Ahead:
@@ -1729,6 +1741,37 @@ bool legend_pi::GroupMatchesFilter(const DynamicGroup &group) const
             return false;
     }
     return true;
+}
+
+// Moves one of the blocks at the top of the list (Marifoon, Uitkijk,
+// Notities, Licht herkennen) among the others; the order is kept in
+// legend.ini.
+void legend_pi::MoveTopBlock(int index, int delta)
+{
+    const int target = index + delta;
+    const int count = static_cast<int>(m_top_block_order.size());
+
+    if (index < 0 || index >= count || target < 0 || target >= count)
+        return;
+
+    std::swap(m_top_block_order[static_cast<size_t>(index)],
+              m_top_block_order[static_cast<size_t>(target)]);
+    SaveConfig();
+    RenderDynamicLegend(true);
+}
+
+wxString legend_pi::TopBlockTitle(const wxString &key) const
+{
+    const bool nl = m_dutch_names;
+    if (key == "@marifoon")
+        return nl ? "Marifoon" : "VHF";
+    if (key == "@vooruit")
+        return nl ? "Uitkijk" : "Lookout";
+    if (key == "@notities")
+        return nl ? "Notities" : "Notes";
+    if (key == "@herkennen")
+        return nl ? "Licht herkennen" : "Identify a light";
+    return key;
 }
 
 // Moves the block of a heading in symbolen.txt: the [Heading] line and

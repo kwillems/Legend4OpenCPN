@@ -167,8 +167,8 @@ private:
 
     // What is under the mouse in the dynamic legend: a row, its counter, a
     // heading, a button, ..., with its number in the page.
-    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, Ahead, Tip, Tap, Match, Button,
-                         AheadVhf, VhfArea, AheadNote, Note };
+    enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, MoveBlockUp, MoveBlockDown,
+                         Ahead, Tip, Tap, Match, Button, AheadVhf, VhfArea, AheadNote, Note };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -320,6 +320,8 @@ private:
     bool m_menu_any_open = false;
     bool m_menu_has_lights = false;
     void MoveSection(int section, int delta);
+    void MoveTopBlock(int index, int delta);
+    wxString TopBlockTitle(const wxString &key) const;
     void ResolveLabel(
         const wxString &key,
         const wxString &iconDescription,
@@ -490,6 +492,12 @@ private:
 
     std::set<wxString> m_collapsed_sections;
     bool m_reorder_mode = false;
+
+    // The order of the blocks at the top of the list, by heading key
+    // ("@marifoon", "@vooruit", "@notities", "@herkennen"); kept in
+    // legend.ini, as they are not in symbolen.txt.
+    std::vector<wxString> m_top_block_order = {"@marifoon", "@vooruit",
+                                               "@notities", "@herkennen"};
 
     // Chart object scale factor of OpenCPN the list was last drawn with;
     // row icons follow it, so they match the size on the chart.

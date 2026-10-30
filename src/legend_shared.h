@@ -45,6 +45,11 @@ const wxString kLegendAllIdPrefix = "legend-all-";
 const wxString kLegendMoveUpIdPrefix = "legend-move-up-";
 const wxString kLegendMoveDownIdPrefix = "legend-move-down-";
 
+// Ids of the move buttons of the blocks at the top (Marifoon, Uitkijk,
+// Notities, Licht herkennen), followed by their place in that order.
+const wxString kLegendMoveBlockUpIdPrefix = "legend-move-block-up-";
+const wxString kLegendMoveBlockDownIdPrefix = "legend-move-block-down-";
+
 // Id of the cells of the header icons, for their tooltips: 0 settings,
 // 1 Ververs.
 const wxString kLegendTipIdPrefix = "legend-tip-";
