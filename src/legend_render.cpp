@@ -866,11 +866,11 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     // still read, or where no chart covers part of it, the heading says so
     // instead of "nothing in the beam".
     if (m_ahead_reading)
-        summary << " &middot; <b>" << (nl ? "kaarten worden nog gelezen" : "charts still being read")
+        summary << " &middot; <b>" << (nl ? "Kaarten worden nog gelezen" : "Charts still being read")
                 << "</b>";
     else if (m_ahead_uncovered)
         summary << " &middot; <b>"
-                << (nl ? "geen kaart voor een deel van de bundel" : "no chart for part of the beam")
+                << (nl ? "Geen kaart voor een deel van de bundel" : "No chart for part of the beam")
                 << "</b>";
     else if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
         summary << " &middot; " << (nl ? "niets in de bundel" : "nothing in the beam");
