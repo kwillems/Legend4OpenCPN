@@ -404,6 +404,7 @@ std::vector<wxString> OChartsSource::UnopenedCells(const PlugIn_ViewPort &vp)
 
 std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort &area,
                                                            int maxScale, size_t maxCells,
+                                                           const std::vector<std::pair<double, double>> &samples,
                                                            std::vector<wxString> *unopened,
                                                            std::vector<CellExtent> *used)
 {
@@ -431,11 +432,28 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
     }
     std::sort(candidates.begin(), candidates.end(),
               [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
-    if (candidates.size() > maxCells)
-        candidates.resize(maxCells);
+    std::vector<const Cell *> chosen;
+    auto choose = [&chosen](const Cell *cell) {
+        if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
+            chosen.push_back(cell);
+    };
+    for (const auto &point : samples) {
+        for (const Cell *cell : candidates) {
+            if (point.first >= cell->extent.SLAT && point.first <= cell->extent.NLAT &&
+                point.second >= cell->extent.WLON && point.second <= cell->extent.ELON) {
+                choose(cell);
+                break;
+            }
+        }
+    }
+    for (const Cell *cell : candidates) {
+        if (chosen.size() >= maxCells)
+            break;
+        choose(cell);
+    }
 
     std::set<wxString> seen;
-    for (const Cell *candidate : candidates) {
+    for (const Cell *candidate : chosen) {
         const Cell &cell = *candidate;
         if (m_open.find(cell.path) == m_open.end()) {
             unopened->push_back(cell.path);

@@ -213,14 +213,23 @@ void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
     m_ahead_groups_key.Clear();
     m_ahead_cells_used.clear();
 
+    // Points spread over the area: every one gets the most detailed cell
+    // that covers it, whatever the number of small harbour cells.
+    std::vector<std::pair<double, double>> samples;
+    const int kSteps = 8;
+    for (int i = 0; i <= kSteps; ++i)
+        for (int j = 0; j <= kSteps; ++j)
+            samples.emplace_back(area.lat_min + (area.lat_max - area.lat_min) * i / kSteps,
+                                 area.lon_min + (area.lon_max - area.lon_min) * j / kSteps);
+
     std::vector<ChartObject> objects;
     std::vector<wxString> unopened;
     std::vector<wxString> unread;
     if (m_ocharts.Available())
         objects = m_ocharts.PointObjectsInArea(area, kAheadMaxCellScale, kAheadOchartsCells,
-                                               &unopened, &m_ahead_cells_used);
+                                               samples, &unopened, &m_ahead_cells_used);
     const std::vector<ChartObject> enc = m_s57.PointObjectsInArea(
-        area, kAheadMaxCellScale, kAheadS57Cells, &unread, &m_ahead_cells_used);
+        area, kAheadMaxCellScale, kAheadS57Cells, samples, &unread, &m_ahead_cells_used);
     objects.insert(objects.end(), enc.begin(), enc.end());
 
     std::stable_sort(objects.begin(), objects.end(),
@@ -271,6 +280,11 @@ void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
         if (m_ahead_cells_tried.count(path) == 0)
             m_ahead_cells_to_open.emplace_back(false, path);
     m_ahead_reading = !m_ahead_cells_to_open.empty();
+    wxLogMessage("Legend: lookout area %.3f..%.3f N, %.3f..%.3f E: %zu cells read, "
+                 "%zu to open, %zu objects",
+                 area.lat_min, area.lat_max, area.lon_min, area.lon_max,
+                 m_ahead_cells_used.size(), m_ahead_cells_to_open.size(),
+                 m_ahead_objects.size());
     if (m_ahead_reading && !m_ahead_cell_timer.IsRunning())
         m_ahead_cell_timer.StartOnce(50);
 }

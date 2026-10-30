@@ -48,9 +48,12 @@ public:
     // from the cells already open that overlap it and are not coarser than
     // maxScale. The cells still to open come back in `unopened`, the cells
     // used in `used`.
-    // At most maxCells cells, the most detailed first.
+    // For every point of `samples` the most detailed cell that covers it,
+    // so no part of the area goes without a chart; then other cells, the
+    // most detailed first, up to maxCells.
     std::vector<ChartObject> PointObjectsInArea(const PlugIn_ViewPort &area, int maxScale,
                                                 size_t maxCells,
+                                                const std::vector<std::pair<double, double>> &samples,
                                                 std::vector<wxString> *unopened,
                                                 std::vector<CellExtent> *used);
 

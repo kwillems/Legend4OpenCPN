@@ -39,9 +39,12 @@ public:
     // The point objects in an area for the Uitkijk, from the cells already
     // read that overlap it and are not coarser than maxScale. The cells
     // still to read come back in `unread`, the cells used in `used`.
-    // At most maxCells cells, the most detailed first.
+    // For every point of `samples` the most detailed cell that covers it,
+    // so no part of the area goes without a chart; then other cells, the
+    // most detailed first, up to maxCells.
     std::vector<ChartObject> PointObjectsInArea(const PlugIn_ViewPort &area, int maxScale,
                                                 size_t maxCells,
+                                                const std::vector<std::pair<double, double>> &samples,
                                                 std::vector<wxString> *unread,
                                                 std::vector<CellExtent> *used);
 

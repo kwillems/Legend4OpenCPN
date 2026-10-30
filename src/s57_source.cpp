@@ -691,6 +691,7 @@ void S57Source::ReadCell(const wxString &path)
 
 std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &area,
                                                        int maxScale, size_t maxCells,
+                                                       const std::vector<std::pair<double, double>> &samples,
                                                        std::vector<wxString> *unread,
                                                        std::vector<CellExtent> *used)
 {
@@ -708,11 +709,28 @@ std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &ar
     }
     std::sort(candidates.begin(), candidates.end(),
               [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
-    if (candidates.size() > maxCells)
-        candidates.resize(maxCells);
+    std::vector<const Cell *> chosen;
+    auto choose = [&chosen](const Cell *cell) {
+        if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
+            chosen.push_back(cell);
+    };
+    for (const auto &point : samples) {
+        for (const Cell *cell : candidates) {
+            if (point.first >= cell->latMin && point.first <= cell->latMax &&
+                point.second >= cell->lonMin && point.second <= cell->lonMax) {
+                choose(cell);
+                break;
+            }
+        }
+    }
+    for (const Cell *cell : candidates) {
+        if (chosen.size() >= maxCells)
+            break;
+        choose(cell);
+    }
 
     std::set<wxString> seen;
-    for (const Cell *candidate : candidates) {
+    for (const Cell *candidate : chosen) {
         const Cell &cell = *candidate;
         if (m_loaded.find(cell.path) == m_loaded.end()) {
             unread->push_back(cell.path);
