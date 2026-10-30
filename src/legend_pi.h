@@ -221,6 +221,8 @@ private:
     wxString BuildDynamicPage();
     void PrepareDynamicRows(DynamicPage &page);
     void LoadRowIcons(DynamicPage &page);
+    void GroupIcons(const DynamicGroup &group, const wxColour &iconBackground,
+                    const wxColour &muted, double iconScale, wxImage *icon, wxImage *image2);
     void RenderTitleBar(DynamicPage &page);
     bool RenderExtraHeading(DynamicPage &page, const wxString &key,
                             const wxString &title, const wxString &summary);
@@ -256,6 +258,13 @@ private:
     void EnsureChartSymbols();
     void CollectChartObjects(
         const PlugIn_ViewPort &vp, std::map<wxString, DynamicGroup> *groups);
+    void GroupChartObjects(const std::vector<ChartObject> &objects, const PlugIn_ViewPort &vp,
+                           std::map<wxString, DynamicGroup> *groups, bool lookout,
+                           size_t *probes, int *unanswered);
+    void CollectWaypointGroups(const PlugIn_ViewPort &area, double scaleForLimits,
+                               std::map<wxString, DynamicGroup> *groups, bool lookout);
+    std::vector<DynamicGroup> OrderGroups(const std::map<wxString, DynamicGroup> &groups,
+                                          double clat, double clon) const;
     // Adds one light to the row of its light character under the row
     // parentKey (empty: under "Lichtkarakters"). A light under a row is
     // hidden at this scale when its row is; hiddenFrom is the scale limit
@@ -689,6 +698,29 @@ private:
     bool m_ahead_sailing = false; // a recent fix and some speed
     void ComputeAhead();
     double AheadRange() const;
+
+    // The Uitkijk reads its own area, not the view: a box round the fan
+    // with room to spare (m_ahead_area), read again when the fan leaves it.
+    // Its chart objects are kept (m_ahead_objects) and grouped as the legend
+    // groups them (m_ahead_groups), again when the view's scale or the
+    // settings change (m_ahead_groups_key). Cells not open yet are opened
+    // one by one in the background (m_ahead_cell_timer); the most detailed
+    // cell counts where cells overlap.
+    PlugIn_ViewPort m_ahead_area;
+    bool m_ahead_area_valid = false;
+    std::vector<ChartObject> m_ahead_objects;
+    std::vector<CellExtent> m_ahead_cells_used;
+    std::vector<DynamicGroup> m_ahead_groups;
+    wxString m_ahead_groups_key;
+    std::vector<std::pair<bool, wxString>> m_ahead_cells_to_open; // o-charts?, path
+    std::set<wxString> m_ahead_cells_tried;
+    wxTimer m_ahead_cell_timer;
+    bool m_ahead_reading = false;   // cells of the area still to open
+    bool m_ahead_uncovered = false; // part of the fan lies outside every cell
+    void EnsureAheadGroups(double range);
+    void ReadAheadArea(const PlugIn_ViewPort &area);
+    void OpenNextAheadCell();
+    bool AheadCovered(double range) const;
 
     // The fan of the Uitkijk: at least this wide on either side of the
     // course, widening at m_ahead_angle degrees on either side (setting

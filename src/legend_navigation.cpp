@@ -132,6 +132,208 @@ wxString legend_pi::AheadTimeText(double miles) const
            FormatDuration(miles / m_ship_sog * 60.0, m_dutch_names);
 }
 
+namespace {
+
+// Cells the Uitkijk reads at most, the most detailed first: o-charts cells
+// stay open in memory, plain cells are kept parsed.
+const size_t kAheadOchartsCells = 12;
+const size_t kAheadS57Cells = 24;
+
+// Overview cells (band 1) carry only the largest lights; coarser cells
+// than this are not read for the Uitkijk.
+const int kAheadMaxCellScale = 700000;
+
+} // namespace
+
+// The groups of the Uitkijk for a fan of this range: its area read again
+// when the fan leaves it, and grouped again when the legend was collected
+// again (another scale, other settings) or the area was read again.
+void legend_pi::EnsureAheadGroups(double range)
+{
+    double latMin = m_ship_lat;
+    double latMax = m_ship_lat;
+    double lonMin = m_ship_lon;
+    double lonMax = m_ship_lon;
+    for (const auto &corner : FanOutline(m_ship_lat, m_ship_lon, m_ship_cog, range,
+                                         m_ahead_angle, kAheadMinHalfWidth)) {
+        latMin = std::min(latMin, corner.first);
+        latMax = std::max(latMax, corner.first);
+        lonMin = std::min(lonMin, corner.second);
+        lonMax = std::max(lonMax, corner.second);
+    }
+
+    const bool inside = m_ahead_area_valid && latMin >= m_ahead_area.lat_min &&
+                        latMax <= m_ahead_area.lat_max && lonMin >= m_ahead_area.lon_min &&
+                        lonMax <= m_ahead_area.lon_max;
+    if (!inside) {
+        // Room round the fan, half its length and half a mile more on every
+        // side, so a turn or some sailing stays inside the area.
+        const double kPi = 3.14159265358979323846;
+        const double margin = (range / 2.0 + 0.5) / 60.0;
+        const double cosLat = std::max(0.2, std::cos(m_ship_lat * kPi / 180.0));
+        PlugIn_ViewPort area = m_viewport;
+        area.lat_min = latMin - margin;
+        area.lat_max = latMax + margin;
+        area.lon_min = lonMin - margin / cosLat;
+        area.lon_max = lonMax + margin / cosLat;
+        area.clat = (area.lat_min + area.lat_max) / 2.0;
+        area.clon = (area.lon_min + area.lon_max) / 2.0;
+        ReadAheadArea(area);
+    }
+
+    if (!m_ahead_groups_key.IsEmpty() || !m_viewport_valid)
+        return;
+    m_ahead_groups_key = "grouped";
+
+    // As the legend: what the chart does not draw at the scale of the view
+    // only with the setting for those, and then in grey.
+    const PlugIn_ViewPort &vp = m_viewport;
+    const double scaleForLimits = m_displayed_scale > 0.0 ? m_displayed_scale : vp.chart_scale;
+    std::map<wxString, DynamicGroup> groups;
+    LoadMeanings();
+    CollectWaypointGroups(m_ahead_area, scaleForLimits, &groups, true);
+    EnsureChartSymbols();
+    if (m_chart_symbols.IsLoaded()) {
+        size_t probes = 0;
+        int unanswered = 0;
+        GroupChartObjects(m_ahead_objects, vp, &groups, true, &probes, &unanswered);
+    }
+    m_ahead_groups = OrderGroups(groups, m_ship_lat, m_ship_lon);
+}
+
+// Reads the chart objects of an area from the cells already open; the
+// others are opened one by one in the background, after which the area is
+// read again. Where cells of different scales overlap, an object of a
+// coarser cell gives way to the same kind of object near it in a more
+// detailed one: the same buoy, drawn a little apart.
+void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
+{
+    m_ahead_area = area;
+    m_ahead_area_valid = true;
+    m_ahead_groups_key.Clear();
+    m_ahead_cells_used.clear();
+
+    std::vector<ChartObject> objects;
+    std::vector<wxString> unopened;
+    std::vector<wxString> unread;
+    if (m_ocharts.Available())
+        objects = m_ocharts.PointObjectsInArea(area, kAheadMaxCellScale, kAheadOchartsCells,
+                                               &unopened, &m_ahead_cells_used);
+    const std::vector<ChartObject> enc = m_s57.PointObjectsInArea(
+        area, kAheadMaxCellScale, kAheadS57Cells, &unread, &m_ahead_cells_used);
+    objects.insert(objects.end(), enc.begin(), enc.end());
+
+    std::stable_sort(objects.begin(), objects.end(),
+                     [](const ChartObject &a, const ChartObject &b) {
+                         return a.cellScale < b.cellScale;
+                     });
+    const double kPi = 3.14159265358979323846;
+    const double cosLat = std::max(0.2, std::cos(area.clat * kPi / 180.0));
+    const double kBucket = 0.02; // degrees, more than the largest tolerance
+    std::map<std::pair<long, long>, std::vector<size_t>> buckets;
+    m_ahead_objects.clear();
+    for (const ChartObject &object : objects) {
+        // Half a millimetre on the coarser chart, at least 50 metres.
+        const double tolerance = std::max(50.0, object.cellScale * 0.0005) / 1852.0 / 60.0;
+        const long bLat = static_cast<long>(std::floor(object.lat / kBucket));
+        const long bLon = static_cast<long>(std::floor(object.lon / kBucket));
+        bool duplicate = false;
+        for (long dLat = -1; dLat <= 1 && !duplicate; ++dLat) {
+            for (long dLon = -1; dLon <= 1 && !duplicate; ++dLon) {
+                auto bucket = buckets.find(std::make_pair(bLat + dLat, bLon + dLon));
+                if (bucket == buckets.end())
+                    continue;
+                for (size_t index : bucket->second) {
+                    const ChartObject &kept = m_ahead_objects[index];
+                    if (kept.cellScale >= object.cellScale ||
+                        kept.className != object.className)
+                        continue;
+                    const double dlat = kept.lat - object.lat;
+                    const double dlon = (kept.lon - object.lon) * cosLat;
+                    if (dlat * dlat + dlon * dlon <= tolerance * tolerance) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (duplicate)
+            continue;
+        buckets[std::make_pair(bLat, bLon)].push_back(m_ahead_objects.size());
+        m_ahead_objects.push_back(object);
+    }
+
+    m_ahead_cells_to_open.clear();
+    for (const wxString &path : unopened)
+        if (m_ahead_cells_tried.count(path) == 0)
+            m_ahead_cells_to_open.emplace_back(true, path);
+    for (const wxString &path : unread)
+        if (m_ahead_cells_tried.count(path) == 0)
+            m_ahead_cells_to_open.emplace_back(false, path);
+    m_ahead_reading = !m_ahead_cells_to_open.empty();
+    if (m_ahead_reading && !m_ahead_cell_timer.IsRunning())
+        m_ahead_cell_timer.StartOnce(50);
+}
+
+// One cell of the Uitkijk's area opened; after the last, the area is read
+// again and the list follows.
+void legend_pi::OpenNextAheadCell()
+{
+    if (m_ahead_cells_to_open.empty())
+        return;
+    // The legend's own reading of the view goes first.
+    if (m_cell_timer.IsRunning()) {
+        m_ahead_cell_timer.StartOnce(200);
+        return;
+    }
+    const auto cell = m_ahead_cells_to_open.front();
+    m_ahead_cells_to_open.erase(m_ahead_cells_to_open.begin());
+    m_ahead_cells_tried.insert(cell.second);
+    if (cell.first)
+        m_ocharts.OpenCell(cell.second);
+    else
+        m_s57.ReadCell(cell.second);
+
+    if (!m_ahead_cells_to_open.empty()) {
+        m_ahead_cell_timer.StartOnce(50);
+        return;
+    }
+    m_ahead_area_valid = false;
+    m_ahead_reading = false;
+    if (IsDynamicLegendVisible())
+        RenderDynamicLegend(true);
+}
+
+// Whether every part of the fan lies in a cell the Uitkijk read: points
+// along the course line and its edges. Without readable charts at all
+// there is nothing to say.
+bool legend_pi::AheadCovered(double range) const
+{
+    if (!m_chart_sources_available)
+        return true;
+    const double widen = std::tan(m_ahead_angle * 3.14159265358979323846 / 180.0);
+    for (int step = 0; step <= 8; ++step) {
+        const double along = range * step / 8.0;
+        const double half = std::max(kAheadMinHalfWidth, along * widen);
+        for (double across : {-half, 0.0, half}) {
+            double lat = 0.0;
+            double lon = 0.0;
+            PositionAt(m_ship_lat, m_ship_lon, m_ship_cog, along, across, &lat, &lon);
+            bool covered = false;
+            for (const CellExtent &cell : m_ahead_cells_used) {
+                if (lat >= cell.latMin && lat <= cell.latMax && lon >= cell.lonMin &&
+                    lon <= cell.lonMax) {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered)
+                return false;
+        }
+    }
+    return true;
+}
+
 // The objects of the list in a fan ahead of the boat: a strip that widens
 // with the distance (at least 0.12 sea mile on either side, widening at the
 // angle of the setting), as far as AheadRange(), with a circle of 0.12 sea
@@ -151,6 +353,9 @@ void legend_pi::ComputeAhead()
 
     const double range = AheadRange();
     EnsureVhfAreas();
+    // Not only what is in view: the Uitkijk reads the fan's own area.
+    EnsureAheadGroups(range);
+    m_ahead_uncovered = !m_ahead_reading && !AheadCovered(range);
 
     struct Found
     {
@@ -161,8 +366,8 @@ void legend_pi::ComputeAhead()
     };
     std::vector<Found> found;
 
-    for (size_t i = 0; i < m_dynamic_groups.size(); ++i) {
-        const DynamicGroup &group = m_dynamic_groups[i];
+    for (size_t i = 0; i < m_ahead_groups.size(); ++i) {
+        const DynamicGroup &group = m_ahead_groups[i];
         // Lights under a row come with their row; flares double a buoy.
         if (!group.parentKey.IsEmpty() || group.lightSymbol)
             continue;
@@ -194,13 +399,13 @@ void legend_pi::ComputeAhead()
                 f.item.light = group.lightText;
             }
             else {
-                for (size_t k = i + 1; k < m_dynamic_groups.size() &&
-                                       m_dynamic_groups[k].parentKey == group.key;
+                for (size_t k = i + 1; k < m_ahead_groups.size() &&
+                                       m_ahead_groups[k].parentKey == group.key;
                      ++k) {
-                    for (const auto &p : m_dynamic_groups[k].positions) {
+                    for (const auto &p : m_ahead_groups[k].positions) {
                         if (std::fabs(p.first - lat) < 0.0003 &&
                             std::fabs(p.second - lon) < 0.0005) {
-                            f.item.light = m_dynamic_groups[k].lightText;
+                            f.item.light = m_ahead_groups[k].lightText;
                             break;
                         }
                     }
@@ -222,7 +427,7 @@ void legend_pi::ComputeAhead()
     for (const Found &f : found) {
         bool duplicate = false;
         for (AheadItem &kept : m_ahead) {
-            const auto &p = m_dynamic_groups[kept.group].positions[kept.position];
+            const auto &p = m_ahead_groups[kept.group].positions[kept.position];
             if (std::fabs(p.first - f.lat) < 0.0002 && std::fabs(p.second - f.lon) < 0.0003) {
                 if (kept.light.IsEmpty() && !f.item.light.IsEmpty())
                     kept = f.item;
@@ -236,10 +441,14 @@ void legend_pi::ComputeAhead()
     }
 
     for (const AheadItem &item : m_ahead) {
-        key << m_dynamic_groups[item.group].key << '@' << item.position << '/'
+        key << m_ahead_groups[item.group].key << '@' << item.position << '/'
             << static_cast<int>(item.minutes) << (item.cross >= 0.0 ? 's' : 'p')
-            << (m_dynamic_groups[item.group].hiddenAtScale ? "h" : "") << ';';
+            << (m_ahead_groups[item.group].hiddenAtScale ? "h" : "") << ';';
     }
+    if (m_ahead_reading)
+        key << "reading;";
+    if (m_ahead_uncovered)
+        key << "uncovered;";
 
     // Notes whose place lies in the same fan.
     m_ahead_notes.clear();
@@ -430,21 +639,30 @@ void legend_pi::ShowAheadItem(size_t index)
     if (index >= m_ahead.size())
         return;
     const AheadItem item = m_ahead[index];
-    if (item.group >= m_dynamic_groups.size())
+    if (item.group >= m_ahead_groups.size())
         return;
-    DynamicGroup &group = m_dynamic_groups[item.group];
+    const DynamicGroup &group = m_ahead_groups[item.group];
     if (item.position >= group.positions.size())
         return;
 
-    group.current = static_cast<int>(item.position);
+    // Its row in the legend, when it has one in view, is lit.
     m_active_group_key = group.key;
     m_active_light_key.Clear();
 
+    // The Uitkijk also lists what lies beyond the view: the chart goes
+    // there, at the same scale.
     const auto position = group.positions[item.position];
+    const bool inView = m_viewport_valid && position.first >= m_viewport.lat_min &&
+                        position.first <= m_viewport.lat_max &&
+                        position.second >= m_viewport.lon_min &&
+                        position.second <= m_viewport.lon_max;
     if (group.hiddenAtScale) {
         const double zoom = ViewScaleForLimit(group.visibleFrom);
         if (zoom > 0.0)
             JumpTo(position.first, position.second, zoom);
+    }
+    else if (!inView && m_viewport_valid) {
+        JumpTo(position.first, position.second, m_viewport.view_scale_ppm);
     }
     LightCharacter light;
     if (!item.light.IsEmpty() && light.Parse(item.light))

@@ -689,6 +689,55 @@ void S57Source::ReadCell(const wxString &path)
     }
 }
 
+std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &area,
+                                                       int maxScale, size_t maxCells,
+                                                       std::vector<wxString> *unread,
+                                                       std::vector<CellExtent> *used)
+{
+    std::vector<ChartObject> objects;
+    if (!m_inventoried)
+        Inventory();
+
+    std::vector<const Cell *> candidates;
+    for (const Cell &cell : m_cells) {
+        if (cell.latMax < area.lat_min || cell.latMin > area.lat_max ||
+            cell.lonMax < area.lon_min || cell.lonMin > area.lon_max)
+            continue;
+        if (cell.scale <= maxScale)
+            candidates.push_back(&cell);
+    }
+    std::sort(candidates.begin(), candidates.end(),
+              [](const Cell *a, const Cell *b) { return a->scale < b->scale; });
+    if (candidates.size() > maxCells)
+        candidates.resize(maxCells);
+
+    std::set<wxString> seen;
+    for (const Cell *candidate : candidates) {
+        const Cell &cell = *candidate;
+        if (m_loaded.find(cell.path) == m_loaded.end()) {
+            unread->push_back(cell.path);
+            continue;
+        }
+        const ParsedCell *parsed = Load(cell);
+        if (!parsed)
+            continue;
+        used->push_back({cell.latMin, cell.lonMin, cell.latMax, cell.lonMax, cell.scale});
+
+        for (const ChartObject &object : parsed->points) {
+            if (object.lat < area.lat_min || object.lat > area.lat_max ||
+                object.lon < area.lon_min || object.lon > area.lon_max)
+                continue;
+            const wxString key = wxString::Format(
+                "%s|%.5f|%.5f|%d", object.className, object.lat, object.lon, cell.scale);
+            if (!seen.insert(key).second)
+                continue;
+            objects.push_back(object);
+            objects.back().cellScale = cell.scale;
+        }
+    }
+    return objects;
+}
+
 std::vector<ChartObject> S57Source::PointObjectsInView(const PlugIn_ViewPort &vp)
 {
     std::vector<ChartObject> objects;

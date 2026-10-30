@@ -36,6 +36,15 @@ public:
     // bounds. Cells far more detailed than the view are left out.
     std::vector<ChartObject> PointObjectsInView(const PlugIn_ViewPort &vp);
 
+    // The point objects in an area for the Uitkijk, from the cells already
+    // read that overlap it and are not coarser than maxScale. The cells
+    // still to read come back in `unread`, the cells used in `used`.
+    // At most maxCells cells, the most detailed first.
+    std::vector<ChartObject> PointObjectsInArea(const PlugIn_ViewPort &area, int maxScale,
+                                                size_t maxCells,
+                                                std::vector<wxString> *unread,
+                                                std::vector<CellExtent> *used);
+
     // The cells of this view that are not read yet, and one of them read,
     // so the legend can read them one by one before it asks for objects.
     std::vector<wxString> UnreadCells(const PlugIn_ViewPort &vp);
