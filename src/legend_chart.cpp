@@ -49,10 +49,6 @@ void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
     static const unsigned char kColours[][6] = {
         {239, 159, 39, 186, 117, 23},   // amber
         {230, 120, 40, 224, 112, 32},   // orange
-        {240, 208, 40, 168, 142, 10},   // yellow
-        {222, 62, 50, 160, 32, 26},     // red
-        {64, 172, 84, 30, 122, 52},     // green
-        {152, 84, 204, 106, 52, 152},   // purple
         {0, 0, 0, 0, 0, 0},             // grey: black, seen through
     };
     const int count = static_cast<int>(sizeof(kColours) / sizeof(kColours[0]));
