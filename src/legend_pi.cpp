@@ -610,7 +610,7 @@ void legend_pi::LoadConfig()
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
     m_locale = GetLocaleCanonicalName();
-    m_dutch_names = m_locale.StartsWith("nl");
+    m_dutch_names = DutchInterface(m_locale);
 
     // Keys missing from the saved order (a new block) go at the end;
     // unknown ones are dropped.

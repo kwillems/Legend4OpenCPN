@@ -556,6 +556,10 @@ private:
     // English, as OpenCPN; the interface itself is translated by gettext.
     bool m_dutch_names = true;
     wxString m_locale;            // OpenCPN's language at the last look, "nl_NL"
+    // Dutch only when the Dutch translation of the interface is loaded, so
+    // meanings and interface never differ: without the translation (a
+    // build without gettext) both are English.
+    static bool DutchInterface(const wxString &locale);
     // Takes over OpenCPN's language when it changed since the last look.
     void FollowOpenCpnLanguage();
     bool m_chart_symbols_tried = false;
