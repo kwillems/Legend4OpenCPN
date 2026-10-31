@@ -487,7 +487,7 @@ prullenbak verschijnen alleen bij een notitie:
 |---|---|
 | Potlood | De notitie bewerken |
 | Tekstvak met cursor | Een andere titel geven: het bestand en de `# Titel` bovenaan veranderen mee |
-| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map `Verwijderd` in de Legend-map; zet het terug om het weer te gebruiken |
+| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map voor verwijderde notities in de Legend-map: `Verwijderd` in het Nederlands, `Deleted` in het Engels. Zet het terug om het weer te gebruiken. Na een wissel van taal krijgt de map zijn nieuwe naam zodra je weer een notitie verwijdert |
 | Plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
 
 Tijdens het bewerken zie je de notitie zoals hij eruitziet, zonder
@@ -627,8 +627,8 @@ Instellingen en caches staan in de privémap van OpenCPN:
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-Daar staan `legend.ini` (laatste item, venster, ingeklapte kopjes en de
-keuzes uit Instellingen) en `ocharts-cells.txt` en `s57-cells.txt` met de
+Daar staan `legend.ini` (laatste item, venster, ingeklapte kopjes, de
+keuzes uit Instellingen en de naam van de map voor verwijderde notities) en `ocharts-cells.txt` en `s57-cells.txt` met de
 dekking van de kaartcellen, zodat latere starts snel zijn.
 
 ## Beperkingen

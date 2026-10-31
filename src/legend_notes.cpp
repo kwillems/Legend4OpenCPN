@@ -367,8 +367,8 @@ void legend_pi::RenameNote()
     ShowNoteNamed(target.GetFullName());
 }
 
-// Moves the note into the folder "Verwijderd" in the Legend folder, where
-// it can be fetched back; images it uses stay where they are.
+// Moves the note into the folder for deleted notes in the Legend folder,
+// where it can be fetched back; images it uses stay where they are.
 void legend_pi::DeleteNote()
 {
     if (m_editing || !IsMarkdownItem(m_current_legend_path))
@@ -376,8 +376,24 @@ void legend_pi::DeleteNote()
     DeleteNoteFile(m_current_legend_path);
 }
 
-// Moves a note into the folder "Verwijderd" in the Legend folder, after
-// asking; from the legend window or from the chart's menu.
+// The folder for deleted notes in the Legend folder, named in OpenCPN's
+// language: "Deleted", "Verwijderd". After a change of language the folder
+// of the remembered name is renamed first, so that there is one.
+wxString legend_pi::DeletedFolder()
+{
+    const wxString name = _("Deleted");
+    const wxString legendDir = GetLegendDirectory() + wxFileName::GetPathSeparator();
+    if (name != m_deleted_folder) {
+        if (wxDirExists(legendDir + m_deleted_folder) && !wxDirExists(legendDir + name))
+            wxRenameFile(legendDir + m_deleted_folder, legendDir + name, false);
+        m_deleted_folder = name;
+        SaveConfig();
+    }
+    return legendDir + name;
+}
+
+// Moves a note into the folder for deleted notes, after asking; from the
+// legend window or from the chart's menu.
 void legend_pi::DeleteNoteFile(const wxString &path)
 {
     const wxString title = MakeDisplayTitle(path);
@@ -386,16 +402,15 @@ void legend_pi::DeleteNoteFile(const wxString &path)
                            : GetOCPNCanvasWindow();
     const wxString question =
         wxString::Format(_("Delete note \"%s\"?\n\nThe file goes to the folder "
-                           "\"Verwijderd\" in the Legend folder; you can get it back from there."),
-                         title);
+                           "\"%s\" in the Legend folder; you can get it back from there."),
+                         title, _("Deleted"));
     wxMessageDialog confirm(parent, question, _("Delete note"),
                             wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
     confirm.SetYesNoLabels(_("Delete"), _("Cancel"));
     if (confirm.ShowModal() != wxID_YES)
         return;
 
-    wxFileName target(GetLegendDirectory() + wxFileName::GetPathSeparator() + "Verwijderd",
-                      wxFileName(path).GetFullName());
+    wxFileName target(DeletedFolder(), wxFileName(path).GetFullName());
     wxFileName::Mkdir(target.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     for (int n = 2; target.FileExists(); ++n)
         target.SetName(wxString::Format("%s %d", wxFileName(path).GetName(), n));

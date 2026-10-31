@@ -493,7 +493,7 @@ bin appear only with a note:
 |---|---|
 | Pencil | Edit the note |
 | Text box with cursor | Give it another title: the file and the `# Title` at the top change along |
-| Bin | Delete, after confirmation. The file goes to the `Verwijderd` folder in the Legend folder; move it back to use it again |
+| Bin | Delete, after confirmation. The file goes to the folder for deleted notes in the Legend folder: `Deleted` in English, `Verwijderd` in Dutch. Move it back to use it again. After a change of language the folder gets its new name when the next note is deleted |
 | Plus | A new note: you give a title and start writing right away |
 
 While editing you see the note as it looks, without Markdown characters. At
@@ -626,8 +626,8 @@ Settings and caches are kept in OpenCPN's private folder:
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-That holds `legend.ini` (last item, window, folded headings and the choices
-from Settings) and `ocharts-cells.txt` and `s57-cells.txt` with the coverage
+That holds `legend.ini` (last item, window, folded headings, the choices
+from Settings and the name of the folder for deleted notes) and `ocharts-cells.txt` and `s57-cells.txt` with the coverage
 of the chart cells, so that later start-ups are fast.
 
 ## Limitations

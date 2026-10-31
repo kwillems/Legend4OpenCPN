@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: legend_pi\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-31 23:29+0100\n"
+"POT-Creation-Date: 2026-10-31 23:41+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -41,7 +41,7 @@ msgstr ""
 msgid "Pin here on the chart"
 msgstr ""
 
-#: src/legend_chart.cpp:395 src/legend_window.cpp:426
+#: src/legend_chart.cpp:395 src/legend_window.cpp:427
 msgid "Boat's position in the text"
 msgstr ""
 
@@ -53,7 +53,7 @@ msgstr ""
 msgid "New note here"
 msgstr ""
 
-#: src/legend_chart.cpp:402 src/legend_window.cpp:363
+#: src/legend_chart.cpp:402 src/legend_window.cpp:364
 msgid "New note at the boat"
 msgstr ""
 
@@ -203,8 +203,8 @@ msgstr ""
 msgid "Title of the new note:"
 msgstr ""
 
-#: src/legend_notes.cpp:159 src/legend_notes.cpp:179 src/legend_window.cpp:362
-#: src/legend_window.cpp:1035
+#: src/legend_notes.cpp:159 src/legend_notes.cpp:179 src/legend_window.cpp:363
+#: src/legend_window.cpp:1036
 msgid "New note"
 msgstr ""
 
@@ -261,86 +261,90 @@ msgstr ""
 msgid "Could not rename the file."
 msgstr ""
 
-#: src/legend_notes.cpp:388
+#: src/legend_notes.cpp:384 src/legend_notes.cpp:406 src/legend_window.cpp:1034
+msgid "Deleted"
+msgstr ""
+
+#: src/legend_notes.cpp:404
 #, c-format
 msgid ""
 "Delete note \"%s\"?\n"
 "\n"
-"The file goes to the folder \"Verwijderd\" in the Legend folder; you can get "
-"it back from there."
+"The file goes to the folder \"%s\" in the Legend folder; you can get it back "
+"from there."
 msgstr ""
 
-#: src/legend_notes.cpp:391 src/legend_notes.cpp:408
+#: src/legend_notes.cpp:407 src/legend_notes.cpp:423
 msgid "Delete note"
 msgstr ""
 
-#: src/legend_notes.cpp:393
+#: src/legend_notes.cpp:409
 msgid "Delete"
 msgstr ""
 
-#: src/legend_notes.cpp:393
+#: src/legend_notes.cpp:409
 msgid "Cancel"
 msgstr ""
 
-#: src/legend_notes.cpp:407
+#: src/legend_notes.cpp:422
 msgid "Could not move the note."
 msgstr ""
 
-#: src/legend_notes.cpp:550
+#: src/legend_notes.cpp:565
 msgid "No position of the boat"
 msgstr ""
 
-#: src/legend_notes.cpp:551
+#: src/legend_notes.cpp:566
 msgid "No GPS position has come in during the last minute."
 msgstr ""
 
-#: src/legend_notes.cpp:844
+#: src/legend_notes.cpp:859
 msgid "Note nearby"
 msgstr ""
 
-#: src/legend_notes.cpp:846
+#: src/legend_notes.cpp:861
 msgid "Click to open the note"
 msgstr ""
 
-#: src/legend_notes.cpp:905
+#: src/legend_notes.cpp:920
 msgid "Could not save the new place in the note."
 msgstr ""
 
-#: src/legend_notes.cpp:906
+#: src/legend_notes.cpp:921
 msgid "Move note"
 msgstr ""
 
-#: src/legend_notes.cpp:935
+#: src/legend_notes.cpp:950
 msgid ""
 "Radius in nautical miles: within this distance you get a notice of this note "
 "under way."
 msgstr ""
 
-#: src/legend_notes.cpp:937 src/legend_notes.cpp:947 src/legend_window.cpp:1067
+#: src/legend_notes.cpp:952 src/legend_notes.cpp:962 src/legend_window.cpp:1068
 msgid "Radius"
 msgstr ""
 
-#: src/legend_notes.cpp:946
+#: src/legend_notes.cpp:961
 msgid "Enter a radius in nautical miles, for example 0.5."
 msgstr ""
 
-#: src/legend_notes.cpp:967 src/legend_window.cpp:990
+#: src/legend_notes.cpp:982 src/legend_window.cpp:991
 msgid "Not saved yet…"
 msgstr ""
 
-#: src/legend_notes.cpp:984
+#: src/legend_notes.cpp:999
 msgid "Pinned at "
 msgstr ""
 
-#: src/legend_notes.cpp:986
+#: src/legend_notes.cpp:1001
 msgid " · radius "
 msgstr ""
 
-#: src/legend_notes.cpp:987
+#: src/legend_notes.cpp:1002
 msgid "Click to see the place on the chart"
 msgstr ""
 
-#: src/legend_pi.cpp:256 src/legend_window.cpp:1062
+#: src/legend_pi.cpp:256 src/legend_window.cpp:1063
 msgid "Legend"
 msgstr ""
 
@@ -371,39 +375,39 @@ msgstr ""
 msgid "Chart legend (in view)"
 msgstr ""
 
-#: src/legend_pi.cpp:916
+#: src/legend_pi.cpp:918
 msgid "Could not open the Markdown file."
 msgstr ""
 
-#: src/legend_pi.cpp:921
+#: src/legend_pi.cpp:923
 msgid "Empty Markdown file."
 msgstr ""
 
-#: src/legend_pi.cpp:927
+#: src/legend_pi.cpp:929
 msgid "Could not read the whole Markdown file."
 msgstr ""
 
-#: src/legend_pi.cpp:969
+#: src/legend_pi.cpp:971
 msgid "This note is pinned to the chart:"
 msgstr ""
 
-#: src/legend_pi.cpp:971
+#: src/legend_pi.cpp:973
 msgid "radius"
 msgstr ""
 
-#: src/legend_pi.cpp:1001
+#: src/legend_pi.cpp:1003
 msgid "Could not process the Markdown."
 msgstr ""
 
-#: src/legend_pi.cpp:1073
+#: src/legend_pi.cpp:1075
 msgid "No legends or notes found."
 msgstr ""
 
-#: src/legend_pi.cpp:1074
+#: src/legend_pi.cpp:1076
 msgid "Put a PNG or Markdown file in:"
 msgstr ""
 
-#: src/legend_pi.cpp:1176
+#: src/legend_pi.cpp:1178
 #, c-format
 msgid "%zu of %zu"
 msgstr ""
@@ -454,7 +458,7 @@ msgstr ""
 msgid " &middot; middle of the chart, no GPS"
 msgstr ""
 
-#: src/legend_render.cpp:785 src/legend_window.cpp:1817
+#: src/legend_render.cpp:785 src/legend_window.cpp:1825
 msgid "VHF"
 msgstr ""
 
@@ -507,7 +511,7 @@ msgstr ""
 msgid "nothing in the beam"
 msgstr ""
 
-#: src/legend_render.cpp:915 src/legend_window.cpp:1819
+#: src/legend_render.cpp:915 src/legend_window.cpp:1827
 msgid "Lookout"
 msgstr ""
 
@@ -524,7 +528,7 @@ msgstr ""
 msgid "%zu hidden at this scale"
 msgstr ""
 
-#: src/legend_render.cpp:1205 src/legend_window.cpp:1821
+#: src/legend_render.cpp:1205 src/legend_window.cpp:1829
 msgid "Notes"
 msgstr ""
 
@@ -536,8 +540,8 @@ msgstr ""
 msgid "looks like "
 msgstr ""
 
-#: src/legend_render.cpp:1307 src/legend_window.cpp:1557
-#: src/legend_window.cpp:1823
+#: src/legend_render.cpp:1307 src/legend_window.cpp:1565
+#: src/legend_window.cpp:1831
 msgid "Identify a light"
 msgstr ""
 
@@ -699,327 +703,328 @@ msgid ""
 " Grey rows are hidden at this scale; a click zooms in until they are visible."
 msgstr ""
 
-#: src/legend_window.cpp:400
+#: src/legend_window.cpp:401
 msgid "Plain text"
 msgstr ""
 
-#: src/legend_window.cpp:402
+#: src/legend_window.cpp:403
 #, c-format
 msgid "Heading %d"
 msgstr ""
 
-#: src/legend_window.cpp:423
+#: src/legend_window.cpp:424
 msgid "Link to the centre of the chart in the text"
 msgstr ""
 
-#: src/legend_window.cpp:424
+#: src/legend_window.cpp:425
 msgid "Pin note to the centre of the chart"
 msgstr ""
 
-#: src/legend_window.cpp:427
+#: src/legend_window.cpp:428
 msgid "Pin note to the boat's position"
 msgstr ""
 
-#: src/legend_window.cpp:896
+#: src/legend_window.cpp:897
 msgid "Point out all instances in view at once"
 msgstr ""
 
-#: src/legend_window.cpp:900
+#: src/legend_window.cpp:901
 msgid "Make all lights in view with this characteristic shine, in their rhythm"
 msgstr ""
 
-#: src/legend_window.cpp:903
+#: src/legend_window.cpp:904
 msgid "To the nearest instance; another click goes to the next one"
 msgstr ""
 
-#: src/legend_window.cpp:910
+#: src/legend_window.cpp:911
 msgid "Not drawn at this scale"
 msgstr ""
 
-#: src/legend_window.cpp:912
+#: src/legend_window.cpp:913
 msgid ", visible from "
 msgstr ""
 
-#: src/legend_window.cpp:914
+#: src/legend_window.cpp:915
 msgid "; a click zooms in until the nearest instance is visible"
 msgstr ""
 
-#: src/legend_window.cpp:917
+#: src/legend_window.cpp:918
 msgid "Chart symbol "
 msgstr ""
 
-#: src/legend_window.cpp:919
+#: src/legend_window.cpp:920
 msgid ""
 "The nearest light with this characteristic shines on the chart in its rhythm; "
 "another click goes to the next one. Period and groups come from the chart; "
 "the length of a flash or eclipse is a common value"
 msgstr ""
 
-#: src/legend_window.cpp:931
+#: src/legend_window.cpp:932
 msgid "Unfold group"
 msgstr ""
 
-#: src/legend_window.cpp:932
+#: src/legend_window.cpp:933
 msgid "Fold group"
 msgstr ""
 
-#: src/legend_window.cpp:936
+#: src/legend_window.cpp:937
 msgid "Heading up"
 msgstr ""
 
-#: src/legend_window.cpp:940
+#: src/legend_window.cpp:941
 msgid "Heading down"
 msgstr ""
 
-#: src/legend_window.cpp:943
+#: src/legend_window.cpp:944
 msgid "Point out on the chart"
 msgstr ""
 
-#: src/legend_window.cpp:947
+#: src/legend_window.cpp:948
 msgid "Highlight the VHF area on the chart"
 msgstr ""
 
-#: src/legend_window.cpp:951
+#: src/legend_window.cpp:952
 msgid "Open the note"
 msgstr ""
 
-#: src/legend_window.cpp:954
+#: src/legend_window.cpp:955
 msgid "Hold down while the light is on (or the space bar)"
 msgstr ""
 
-#: src/legend_window.cpp:957
+#: src/legend_window.cpp:958
 msgid "Make this light shine on the chart"
 msgstr ""
 
-#: src/legend_window.cpp:960
+#: src/legend_window.cpp:961
 msgid "Discard the tapped rhythm and start again"
 msgstr ""
 
-#: src/legend_window.cpp:961
+#: src/legend_window.cpp:962
 msgid "Close Identify a light; the menu opens it again"
 msgstr ""
 
-#: src/legend_window.cpp:962
+#: src/legend_window.cpp:963
 msgid "Compare only lights of this colour"
 msgstr ""
 
-#: src/legend_window.cpp:965
+#: src/legend_window.cpp:966
 msgid "Settings: what the legend shows"
 msgstr ""
 
-#: src/legend_window.cpp:966
+#: src/legend_window.cpp:967
 msgid "Refresh: read charts and layers again"
 msgstr ""
 
-#: src/legend_window.cpp:1029
+#: src/legend_window.cpp:1030
 msgid "Edit this note"
 msgstr ""
 
-#: src/legend_window.cpp:1031
+#: src/legend_window.cpp:1032
 msgid "Give this note another name"
 msgstr ""
 
-#: src/legend_window.cpp:1033
-msgid "Delete this note (into the folder Verwijderd)"
+#: src/legend_window.cpp:1034
+#, c-format
+msgid "Delete this note (into the folder %s)"
 msgstr ""
 
-#: src/legend_window.cpp:1037
+#: src/legend_window.cpp:1038
 msgid "Heading level: heading 1 to 6, or plain text"
 msgstr ""
 
-#: src/legend_window.cpp:1039
+#: src/legend_window.cpp:1040
 msgid "Bold (Cmd+B)"
 msgstr ""
 
-#: src/legend_window.cpp:1041
+#: src/legend_window.cpp:1042
 msgid "Italic (Cmd+I)"
 msgstr ""
 
-#: src/legend_window.cpp:1043
+#: src/legend_window.cpp:1044
 msgid "Bulleted list on or off"
 msgstr ""
 
-#: src/legend_window.cpp:1045
+#: src/legend_window.cpp:1046
 msgid "Numbered list on or off"
 msgstr ""
 
-#: src/legend_window.cpp:1047
+#: src/legend_window.cpp:1048
 msgid "Checklist on or off; click a box to tick it"
 msgstr ""
 
-#: src/legend_window.cpp:1049
+#: src/legend_window.cpp:1050
 msgid "Make a link of the selected text"
 msgstr ""
 
-#: src/legend_window.cpp:1051
+#: src/legend_window.cpp:1052
 msgid "An image from the Legend folder or elsewhere"
 msgstr ""
 
-#: src/legend_window.cpp:1053
+#: src/legend_window.cpp:1054
 msgid ""
 "A place on the chart: as a link in the text, or pin the whole note to the "
 "chart. For a place other than the centre: right-click the chart"
 msgstr ""
 
-#: src/legend_window.cpp:1065
+#: src/legend_window.cpp:1066
 msgid "Save"
 msgstr ""
 
-#: src/legend_window.cpp:1066
+#: src/legend_window.cpp:1067
 msgid "Save and finish editing (Esc)"
 msgstr ""
 
-#: src/legend_window.cpp:1068
+#: src/legend_window.cpp:1069
 msgid "Within what distance you get a notice under way"
 msgstr ""
 
-#: src/legend_window.cpp:1069
+#: src/legend_window.cpp:1070
 msgid "Unpin"
 msgstr ""
 
-#: src/legend_window.cpp:1070
+#: src/legend_window.cpp:1071
 msgid "No longer pin the note to the chart"
 msgstr ""
 
-#: src/legend_window.cpp:1071
+#: src/legend_window.cpp:1072
 msgid "Search the legend"
 msgstr ""
 
-#: src/legend_window.cpp:1072
+#: src/legend_window.cpp:1073
 msgid ""
 "Shows only the symbols whose name, heading or icon name contains all typed "
 "words (Cmd+F)"
 msgstr ""
 
-#: src/legend_window.cpp:1074
+#: src/legend_window.cpp:1075
 msgid "‹  Previous"
 msgstr ""
 
-#: src/legend_window.cpp:1075
+#: src/legend_window.cpp:1076
 msgid "Next  ›"
 msgstr ""
 
-#: src/legend_window.cpp:1076
+#: src/legend_window.cpp:1077
 msgid "Show the previous legend or note"
 msgstr ""
 
-#: src/legend_window.cpp:1077
+#: src/legend_window.cpp:1078
 msgid "Show the next legend or note"
 msgstr ""
 
-#: src/legend_window.cpp:1079
+#: src/legend_window.cpp:1080
 msgid "Saved"
 msgstr ""
 
-#: src/legend_window.cpp:1296
+#: src/legend_window.cpp:1297
 msgid "Building the chart legend"
 msgstr ""
 
-#: src/legend_window.cpp:1342
+#: src/legend_window.cpp:1343
 msgid "Chart symbols"
 msgstr ""
 
-#: src/legend_window.cpp:1344
+#: src/legend_window.cpp:1345
 msgid "Light characteristics"
 msgstr ""
 
-#: src/legend_window.cpp:1345
+#: src/legend_window.cpp:1346
 msgid "Other"
 msgstr ""
 
-#: src/legend_window.cpp:1477
+#: src/legend_window.cpp:1478
 msgid "Length of the lookout beam in nautical miles (0.5 to 50):"
 msgstr ""
 
-#: src/legend_window.cpp:1478 src/legend_window.cpp:1496
-#: src/legend_window.cpp:1605
+#: src/legend_window.cpp:1479 src/legend_window.cpp:1497
+#: src/legend_window.cpp:1613
 msgid "Lookout beam: length"
 msgstr ""
 
-#: src/legend_window.cpp:1495
+#: src/legend_window.cpp:1496
 msgid "Enter a length from 0.5 to 50 nautical miles, for example 3 or 12.5."
 msgstr ""
 
-#: src/legend_window.cpp:1544
+#: src/legend_window.cpp:1552
 msgid "Lights"
 msgstr ""
 
-#: src/legend_window.cpp:1545
+#: src/legend_window.cpp:1553
 msgid "Also show hidden at this scale"
 msgstr ""
 
-#: src/legend_window.cpp:1547
+#: src/legend_window.cpp:1555
 msgid "Distance and bearing from the boat"
 msgstr ""
 
-#: src/legend_window.cpp:1552
+#: src/legend_window.cpp:1560
 msgid "Make all lights shine"
 msgstr ""
 
-#: src/legend_window.cpp:1555
+#: src/legend_window.cpp:1563
 msgid "Night preview"
 msgstr ""
 
-#: src/legend_window.cpp:1562
+#: src/legend_window.cpp:1570
 msgid "VHF area stays highlighted"
 msgstr ""
 
-#: src/legend_window.cpp:1564
+#: src/legend_window.cpp:1572
 msgid "Notice on entering a VHF area"
 msgstr ""
 
-#: src/legend_window.cpp:1568
+#: src/legend_window.cpp:1576
 msgid "Notice when near a note"
 msgstr ""
 
-#: src/legend_window.cpp:1572
+#: src/legend_window.cpp:1580
 msgid "Lookout beam on the chart"
 msgstr ""
 
-#: src/legend_window.cpp:1575
+#: src/legend_window.cpp:1583
 msgid "Narrow (15°)"
 msgstr ""
 
-#: src/legend_window.cpp:1577
+#: src/legend_window.cpp:1585
 msgid "Medium (30°)"
 msgstr ""
 
-#: src/legend_window.cpp:1579
+#: src/legend_window.cpp:1587
 msgid "Wide (45°)"
 msgstr ""
 
-#: src/legend_window.cpp:1581
+#: src/legend_window.cpp:1589
 msgid "Lookout beam: width"
 msgstr ""
 
-#: src/legend_window.cpp:1596
+#: src/legend_window.cpp:1604
 msgid "Other…"
 msgstr ""
 
-#: src/legend_window.cpp:1608
+#: src/legend_window.cpp:1616
 msgid "Amber"
 msgstr ""
 
-#: src/legend_window.cpp:1608
+#: src/legend_window.cpp:1616
 msgid "Orange (searchlight)"
 msgstr ""
 
-#: src/legend_window.cpp:1609
+#: src/legend_window.cpp:1617
 msgid "Grey"
 msgstr ""
 
-#: src/legend_window.cpp:1612
+#: src/legend_window.cpp:1620
 msgid "Lookout beam: colour"
 msgstr ""
 
-#: src/legend_window.cpp:1615
+#: src/legend_window.cpp:1623
 msgid "Fold all"
 msgstr ""
 
-#: src/legend_window.cpp:1616
+#: src/legend_window.cpp:1624
 msgid "Unfold all"
 msgstr ""
 
-#: src/legend_window.cpp:1617
+#: src/legend_window.cpp:1625
 msgid "Change order…"
 msgstr ""
