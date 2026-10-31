@@ -749,6 +749,20 @@ private:
     bool m_ahead_fan_was_visible = false; // at the last fix: erase it once
     bool AheadFanVisible() const;
     std::vector<wxPoint> AheadFanPixels(PlugIn_ViewPort *vp) const;
+    // On the fan, how far it reaches: dashed lines across it at whole sea
+    // miles (see FanMileLines), and at its far end a label ("3 NM · ± 20
+    // min"), set beyond `anchor` in the direction (dx, dy). Left out while
+    // the fan, or the space between the lines, is small on the screen.
+    struct AheadFanLabel
+    {
+        wxString text;
+        wxPoint anchor;
+        double dx = 0.0;
+        double dy = 0.0;
+    };
+    void AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoint>> *lines,
+                       AheadFanLabel *label) const;
+    wxFont AheadFanFont() const;
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);

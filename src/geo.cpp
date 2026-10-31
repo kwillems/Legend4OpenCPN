@@ -158,6 +158,37 @@ std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, doub
     return outline;
 }
 
+std::vector<double> FanMileLines(double range)
+{
+    const double step = range <= 5.0 ? 1.0 : (range <= 25.0 ? 5.0 : 10.0);
+    std::vector<double> lines;
+    for (double at = step; at < range - step / 2.0; at += step)
+        lines.push_back(at);
+    return lines;
+}
+
+std::vector<std::pair<double, double>> FanArc(double lat0, double lon0, double course,
+                                              double distance, double halfAngle,
+                                              double minHalfWidth)
+{
+    // Its ends where the sides of the fan are at that distance: the angle
+    // of the fan, or the strip near the boat while it is wider.
+    const double angle = halfAngle * kPi / 180.0;
+    const double side =
+        std::max(angle, std::asin(std::min(1.0, minHalfWidth / std::max(distance, 1e-9))));
+    const int kSteps = 24;
+    std::vector<std::pair<double, double>> arc;
+    for (int step = 0; step <= kSteps; ++step) {
+        const double a = -side + 2.0 * side * step / kSteps;
+        double lat = 0.0;
+        double lon = 0.0;
+        PositionAt(lat0, lon0, course, distance * std::cos(a), distance * std::sin(a), &lat,
+                   &lon);
+        arc.emplace_back(lat, lon);
+    }
+    return arc;
+}
+
 wxString FormatBearing(double degrees)
 {
     long whole = std::lround(degrees) % 360;
