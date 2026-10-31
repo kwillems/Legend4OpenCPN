@@ -1162,11 +1162,13 @@ void legend_pi::UpdateAllLights()
 }
 
 // The fan is drawn while it means something: the setting is on, the
-// legend is open and the boat sails (a recent fix and some speed, as
-// ComputeAhead() asks).
+// window is open and the boat sails (a recent fix and some speed, as
+// ComputeAhead() asks). The window may show a note meanwhile: a glance at
+// it does not take the fan away.
 bool legend_pi::AheadFanVisible() const
 {
-    return m_ahead_fan_shown && IsDynamicLegendVisible() && m_ship_time > 0 &&
+    return m_ahead_fan_shown && m_legend_window && m_legend_window->IsShown() &&
+           m_ship_time > 0 &&
            (wxGetUTCTimeMillis() - m_ship_time) < 60000 && !std::isnan(m_ship_cog) &&
            !std::isnan(m_ship_sog) && m_ship_sog >= 0.5;
 }
