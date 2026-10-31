@@ -94,7 +94,7 @@ wxString legend_pi::DistanceText(const DynamicGroup &group) const
             best = miles;
         }
     }
-    return FormatDistance(best) + wxString::FromUTF8(" \u00b7 ") +
+    return FormatDistance(best, m_dutch_names) + wxString::FromUTF8(" \u00b7 ") +
            FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, nearest->first,
                                         nearest->second));
 }
@@ -773,7 +773,8 @@ void legend_pi::ShowVhfAreas(const std::vector<VhfArea> &areas)
         if (said.insert(line).second)
             text << (text.IsEmpty() ? "" : "\n") << line;
     }
-    ShowNotice(said.size() > 1 ? "Marifoongebieden" : "Marifoongebied", text, false);
+    ShowNotice(said.size() > 1 ? Tr("Marifoongebieden", "VHF areas") : Tr("Marifoongebied", "VHF area"),
+               text, false);
     m_vhf_highlight.Show(areas);
 }
 
@@ -790,10 +791,12 @@ void legend_pi::ShowVhfHere(double lat, double lon)
             text << (text.IsEmpty() ? "" : "\n") << line;
     }
     if (m_vhf_areas.IsEmpty())
-        text = "Geen marifoongebieden geladen (laag VHFinfo Nederland).";
+        text = Tr("Geen marifoongebieden geladen (laag VHFinfo Nederland).",
+                  "No VHF areas loaded (layer VHFinfo Nederland).");
     else if (text.IsEmpty())
-        text = "Hier geldt geen marifoongebied uit VHFinfo Nederland.";
-    ShowNotice("Marifoonkanaal op deze locatie", text, false);
+        text = Tr("Hier geldt geen marifoongebied uit VHFinfo Nederland.",
+                  "No VHF area from VHFinfo Nederland applies here.");
+    ShowNotice(Tr("Marifoonkanaal op deze locatie", "VHF channel at this location"), text, false);
     if (!parts.empty())
         m_vhf_highlight.Show(parts);
 }
@@ -838,7 +841,7 @@ void legend_pi::CheckVhfAreaChange()
     wxString text;
     for (const VhfArea *area : entered)
         text << (text.IsEmpty() ? "" : "\n") << VhfAreaLine(*area, m_dutch_names);
-    ShowNotice("Nieuw marifoongebied", text, true);
+    ShowNotice(Tr("Nieuw marifoongebied", "New VHF area"), text, true);
     m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(m_ship_lat, m_ship_lon));
 }
 
@@ -853,6 +856,7 @@ void legend_pi::ShowNotice(const wxString &title, const wxString &text, bool sou
     colours.text = palette.text;
     colours.frame = palette.headerRule;
     colours.accent = palette.active;
+    m_notice.SetCloseLabel(Tr("Sluiten", "Close"));
     m_notice.Show(title, text, sound, colours, action, actionLabel);
 }
 

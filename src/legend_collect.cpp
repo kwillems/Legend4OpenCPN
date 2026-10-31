@@ -630,7 +630,7 @@ void legend_pi::FinishWaypointLoading()
 void legend_pi::RenderLoadingPage()
 {
     const size_t total = m_loading ? m_loading_guids.GetCount() : 0;
-    RenderProgressPage("Waypoints worden geladen", m_loading_next, total);
+    RenderProgressPage(Tr("Waypoints worden geladen", "Loading waypoints"), m_loading_next, total);
 }
 
 // Opening a chart cell takes a fifth of a second. With more than one to
@@ -660,7 +660,7 @@ bool legend_pi::OpenChartCellsFirst(std::function<void()> then)
     m_cells_opened = 0;
     m_after_cells = then;
     if (IsDynamicLegendVisible())
-        RenderProgressPage("Kaarten worden gelezen", 0, m_cells_to_open.size());
+        RenderProgressPage(Tr("Kaarten worden gelezen", "Reading charts"), 0, m_cells_to_open.size());
     m_cell_timer.StartOnce(10);
     return true;
 }
@@ -676,7 +676,7 @@ void legend_pi::OpenNextChartCell()
     }
     if (m_cells_opened < m_cells_to_open.size()) {
         if (IsDynamicLegendVisible())
-            RenderProgressPage("Kaarten worden gelezen", m_cells_opened,
+            RenderProgressPage(Tr("Kaarten worden gelezen", "Reading charts"), m_cells_opened,
                                m_cells_to_open.size());
         m_cell_timer.StartOnce(10);
         return;
@@ -699,16 +699,17 @@ void legend_pi::RenderProgressPage(const wxString &what, size_t done, size_t tot
 
     wxString html;
     html << "<html>" << LegendBodyTag(true)
-         << "<p><font size=\"+1\"><b>Kaartlegenda</b></font></p>"
+         << "<p><font size=\"+1\"><b>" << Tr("Kaartlegenda", "Chart legend") << "</b></font></p>"
          << "<p>" << what << "&hellip;</p>";
 
     if (total > 0) {
         const int percent =
             std::max(1, std::min(100, static_cast<int>(done * 100 / total)));
-        auto number = [](size_t value) {
+        const wxString separator = m_dutch_names ? "." : ",";
+        auto number = [&separator](size_t value) {
             wxString text = wxString::Format("%zu", value);
             for (int at = static_cast<int>(text.length()) - 3; at > 0; at -= 3)
-                text.insert(at, ".");
+                text.insert(at, separator);
             return text;
         };
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tr>"
@@ -719,7 +720,7 @@ void legend_pi::RenderProgressPage(const wxString &what, size_t done, size_t tot
                  << "\"><font size=\"1\">&nbsp;</font></td>";
         html << "</tr></table>"
              << "<p><font color=\"" << HtmlColour(palette.muted) << "\">" << number(done)
-             << " van " << number(total) << "</font></p>";
+             << Tr(" van ", " of ") << number(total) << "</font></p>";
     }
 
     html << "</body></html>";

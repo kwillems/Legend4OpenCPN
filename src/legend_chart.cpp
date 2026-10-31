@@ -210,7 +210,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 canvas = GetOCPNCanvasWindow();
             if (canvas) {
                 if (hover >= 0)
-                    canvas->SetToolTip("Notitie: " + m_note_places[hover].title);
+                    canvas->SetToolTip(Tr("Notitie: ", "Note: ") + m_note_places[hover].title);
                 else
                     canvas->UnsetToolTip();
             }
@@ -284,11 +284,11 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 MoveNotePlace(place.path, place.lat, place.lon);
                 // Moved by mistake, while panning the chart: one click puts
                 // it back.
-                ShowNotice("Notitie verplaatst",
+                ShowNotice(Tr("Notitie verplaatst", "Note moved"),
                            wxString::FromUTF8("\u201C") + place.title +
-                               wxString::FromUTF8("\u201D staat op een nieuwe plek."),
+                               Tr("\u201D staat op een nieuwe plek.", "\u201D is in a new place."),
                            false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
-                           "Terugzetten");
+                           Tr("Terugzetten", "Put back"));
                 return true;
             }
             // A click: the note opens and its radius shows.
@@ -388,32 +388,41 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
     // With a recent GPS fix also the boat's position, wherever the click was.
     const bool boat = BoatPositionKnown();
     if (m_editing) {
-        m_context_submenu->Append(m_menu_link_place, "Link naar deze plek in de tekst");
-        m_context_submenu->Append(m_menu_pin_note, "Hier vastpinnen op de kaart");
+        m_context_submenu->Append(m_menu_link_place, Tr("Link naar deze plek in de tekst",
+                                                        "Link to this place in the text"));
+        m_context_submenu->Append(m_menu_pin_note, Tr("Hier vastpinnen op de kaart",
+                                                      "Pin here on the chart"));
         if (boat) {
             m_context_submenu->AppendSeparator();
-            m_context_submenu->Append(m_menu_link_boat, "Positie van de boot in de tekst");
-            m_context_submenu->Append(m_menu_pin_boat, "Vastpinnen op de positie van de boot");
+            m_context_submenu->Append(m_menu_link_boat, Tr("Positie van de boot in de tekst",
+                                                           "Boat's position in the text"));
+            m_context_submenu->Append(m_menu_pin_boat, Tr("Vastpinnen op de positie van de boot",
+                                                          "Pin to the boat's position"));
         }
     }
     else {
-        m_context_submenu->Append(m_menu_new_note, "Nieuwe notitie hier");
+        m_context_submenu->Append(m_menu_new_note, Tr("Nieuwe notitie hier", "New note here"));
         if (boat)
-            m_context_submenu->Append(m_menu_new_note_boat, "Nieuwe notitie bij de boot");
+            m_context_submenu->Append(m_menu_new_note_boat, Tr("Nieuwe notitie bij de boot",
+                                                               "New note at the boat"));
     }
     if (!m_menu_note_path.IsEmpty()) {
         m_context_submenu->AppendSeparator();
         const wxString quoted =
             wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
-        m_context_submenu->Append(m_menu_open_note, quoted + " openen");
+        m_context_submenu->Append(m_menu_open_note,
+                                  m_dutch_names ? quoted + " openen" : "Open " + quoted);
         m_context_submenu->Append(m_menu_delete_note,
-                                  quoted + wxString::FromUTF8(" verwijderen\u2026"));
+                                  m_dutch_names ? quoted + wxString::FromUTF8(" verwijderen\u2026")
+                                                : "Delete " + quoted + wxString::FromUTF8("\u2026"));
     }
     if (m_undo_move_valid) {
         m_context_submenu->AppendSeparator();
+        const wxString quoted =
+            wxString::FromUTF8("\u201C") + m_undo_move_title + wxString::FromUTF8("\u201D");
         m_context_submenu->Append(m_menu_undo_move,
-                                  wxString::FromUTF8("\u201C") + m_undo_move_title +
-                                      wxString::FromUTF8("\u201D terugzetten op de oude plek"));
+                                  m_dutch_names ? quoted + " terugzetten op de oude plek"
+                                                : "Put " + quoted + " back in its old place");
     }
 }
 
@@ -1211,7 +1220,7 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     if (length < 80.0 * scale)
         return;
 
-    label->text = FormatMiles(range);
+    label->text = FormatMiles(range, m_dutch_names);
     const wxString time = AheadTimeText(range);
     if (!time.IsEmpty())
         label->text << ", " << time;

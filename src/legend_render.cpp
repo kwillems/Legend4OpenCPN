@@ -189,7 +189,9 @@ wxString legend_pi::BuildDynamicPage()
     }
     else if (m_viewport_valid && m_dynamic_groups.empty()) {
         page.html << "<p><font color=\"" << HtmlColour(muted) << "\">"
-                  << "Geen zichtbare waypoints in dit kaartbeeld.</font></p>";
+                  << Tr("Geen zichtbare waypoints in dit kaartbeeld.",
+                        "No visible waypoints in this chart view.")
+                  << "</font></p>";
     }
     else if (m_viewport_valid && page.matches == 0) {
         RenderNoMatches(page);
@@ -602,13 +604,13 @@ wxString legend_pi::RefreshChangeMessage() const
         gone += after.count(before.first) == 0 ? 1 : 0;
 
     wxString message;
-    auto part = [&message](int count, const char *what) {
+    auto part = [&message](int count, const wxString &what) {
         if (count > 0)
             message << (message.IsEmpty() ? "" : ", ") << count << " " << what;
     };
-    part(added, "nieuw");
-    part(changed, "gewijzigd");
-    part(gone, "weg");
+    part(added, Tr("nieuw", "new"));
+    part(changed, Tr("gewijzigd", "changed"));
+    part(gone, Tr("weg", "gone"));
     return message;
 }
 
@@ -644,24 +646,28 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
 
     html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" "
          << "bgcolor=\"" << HtmlColour(palette.header) << "\"><tr><td valign=\"middle\">"
-         << "<font size=\"+1\"><b>Kaartlegenda</b></font>";
+         << "<font size=\"+1\"><b>" << Tr("Kaartlegenda", "Chart legend") << "</b></font>";
 
     if (!m_viewport_valid) {
         html << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-             << "De kaartpositie is nog niet bekend. Beweeg de kaart "
-                "een klein stukje en klik daarna op Ververs.</font>";
+             << Tr("De kaartpositie is nog niet bekend. Beweeg de kaart "
+                   "een klein stukje en klik daarna op Ververs.",
+                   "The chart position is not known yet. Move the chart "
+                   "a little and then click Refresh.")
+             << "</font>";
     }
     else if (page.filtering) {
         html << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-             << static_cast<int>(page.matches) << " van de "
+             << static_cast<int>(page.matches) << Tr(" van de ", " of the ")
              << static_cast<int>(page.mainRows)
-             << " symbolen in beeld passen bij &lsquo;" << EscapeHtml(m_filter)
+             << Tr(" symbolen in beeld passen bij &lsquo;", " symbols in view match &lsquo;")
+             << EscapeHtml(m_filter)
              << "&rsquo;</font>";
     }
 
     html << "</td><td align=\"right\" valign=\"middle\" nowrap>";
     if (page.showHeadings && m_reorder_mode) {
-        html << "<a href=\"legend-reorder-done:\"><b>Klaar</b></a>";
+        html << "<a href=\"legend-reorder-done:\"><b>" << Tr("Klaar", "Done") << "</b></a>";
     }
     else {
         auto icon = [&](bool gear) {
@@ -870,7 +876,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     // setting with the time they take at this speed, and the width of the
     // setting; and when nothing lies in it, that too.
     const double range = AheadRange();
-    wxString summary = (nl ? "tot " : "up to ") + FormatMiles(m_ahead_miles);
+    wxString summary = (nl ? "tot " : "up to ") + FormatMiles(m_ahead_miles, m_dutch_names);
     const wxString time = AheadTimeText(range);
     if (!time.IsEmpty())
         summary << ", " << EscapeHtml(time);
@@ -941,7 +947,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         wxString out = " &middot; <font color=\"" + HtmlColour(muted) +
                        "\"><img src=\"memory:" + eyeName + "\">";
         if (scale > 0)
-            out << " " << FormatScaleShort(scale);
+            out << " " << FormatScaleShort(scale, m_dutch_names);
         return out + "</font>";
     };
     auto grey = [&](const wxString &text) {
@@ -1041,7 +1047,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         if (DistanceFromBoatShown() && item.position < group.positions.size()) {
             const auto &at = group.positions[item.position];
             facts << " &middot; "
-                  << FormatDistance(SeaMiles(m_ship_lat, m_ship_lon, at.first, at.second))
+                  << FormatDistance(SeaMiles(m_ship_lat, m_ship_lon, at.first, at.second), m_dutch_names)
                   << " &middot; "
                   << FormatBearing(BearingDegrees(m_ship_lat, m_ship_lon, at.first, at.second));
         }
@@ -1180,9 +1186,10 @@ void legend_pi::RenderNotesBlock(DynamicPage &page)
                             i);
     }
     std::sort(inView.begin(), inView.end());
-    auto miles = [](double value) {
+    auto miles = [this](double value) {
         wxString text = wxString::Format("%.1f NM", value);
-        text.Replace(".", ",");
+        if (m_dutch_names)
+            text.Replace(".", ",");
         return text;
     };
 
@@ -1232,7 +1239,7 @@ void legend_pi::RenderNotesBlock(DynamicPage &page)
                 wxString::Format("legend_dyn_%d_noteeye_%zu.png",
                                  m_dynamic_generation, k),
                 EyeIcon(false, muted, rowColour), EyeIcon(false, muted, rowColour, 2));
-            facts << "<img src=\"memory:" << eye << "\"> " << FormatScaleShort(place.scamin)
+            facts << "<img src=\"memory:" << eye << "\"> " << FormatScaleShort(place.scamin, m_dutch_names)
                   << " &middot; ";
             title = "<font color=\"" + HtmlColour(muted) + "\">" + title + "</font>";
         }
@@ -1463,7 +1470,7 @@ void legend_pi::RenderReorderList(DynamicPage &page)
              << "<td valign=\"middle\"><b>"
              << EscapeHtml(TopBlockTitle(m_top_block_order[block]))
              << "</b><br><font size=\"-1\" color=\"" << HtmlColour(muted)
-             << "\">bovenaan de lijst</font></td>"
+             << "\">" << Tr("bovenaan de lijst", "at the top of the list") << "</font></td>"
              << moveButton(kLegendMoveBlockUpIdPrefix, block, "&#9650;", block > 0)
              << moveButton(kLegendMoveBlockDownIdPrefix, block, "&#9660;",
                            block < blocks - 1)
@@ -1517,10 +1524,11 @@ void legend_pi::RenderReorderList(DynamicPage &page)
              << "\">";
 
         if (symbols == 0)
-            html << "niets in beeld";
+            html << Tr("niets in beeld", "nothing in view");
         else
-            html << symbols << (symbols == 1 ? " symbool, " : " symbolen, ")
-                 << waypoints << " in beeld";
+            html << symbols
+                 << (symbols == 1 ? Tr(" symbool, ", " symbol, ") : Tr(" symbolen, ", " symbols, "))
+                 << waypoints << Tr(" in beeld", " in view");
 
         html << "</font></td><td align=\"right\" valign=\"middle\">"
              << strip << "</td>"
@@ -1532,10 +1540,15 @@ void legend_pi::RenderReorderList(DynamicPage &page)
 
     html << "</table>"
          << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-         << "Tik of klik op &#9650; of &#9660; om een kopje te verplaatsen. "
-            "De volgorde van de kopjes wordt in symbolen.txt bewaard, die "
-            "van de blokken bovenaan in de instellingen. 'Overig' staat "
-            "altijd onderaan.</font></p>";
+         << Tr("Tik of klik op &#9650; of &#9660; om een kopje te verplaatsen. "
+               "De volgorde van de kopjes wordt in symbolen.txt bewaard, die "
+               "van de blokken bovenaan in de instellingen. 'Overig' staat "
+               "altijd onderaan.",
+               "Tap or click &#9650; or &#9660; to move a heading. "
+               "The order of the headings is saved in symbolen.txt, that of "
+               "the blocks at the top in the settings. 'Other' is always at "
+               "the bottom.")
+         << "</font></p>";
 }
 
 // A search that matches nothing in view.
@@ -1544,15 +1557,21 @@ void legend_pi::RenderNoMatches(DynamicPage &page)
     const wxColour &muted = page.palette.muted;
     wxString &html = page.html;
 
-    html << "<p>Geen symbolen in beeld die passen bij &lsquo;"
+    html << "<p>" << Tr("Geen symbolen in beeld die passen bij &lsquo;",
+                        "No symbols in view match &lsquo;")
          << EscapeHtml(m_filter) << "&rsquo;.</p>"
          << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-         << "Er wordt gezocht in de namen in de lijst, de kopjes en de "
-            "icoonnamen, alleen van wat nu in beeld is. Verschuif de "
-            "kaart, zoom uit, of maak het zoekveld leeg.";
+         << Tr("Er wordt gezocht in de namen in de lijst, de kopjes en de "
+               "icoonnamen, alleen van wat nu in beeld is. Verschuif de "
+               "kaart, zoom uit, of maak het zoekveld leeg.",
+               "The search looks in the names in the list, the headings and "
+               "the icon names, only of what is in view now. Pan the chart, "
+               "zoom out, or clear the search field.");
     if (!m_show_hidden_at_scale)
-        html << " Symbolen die op deze schaal verborgen zijn, tellen pas "
-                "mee met &lsquo;Ook verborgen tonen&rsquo;.";
+        html << Tr(" Symbolen die op deze schaal verborgen zijn, tellen pas "
+                   "mee met &lsquo;Ook op deze schaal verborgen tonen&rsquo;.",
+                   " Symbols hidden at this scale only count with "
+                   "&lsquo;Also show hidden at this scale&rsquo;.");
     html << "</font></p>";
 }
 
@@ -1676,8 +1695,8 @@ void legend_pi::RenderSectionHeading(DynamicPage &page, size_t i, bool atTop)
               << (folded ? "&#9654;" : "&#9660;") << "</font>&nbsp;<b>"
               << EscapeHtml(headingTitle) << "</b> <font color=\"" << HtmlColour(muted)
               << "\">&middot; " << symbols
-              << (symbols == 1 ? " symbool, " : " symbolen, ")
-              << waypoints << " in beeld</font></td>"
+              << (symbols == 1 ? Tr(" symbool, ", " symbol, ") : Tr(" symbolen, ", " symbols, "))
+              << waypoints << Tr(" in beeld", " in view") << "</font></td>"
               << "<td" << idAttribute
               << " align=\"right\" valign=\"middle\">"
               << strip << "</td></tr>"
@@ -1761,7 +1780,7 @@ void legend_pi::RenderRow(DynamicPage &page, size_t i)
 
         facts << "<img src=\"memory:" << eyeName << "\">";
         if (group.visibleFrom > 0)
-            facts << " " << FormatScaleShort(group.visibleFrom);
+            facts << " " << FormatScaleShort(group.visibleFrom, m_dutch_names);
     }
     const wxString distance = DistanceText(group);
     if (!distance.IsEmpty()) {
@@ -1904,40 +1923,56 @@ void legend_pi::RenderFooter(DynamicPage &page)
     const wxColour &muted = page.palette.muted;
     wxString &html = page.html;
 
-    html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">In beeld: "
-         << static_cast<int>(m_dynamic_groups.size() - page.lightRows) << " symbolen"
+    html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
+         << Tr("In beeld: ", "In view: ")
+         << static_cast<int>(m_dynamic_groups.size() - page.lightRows) << Tr(" symbolen", " symbols")
          << " &middot; " << m_dynamic_total << " waypoints";
     if (m_chart_object_total > 0)
-        html << " &middot; " << m_chart_object_total << " kaartobjecten";
+        html << " &middot; " << m_chart_object_total << Tr(" kaartobjecten", " chart objects");
     if (page.lightRows > 0)
-        html << " &middot; " << static_cast<int>(page.lightRows) << " lichtkarakters";
+        html << " &middot; " << static_cast<int>(page.lightRows)
+             << Tr(" lichtkarakters", " light characteristics");
     if (m_show_hidden_at_scale && m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
         html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
-             << " op deze schaal verborgen";
+             << Tr(" op deze schaal verborgen", " hidden at this scale");
     }
     html << ".</font></p>";
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
          << (DistanceFromBoatShown()
-                 ? "Boven de betekenis van elke rij staan de afstand en de ware "
-                   "peiling vanaf de boot naar het dichtstbijzijnde exemplaar. Klik "
-                   "op een rij om naar het exemplaar te gaan dat het dichtst bij de "
-                   "boot ligt; "
-                 : "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; ")
-         << "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
-            "exemplaren in beeld tegelijk aan te wijzen. De lijst past zich "
-            "vanzelf aan als je de kaart verschuift of zoomt.";
+                 ? Tr("Boven de betekenis van elke rij staan de afstand en de ware "
+                      "peiling vanaf de boot naar het dichtstbijzijnde exemplaar. Klik "
+                      "op een rij om naar het exemplaar te gaan dat het dichtst bij de "
+                      "boot ligt; ",
+                      "Above the meaning of each row are the distance and the true "
+                      "bearing from the boat to the nearest instance. Click a row to "
+                      "go to the instance nearest to the boat; ")
+                 : Tr("Klik op een rij om naar het dichtstbijzijnde symbool te gaan; ",
+                      "Click a row to go to the nearest symbol; "))
+         << Tr("nog een klik gaat naar het volgende. Klik op &#9678; om alle "
+               "exemplaren in beeld tegelijk aan te wijzen. De lijst past zich "
+               "vanzelf aan als je de kaart verschuift of zoomt.",
+               "another click goes to the next one. Click &#9678; to point out "
+               "all instances in view at once. The list follows by itself as "
+               "you pan or zoom the chart.");
     if (page.showHeadings)
-        html << " Klik op een kopje om de groep in of uit te klappen.";
+        html << Tr(" Klik op een kopje om de groep in of uit te klappen.",
+                   " Click a heading to fold or unfold the group.");
     if (m_chart_object_total > 0)
-        html << " Kaartsymbolen komen uit de kaarten in beeld.";
+        html << Tr(" Kaartsymbolen komen uit de kaarten in beeld.",
+                   " Chart symbols come from the charts in view.");
     if (page.lightsShown)
-        html << " Lichtkarakters staan voluit in woorden; het ritme eronder "
-                "is schematisch getekend. Een klik laat het licht op de kaart "
-                "branden in dat ritme.";
+        html << Tr(" Lichtkarakters staan voluit in woorden; het ritme eronder "
+                   "is schematisch getekend. Een klik laat het licht op de kaart "
+                   "branden in dat ritme.",
+                   " Light characteristics are written out in words; the rhythm "
+                   "below is drawn schematically. A click makes the light shine "
+                   "on the chart in that rhythm.");
     if (m_show_hidden_at_scale)
-        html << " Grijze rijen zijn op deze schaal verborgen; een klik "
-                "zoomt in tot ze zichtbaar zijn.";
+        html << Tr(" Grijze rijen zijn op deze schaal verborgen; een klik "
+                   "zoomt in tot ze zichtbaar zijn.",
+                   " Grey rows are hidden at this scale; a click zooms in until "
+                   "they are visible.");
     html << "</font></p>";
 }
 

@@ -100,7 +100,7 @@ void ChartNotice::Create(wxWindow *canvas)
     // button beside it, in bold.
     m_buttons = new wxPanel(m_panel);
     auto *buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_close_button = MakeButton("Sluiten", [this]() {
+    m_close_button = MakeButton(m_close_label, [this]() {
         m_action = std::function<void()>();
         Hide();
     });
@@ -152,6 +152,7 @@ void ChartNotice::Show(const wxString &title,
     m_buttons->SetBackgroundColour(colours.background);
     ColourButton(m_close_button, colours.frame, colours.background, colours.text);
     ColourButton(m_action_button, colours.frame, colours.accent, colours.text);
+    m_close_button.label->SetLabel(m_close_label);
     m_action_button.label->SetLabel(actionLabel);
     m_action_button.frame->Show(!actionLabel.IsEmpty());
     m_panel->GetSizer()->Layout();

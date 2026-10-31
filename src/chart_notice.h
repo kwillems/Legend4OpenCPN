@@ -53,6 +53,10 @@ public:
     bool IsShown() const;
     void Hide();
 
+    // "Sluiten" or "Close": the close button in the plugin's language,
+    // from the next notice on.
+    void SetCloseLabel(const wxString &label) { m_close_label = label; }
+
     // Stops the timers and deletes the window, before the plugin goes.
     void Close();
 
@@ -82,6 +86,7 @@ private:
     wxStaticText *m_text = nullptr;
     wxPanel *m_buttons = nullptr; // Sluiten, and the action as a button
     Button m_close_button;
+    wxString m_close_label = "Sluiten";
     Button m_action_button;
     std::function<void()> m_action;
     wxTimer m_hide_timer;

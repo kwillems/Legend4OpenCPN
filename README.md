@@ -19,10 +19,8 @@ your own legends, notes and route descriptions too.
 > yourself. The author is not liable for any damage or accidents caused by
 > using this plugin.
 
-> **Language.** The plugin's interface is in Dutch for now; an English
-> interface is planned. Symbol meanings can already be shown in English.
-> This README gives each menu item and button as it appears in the plugin,
-> followed by an English translation in parentheses.
+> **Language.** The plugin follows OpenCPN's language: Dutch when OpenCPN
+> is set to Dutch, English otherwise. This README uses the English names.
 
 ## At a glance
 
@@ -93,7 +91,7 @@ your own legends, notes and route descriptions too.
 **Notes on the chart**
 
 - Pin a note to a place: it shows as a yellow sticky note on the chart,
-  under *Notities* (Notes) in the legend and in the *Uitkijk* (Lookout), and
+  under *Notes* in the legend and in the *Lookout*, and
   you get a notice when you come near.
 - Create a new note by right-clicking the chart, pinned to that spot right
   away, or under way at the boat's position.
@@ -119,12 +117,10 @@ You can import a new version over the old one.
 ## The window
 
 The Legend button opens and closes the window. At the top is a drop-down
-list of all items, with the position next to it (`2 van 12`, 2 of 12). The
-first item is always the **Kaartlegenda** (Chart legend); your notes follow
-in alphabetical order.
+list of all items, with the position next to it (`2 of 12`). The first item
+is always the **Chart legend**; your notes follow in alphabetical order.
 
-- Page through with **Vorige** (Previous) and **Volgende** (Next), or with
-  `←` and `→`.
+- Page through with **Previous** and **Next**, or with `←` and `→`.
 - When the drop-down list has focus, `↑` and `↓` work too.
 - `Esc` closes the window.
 - The last item shown and the window's position and size are remembered.
@@ -151,22 +147,21 @@ panning, zooming or rotating, and also when you switch a layer on or off.
 
 - **Click a row** and the nearest instance is marked on the chart with a
   ring. Another click moves to the next one (`2/7`). If it is not well in
-  view, the chart scrolls to it. With *Afstand en peiling vanaf de boot*
-  (Distance and bearing from the boat) on, that is the instance nearest to
-  the boat (see below).
+  view, the chart scrolls to it. With *Distance and bearing from the boat*
+  on, that is the instance nearest to the boat (see below).
 - **Click the counter** (`×7 ◎`) and all instances in view are pointed out
   at once.
 - **Click a symbol on the chart** while the legend is open, or choose
-  **Toon in legenda** (Show in legend) in the chart's right-click menu. The
+  **Show in legend** in the chart's right-click menu. The
   plugin opens the right heading, scrolls to the row and highlights it.
 - Everything you can click has a tooltip that says what a click does.
 
 ### Header and settings
 
-At the top is **Kaartlegenda** with two buttons on the right:
+At the top is **Chart legend** with two buttons on the right:
 
-- the **gear** opens the *Instellingen* (Settings) menu;
-- the **arrow** (*Ververs*, Refresh) reads all waypoints, chart cells and
+- the **gear** opens the *Settings* menu;
+- the **arrow** (*Refresh*) reads all waypoints, chart cells and
   VHF areas again. Use it when you have changed a waypoint while the chart
   is at rest.
 
@@ -174,22 +169,21 @@ In the Settings menu:
 
 | Menu item | What it does |
 |---|---|
-| Lichten (Lights) | Show or hide light rows |
-| Ook op deze schaal verborgen tonen (Also show hidden at this scale) | Also symbols the chart does not draw at this scale (see below) |
-| Afstand en peiling vanaf de boot (Distance and bearing from the boat) | Above each row's meaning, the distance and bearing to the nearest instance (see below); off by default |
-| Engelse namen (English names) | Meanings in English instead of Dutch |
-| Alle lichten laten branden (Make all lights shine) | All lights in view shine on the chart |
-| Nachtvoorbeeld (Night preview) | The chart as you see it at night |
-| Licht herkennen (Identify a light) | Identify a light by its rhythm |
-| Marifoongebied blijft oplichten (VHF area stays highlighted) | A clicked VHF area stays red until the next click on the chart, instead of fading after six seconds |
-| Melding bij nieuw marifoongebied (Notice on new VHF area) | A notice with beeps when the boat enters a new VHF area |
-| Melding bij notitie in de buurt (Notice when near a note) | A notice with beeps when the boat comes within the radius of a pinned note |
-| Uitkijkbundel op de kaart (Lookout beam on the chart) | The lookout beam drawn faintly on the chart; on by default |
-| Uitkijkbundel: breedte ▸ (Lookout beam: width) | Narrow (15°), Medium (30°) or Wide (45°) on either side of the course |
-| Uitkijkbundel: lengte ▸ (Lookout beam: length) | 1, 2, 5, 10 or 20 nautical miles, or *Anders…* (Other…) to enter a length yourself (0.5 to 50 nautical miles); 2 by default. While sailing, each choice shows how long it takes you |
-| Uitkijkbundel: kleur ▸ (Lookout beam: colour) | Amber (default), Orange or Grey |
-| Alles inklappen / uitklappen (Fold / unfold all) | All headings at once |
-| Volgorde wijzigen… (Change order…) | Put the headings in a different order |
+| Lights | Show or hide light rows |
+| Also show hidden at this scale | Also symbols the chart does not draw at this scale (see below) |
+| Distance and bearing from the boat | Above each row's meaning, the distance and bearing to the nearest instance (see below); off by default |
+| Make all lights shine | All lights in view shine on the chart |
+| Night preview | The chart as you see it at night |
+| Identify a light | Identify a light by its rhythm |
+| VHF area stays highlighted | A clicked VHF area stays red until the next click on the chart, instead of fading after six seconds |
+| Notice on entering a VHF area | A notice with beeps when the boat enters a new VHF area |
+| Notice when near a note | A notice with beeps when the boat comes within the radius of a pinned note |
+| Lookout beam on the chart | The lookout beam drawn faintly on the chart; on by default |
+| Lookout beam: width ▸ | Narrow (15°), Medium (30°) or Wide (45°) on either side of the course |
+| Lookout beam: length ▸ | 1, 2, 5, 10 or 20 nautical miles, or *Other…* to enter a length yourself (0.5 to 50 nautical miles); 2 by default. While sailing, each choice shows how long it takes you |
+| Lookout beam: colour ▸ | Amber (default), Orange (searchlight) or Grey |
+| Fold all / Unfold all | All headings at once |
+| Change order… | Put the headings in a different order |
 
 How many symbols, waypoints, chart objects and light characteristics are in
 view is shown at the bottom of the list.
@@ -210,29 +204,26 @@ The list is divided into headings, which you create yourself in
 - Click a heading to fold or unfold it. A folded heading still shows the
   count and a strip with the first icons. The plugin remembers which
   headings are folded.
-- **Volgorde wijzigen** (Change order) shows only the headings, with large
+- **Change order** shows only the headings, with large
   ▲ and ▼ buttons that also work well on a touch screen. The new order is
   saved to `symbolen.txt` right away.
-- **Kaartsymbolen** (Chart symbols) and **Lichtkarakters** (Light
-  characteristics) are the plugin's own headings: they hold chart symbols
+- **Chart symbols** and **Light characteristics** are the plugin's own
+  headings: they hold chart symbols
   without a meaning of their own and lights that stand on nothing in the
   list. They can be moved just like your own headings.
-- Symbols under no heading at all are at the bottom under **Overig**
-  (Other).
+- Symbols under no heading at all are at the bottom under **Other**.
 
 ### Hidden at this scale
 
 Some symbols are drawn by the chart only when you zoom in far enough. With
-**Ook op deze schaal verborgen tonen** (Also show hidden at this scale) they
-get a grey row. Above the meaning, in small print, are a closed eye and the
+**Also show hidden at this scale** they get a grey row. Above the meaning, in small print, are a closed eye and the
 scale at which they appear (`1:200k`). A click zooms in until the nearest
 instance is visible. What you have switched off yourself under *User
 Standard* in OpenCPN stays out.
 
 ### Distance and bearing from the boat
 
-With **Afstand en peiling vanaf de boot** (Distance and bearing from the
-boat), each row shows above its meaning, small and grey, how far the
+With **Distance and bearing from the boat**, each row shows above its meaning, small and grey, how far the
 nearest instance is from the boat and in which direction: *0.3 NM · 045°*
 (true bearing), or in metres below a tenth of a nautical mile, such as
 *150 m*. In the Lookout it is shown for every object.
@@ -258,7 +249,7 @@ stands on a line of its own in the name, as in the Nautin layer.
 - **Make it shine.** Clicking a light row makes that light shine on the
   chart in its rhythm, with a glow and rays. Period and groups come from the
   chart; how long a single flash lasts is a common value.
-- **Alle lichten laten branden** (Make all lights shine) switches on all
+- **Make all lights shine** switches on all
   lights in view, each in its own rhythm, until you switch it off again.
   They move along with the chart.
 - **Sector lights** become one light with their sectors in words, such as
@@ -268,7 +259,7 @@ stands on a line of its own in the name, as in the Nautin layer.
 
 ### Night preview
 
-**Nachtvoorbeeld** (Night preview) lays a dark blue layer over the chart,
+**Night preview** lays a dark blue layer over the chart,
 through which the coast and fairways just show. On top of it all lights in
 view shine in their rhythm. This way you can see in advance what a night
 arrival looks like. Your own ship and AIS targets stay visible above it, and
@@ -276,8 +267,8 @@ the legend window switches to the night colours too.
 
 ### Identify a light
 
-If you see a light and don't know which one it is, choose **Licht
-herkennen** (Identify a light). A frame with a large pad appears at the top
+If you see a light and don't know which one it is, choose **Identify a
+light**. A frame with a large pad appears at the top
 of the list.
 
 1. Hold down the pad or the space bar while the light is on, and let go
@@ -290,14 +281,14 @@ of the list.
    a light shine on the chart.
 
 Missing a period, for example because of the swell, is no problem. Only
-after a minute without taps does the plugin start over; **Tikken wissen**
-(Clear taps) does so right away. **Sluiten** (Close) removes the frame.
+after a minute without taps does the plugin start over; **Clear taps** does
+so right away. **Close** removes the frame.
 
 ## Under way
 
 ### VHF
 
-The **Marifoon** (VHF) heading is at the top of the list and shows the
+The **VHF** heading is at the top of the list and shows the
 channel for the area the boat is in: channel, call name, type of station,
 what you have to do (listen, report or check in) and the phone number. The
 data comes from the *VHFinfo Nederland* layer of
@@ -313,31 +304,28 @@ A VHF area can be highlighted on the chart, in light red as on
   the channel appears at the top of the chart. If an area consists of
   several parts, they all light up. A row's counter ◎ highlights all areas
   of that icon in view.
-- **Welk marifoonkanaal hier?** (Which VHF channel here?) in the chart's
+- **Which VHF channel here?** in the chart's
   right-click menu highlights all areas at that spot and names their
   channels in a small window. This works even when the layer is switched off
   in OpenCPN: the plugin reads the areas from the GPX file itself.
 - An area lights up for six seconds and then fades, or stays until you click
-  the chart again (setting *Marifoongebied blijft oplichten*, VHF area stays
-  highlighted).
+  the chart again (setting *VHF area stays highlighted*).
 
 **Notice on a new area.** When you sail with GPS into a VHF area you were
 not in a moment ago, it lights up and a small window with the channel
-appears at the top of the chart, for example *kanaal 18 · Ketelbrug ·
-verkeerspost · melden* (channel 18 · Ketelbrug · traffic post · report), with
-six beeps. The window disappears after twelve seconds, with **Sluiten**
-(Close) or with a click outside it. This also works when the legend window
-is closed, and can be switched off with *Melding bij nieuw marifoongebied*
-(Notice on new VHF area).
+appears at the top of the chart, for example *Channel 18 · Ketelbrug ·
+traffic post · report*, with six beeps. The window disappears after twelve
+seconds, with **Close** or with a click outside it. This also works when the
+legend window is closed, and can be switched off with *Notice on entering a
+VHF area*.
 
 ### Lookout
 
-The **Uitkijk** (Lookout) heading shows what you will meet on your course.
+The **Lookout** heading shows what you will meet on your course.
 It appears as soon as the boat is moving: a recent GPS position and at
 least half a knot. Next to the heading it says where the lookout is
-looking, for example *tot 2 NM, ± 20 min · breedte 30°* (up to 2 NM, ±
-20 min · width 30°), and *niets in de bundel* (nothing in the beam) when
-nothing is there. The time is an estimate at your current speed. When you
+looking, for example *up to 2 NM, ± 20 min · width 30°*, and *nothing in the
+beam* when nothing is there. The time is an estimate at your current speed. When you
 fold the Lookout, the icons of what you will meet first are shown to the
 right of the heading, in order of arrival (VHF areas and notes too), with
 the count of the rest after them, such as *+4*.
@@ -345,24 +333,22 @@ the count of the rest after them, such as *+4*.
 Each line starts small with when and where, with the description below:
 
 - All objects from the legend inside the beam, in order of arrival, for
-  example *over 4 min · stuurboord · 0,6 NM · 038°* (in 4 min · starboard ·
-  0.6 NM · 038°) with *Rode spitse ton* (red conical buoy) and the light
-  characteristic below. Distance and bearing are shown when *Afstand en
-  peiling vanaf de boot* is on.
-- With *Ook op deze schaal verborgen tonen*, buoys the chart does not draw
+  example *in 4 min · starboard · 0.6 NM · 038°* with *Red conical buoy*
+  and the light characteristic below. Distance and bearing are shown when
+  *Distance and bearing from the boat* is on.
+- With *Also show hidden at this scale*, buoys the chart does not draw
   yet at this scale are listed too, in grey, with the closed eye and the
   scale, just as in the rest of the legend. A click zooms there.
 - Also what you are passing right now: anything within 0.12 nautical miles
-  (about 220 metres) beside you or just behind you is at the top as *nu*
-  (now), until it falls out of that circle behind you.
+  (about 220 metres) beside you or just behind you is at the top as *now*,
+  until it falls out of that circle behind you.
 - Up to two VHF areas your course enters, at their place in time, for
-  example *over 12 min* with *Marifoongebied kanaal 22 · Houtribsluizen ·
-  melden* (VHF area channel 22 · Houtribsluizen · report) below. A click
+  example *in 12 min* with *VHF area channel 22 · Houtribsluizen · report*
+  below. A click
   highlights the area. The signs of the *VHFinfo Nederland* layer itself
   don't count as objects; real VHF signs along the water (B11, E23) do.
-- The pinned notes on your course, for example *over 6 min · stuurboord*
-  with *Notitie Ondiepte bij de Ketelbrug* (Note Shallows near the
-  Ketelbrug) below. A click opens the note; if it is hidden at this scale,
+- The pinned notes on your course, for example *in 6 min · starboard* with
+  *Note Shallows near the Ketelbrug* below. A click opens the note; if it is hidden at this scale,
   the click zooms there.
 - A click on a line points out the object on the chart, or makes its light
   shine.
@@ -371,21 +357,19 @@ Each line starts small with when and where, with the description below:
 around the boat, in a fan ahead: close by at least 0.12 nautical miles wide
 on each side, wider further on. The end is round: every point of the edge
 is the same distance from the boat. You choose how far it reaches with
-**Uitkijkbundel: lengte** (Lookout beam: length): 1, 2 (default), 5, 10 or
-20 nautical miles, or with *Anders…* (Other…) a length of your own from 0.5
+**Lookout beam: length**: 1, 2 (default), 5, 10 or 20 nautical miles, or
+with *Other…* a length of your own from 0.5
 to 50 nautical miles. The length does not depend on your speed; in the menu
 each choice shows how long it takes you at your current speed. On busy
 waters a short length keeps the list manageable. You choose how wide the
-fan opens with **Uitkijkbundel: breedte** (Lookout beam: width): narrow
+fan opens with **Lookout beam: width**: narrow
 (15°), medium (30°, default) or wide (45°) on either side of the course.
 
-With **Uitkijkbundel op de kaart** (Lookout beam on the chart, on by
-default) the beam is drawn very faintly on the chart, while the legend
+With **Lookout beam on the chart** (on by default) the beam is drawn very faintly on the chart, while the legend
 window is open and the boat is moving, even while you look at a note in it.
 That way you can see why a buoy is or isn't in the list. Switching it off
 hides only the drawing; the list stays. You choose the colour with
-**Uitkijkbundel: kleur** (Lookout beam: colour): amber (default), orange or
-grey. Colours that mean something on the chart (yellow, red, green, purple)
+**Lookout beam: colour**: amber (default), orange or grey. Colours that mean something on the chart (yellow, red, green, purple)
 are deliberately left out. At dusk and night the beam is dimmed but stays
 visible; grey then becomes light grey, because the dark grey of daytime
 would disappear on the dark chart.
@@ -506,7 +490,7 @@ bin appear only with a note:
 |---|---|
 | Pencil | Edit the note |
 | Text box with cursor | Give it another title: the file and the `# Title` at the top change along |
-| Bin | Delete, after confirmation. The file goes to the `Verwijderd` (Deleted) folder in the Legend folder; move it back to use it again |
+| Bin | Delete, after confirmation. The file goes to the `Verwijderd` folder in the Legend folder; move it back to use it again |
 | Plus | A new note: you give a title and start writing right away |
 
 While editing you see the note as it looks, without Markdown characters. At
@@ -522,7 +506,7 @@ the top is a row of buttons:
 Enter after a heading gives plain text again, Enter on an empty list line
 ends the list and `Shift+Enter` starts a new line within the same paragraph.
 Everything is saved by itself, a second and a half after you stop typing;
-the bottom shows when. **Opslaan** (Save), at the top next to the drop-down
+the bottom shows when. **Save**, at the top next to the drop-down
 list, or `Esc` saves and takes you back to the normal view.
 
 On disk a note stays plain Markdown. While editing, a table is shown as
@@ -535,64 +519,55 @@ A note can be connected to the chart in two ways.
 
 **A link to a place in the text.** Click it in the note and the chart goes
 there and points out the place. You create such a link with the pin button
-(*Link naar het midden van de kaart in de tekst*, Link to the centre of the
-chart in the text), or by right-clicking the chart: *Notitie ▸ Link naar
-deze plek in de tekst* (Note ▸ Link to this place in the text). If text is
+(*Link to the centre of the chart in the text*), or by right-clicking the
+chart: *Note ▸ Link to this place in the text*. If text is
 selected, it becomes the link; otherwise the coordinates go into the text.
 In the file such a link reads `[Ketelbrug](geo:52.58030,5.75120)`, a
 standard other chart programs understand too.
 
 **The whole note pinned to a place.** There are three ways to do this:
 
-- by right-clicking the chart: *Notitie ▸ Nieuwe notitie hier* (Note ▸ New
-  note here). You give a title, and the new note opens right away, pinned to
+- by right-clicking the chart: *Note ▸ New note here*. You give a title, and the new note opens right away, pinned to
   that spot, even if the legend window was closed;
-- while editing, with a right-click: *Notitie ▸ Hier vastpinnen op de kaart*
-  (Note ▸ Pin here on the chart);
-- with the pin button: *Notitie vastpinnen op het midden van de kaart* (Pin
-  note to the centre of the chart).
+- while editing, with a right-click: *Note ▸ Pin here on the chart*;
+- with the pin button: *Pin note to the centre of the chart*.
 
 **Where the boat is now.** With a GPS position from the last minute, you can
 also use the boat's position, wherever you click:
 
-- the plus button in the window then asks *Nieuwe notitie* (New note) or
-  *Nieuwe notitie bij de boot* (New note at the boat); with a right-click:
-  *Notitie ▸ Nieuwe notitie bij de boot*;
-- while editing, via the pin button or *Notitie ▸* in the right-click menu:
-  *Vastpinnen op de positie van de boot* (Pin to the boat's position), or
-  *Positie van de boot in de tekst* (Boat's position in the text). The
+- the plus button in the window then asks *New note* or *New note at the
+  boat*; with a right-click: *Note ▸ New note at the boat*;
+- while editing, via the pin button or *Note ▸* in the right-click menu:
+  *Pin to the boat's position*, or *Boat's position in the text*. The
   latter puts the position with the time as a link in the note, for example
-  *52°34,818′N 5°45,072′E (14:32)*: handy for a logbook.
+  *52°34.818′N 5°45.072′E (14:32)*: handy for a logbook.
 
-Above the text it then says *Vastgepind op 52°34,818′N 5°45,072′E · straal
-0,5 NM* (Pinned at … · radius 0.5 NM). A click on it shows the place; with
-**Straal** (Radius) you adjust the distance for the notice, with
-**Losmaken** (Unpin) you unpin the note again. In the normal view the same
+Above the text it then says *Pinned at 52°34.818′N 5°45.072′E · radius
+0.5 NM*. A click on it shows the place; with **Radius** you adjust the
+distance for the notice, with **Unpin** you unpin the note again. In the normal view the same
 appears in a coloured bar above the note.
 
 A pinned note:
 
 - shows as a **yellow sticky note** on the chart. Hover over it to see the
   title; a click opens the note and shows the radius as a dotted line.
-  Right-clicking the sticky note gives *Notitie ▸ "…" openen* (open) and
-  *"…" verwijderen* (delete). **Drag** the sticky note to move the note: the
+  Right-clicking the sticky note gives *Note ▸ Open "…"* and *Delete "…"*. **Drag** the sticky note to move the note: the
   radius moves along, and when you let go the new place is written into the
-  note. A notice then offers **Terugzetten** (Put back) and **Sluiten**
-  (Close); once it is gone, *Notitie ▸ "…" terugzetten op de oude plek* (put
-  back in the old place) is still in the right-click menu, for the most
+  note. A notice then offers **Put back** and **Close**; once it is gone,
+  *Note ▸ Put "…" back in its old place* is still in the right-click menu, for the most
   recently moved note. Like buoys and beacons, the sticky note disappears
   when you zoom out beyond 1:200,000;
-- is listed under the **Notities** (Notes) heading in the legend while the
+- is listed under the **Notes** heading in the legend while the
   place is in view, nearest first: the distance in small print, below it
-  the title and the first line of text. With *Ook op deze schaal verborgen
-  tonen* a note beyond its scale limit stays there in grey, with a closed
+  the title and the first line of text. With *Also show hidden at this
+  scale* a note beyond its scale limit stays there in grey, with a closed
   eye and the scale; a click zooms there;
 - appears in the **Lookout** when your course passes it;
 - gives a **notice** with beeps under way as soon as you come within the
   radius. A click on the notice opens the note. A note you have just pinned
   where the boat is, or that you are editing, doesn't announce itself; only
-  once you sail away and come back. Can be switched off with *Melding bij
-  notitie in de buurt* (Notice when near a note).
+  once you sail away and come back. Can be switched off with *Notice when
+  near a note*.
 
 The place is stored at the top of the file, in the block Obsidian uses too:
 
@@ -664,7 +639,7 @@ of the chart cells, so that later start-ups are fast.
 - The lookout reads its own area from the chart cells, including what lies
   out of view. While cells are still being opened, or when part of the beam
   has no chart, it says so next to the heading. What the chart does not draw
-  at this scale is only included with *Ook op deze schaal verborgen tonen*.
+  at this scale is only included with *Also show hidden at this scale*.
 - The lines and the label on the lookout beam are drawn on top of the chart,
   not beneath it; that is why they are faint.
 - The marker on the chart has been tested with **OpenGL on**.
@@ -781,7 +756,7 @@ Ideas for future versions:
 - showing the range of a light in the night preview;
 - editing meanings in the window itself;
 - a configurable Legend folder;
-- builds for Windows and Linux, and an English translation of the interface.
+- builds for Windows and Linux.
 
 ## License
 
