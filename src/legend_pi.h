@@ -122,6 +122,7 @@ public:
     wxString GetCommonName() override;
     wxString GetShortDescription() override;
     wxString GetLongDescription() override;
+    wxBitmap *GetPlugInBitmap() override;
 
     void OnToolbarToolCallback(int id) override;
     void SetColorScheme(PI_ColorScheme cs) override;
@@ -448,6 +449,7 @@ private:
 
     int m_toolbar_item_id;
     wxBitmap m_toolbar_bitmap;
+    wxBitmap m_plugin_bitmap;   // on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
 
     wxSimplebook *m_header_book;

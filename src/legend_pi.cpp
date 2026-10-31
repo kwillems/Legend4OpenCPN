@@ -464,6 +464,19 @@ wxString legend_pi::GetLongDescription()
              "plus your own legends and notes in Markdown.");
 }
 
+// The icon on the Plugins tab of OpenCPN's options, also asked for while
+// the plugin is not enabled (before Init). The toolbar's light grey hardly
+// shows on that light list, so a darker one.
+wxBitmap *legend_pi::GetPlugInBitmap()
+{
+    if (!m_plugin_bitmap.IsOk()) {
+        const wxString path = GetPluginDataDir("legend_pi") + wxFileName::GetPathSeparator() +
+                              "data" + wxFileName::GetPathSeparator() + "legend_plugin.svg";
+        m_plugin_bitmap = GetBitmapFromSVGFile(path, 32, 32);
+    }
+    return &m_plugin_bitmap;
+}
+
 wxString legend_pi::GetLegendDirectory() const
 {
     return
