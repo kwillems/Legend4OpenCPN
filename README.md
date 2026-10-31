@@ -64,8 +64,9 @@ routebeschrijvingen.
   aankomst, met wanneer je er bent, de kant waar het ligt, de afstand en zijn
   licht, en het volgende marifoongebied. Ook wat je op dit moment passeert.
 - De uitkijkbundel staat licht op de kaart, zodat je ziet waar de uitkijk
-  kijkt; smal, middel of breed, in een kleur naar keuze. Alles wat in de
-  bundel ligt, staat in de lijst.
+  kijkt; smal, middel of breed, in een kleur naar keuze, met dwarslijnen per
+  zeemijl en aan het eind hoe ver hij reikt. Alles wat in de bundel ligt,
+  staat in de lijst.
 
 **Marifoon**
 
@@ -177,7 +178,7 @@ In het menu Instellingen:
 | Uitkijkbundel op de kaart | De uitkijkbundel licht getekend op de kaart; standaard aan |
 | Uitkijkbundel: breedte ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
 | Uitkijkbundel: lengte ▸ | 1, 2, 5, 10 of 20 zeemijl, of *Anders…* om zelf een lengte in te vullen (0,5 tot 50 zeemijl); standaard 2. Tijdens het varen staat erachter hoe lang je erover doet |
-| Uitkijkbundel: kleur ▸ | Amber (standaard), Geel, Rood, Groen, Paars of Grijs |
+| Uitkijkbundel: kleur ▸ | Amber (standaard), Oranje of Grijs |
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
@@ -353,12 +354,25 @@ breedte**: smal (15°), middel (30°, standaard) of breed (45°) aan
 weerszijden van de koers.
 
 Met **Uitkijkbundel op de kaart** (standaard aan) staat de bundel heel licht
-op de kaart, zolang de legenda open is en de boot vaart. De kleur kies je met
-**Uitkijkbundel: kleur**: amber (standaard), geel, rood, groen, paars of
-grijs. Zo
-zie je waarom een ton wel of niet in de lijst staat. Uitzetten verbergt
-alleen de tekening; de lijst blijft. Bij schemer en nacht wordt de bundel
-gedimd, maar blijft hij zichtbaar.
+op de kaart, zolang de legenda open is en de boot vaart. Zo zie je waarom een
+ton wel of niet in de lijst staat. Uitzetten verbergt alleen de tekening; de
+lijst blijft. De kleur kies je met **Uitkijkbundel: kleur**: amber
+(standaard), oranje of grijs. Kleuren die op de kaart iets betekenen (geel,
+rood, groen, paars) zitten er bewust niet bij. Bij schemer en nacht wordt de
+bundel gedimd, maar blijft hij zichtbaar; grijs wordt dan lichtgrijs, omdat
+het donkere grijs van overdag op de donkere kaart zou wegvallen.
+
+Op de bundel zie je hoe ver hij reikt:
+
+- Bij de stuurboordhoek van het eind staat de lengte met de vaartijd, zoals
+  *3 NM · ± 20 min*. Het midden, recht vooruit, blijft zo vrij.
+- Dunne stippellijnen dwars over de bundel markeren de zeemijlen: bij elke
+  zeemijl tot en met 5 NM, bij elke 5 zeemijl tot en met 25 NM en daarboven
+  bij elke 10. Zo zie je meteen of een ton voor of na een mijlgrens ligt.
+  Vlak voor het eind komt geen lijn; bij een bundel van 1 NM staat er alleen
+  het label.
+- Komen de lijnen op het scherm te dicht bij elkaar, dan verdwijnen ze; is de
+  hele bundel klein op het scherm, dan verdwijnt ook het label.
 
 Testen zonder te varen kan met de plugin ShipDriver.
 
@@ -615,9 +629,12 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
   als kaartsymbool.
 - Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
-- De uitkijk kijkt alleen naar wat in beeld is: zoom zo ver uit dat de
-  bundel op het scherm past. Wat de kaart op die schaal niet meer tekent,
-  staat er alleen in met *Ook op deze schaal verborgen tonen*.
+- De uitkijk leest zijn eigen gebied uit de kaartcellen, ook wat buiten beeld
+  ligt. Zolang er nog cellen worden geopend, of als een deel van de bundel
+  geen kaart heeft, staat dat naast het kopje. Wat de kaart op deze schaal
+  niet tekent, staat er alleen in met *Ook op deze schaal verborgen tonen*.
+- De lijnen en het label op de uitkijkbundel worden over de kaart heen
+  getekend, niet eronder; daarom zijn ze licht.
 - De markering op de kaart is getest met **OpenGL aan**.
 - Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
   het bestand, dan kan het icoon op macOS leeg blijven.
