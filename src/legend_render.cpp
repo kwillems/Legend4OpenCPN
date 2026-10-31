@@ -1919,9 +1919,10 @@ void legend_pi::RenderFooter(DynamicPage &page)
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
          << (DistanceFromBoatShown()
-                 ? "Onder elke rij staan de afstand en de ware peiling vanaf de "
-                   "boot naar het dichtstbijzijnde exemplaar. Klik op een rij om "
-                   "naar het exemplaar te gaan dat het dichtst bij de boot ligt; "
+                 ? "Boven de betekenis van elke rij staan de afstand en de ware "
+                   "peiling vanaf de boot naar het dichtstbijzijnde exemplaar. Klik "
+                   "op een rij om naar het exemplaar te gaan dat het dichtst bij de "
+                   "boot ligt; "
                  : "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; ")
          << "nog een klik gaat naar het volgende. Klik op &#9678; om alle "
             "exemplaren in beeld tegelijk aan te wijzen. De lijst past zich "
