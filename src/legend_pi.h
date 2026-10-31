@@ -751,9 +751,9 @@ private:
     std::vector<wxPoint> AheadFanPixels(PlugIn_ViewPort *vp) const;
     // On the fan, how far it reaches: dashed lines across it at whole sea
     // miles (see FanMileLines), and at the starboard corner of its far end
-    // a label ("3 NM · ± 20 min"), set beyond `anchor` in the direction
-    // (dx, dy). Left out while
-    // the fan, or the space between the lines, is small on the screen.
+    // a label ("3 NM, ± 20 min", as beside the heading), set beyond
+    // `anchor` in the direction (dx, dy). Left out while the fan, or the
+    // space between the lines, is small on the screen.
     struct AheadFanLabel
     {
         wxString text;
