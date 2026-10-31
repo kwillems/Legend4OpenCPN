@@ -210,7 +210,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 canvas = GetOCPNCanvasWindow();
             if (canvas) {
                 if (hover >= 0)
-                    canvas->SetToolTip(Tr("Notitie: ", "Note: ") + m_note_places[hover].title);
+                    canvas->SetToolTip(_("Note: ") + m_note_places[hover].title);
                 else
                     canvas->UnsetToolTip();
             }
@@ -284,11 +284,11 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 MoveNotePlace(place.path, place.lat, place.lon);
                 // Moved by mistake, while panning the chart: one click puts
                 // it back.
-                ShowNotice(Tr("Notitie verplaatst", "Note moved"),
+                ShowNotice(_("Note moved"),
                            wxString::FromUTF8("\u201C") + place.title +
-                               Tr("\u201D staat op een nieuwe plek.", "\u201D is in a new place."),
+                               _("\u201D is in a new place."),
                            false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
-                           Tr("Terugzetten", "Put back"));
+                           _("Put back"));
                 return true;
             }
             // A click: the note opens and its radius shows.
@@ -388,41 +388,33 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
     // With a recent GPS fix also the boat's position, wherever the click was.
     const bool boat = BoatPositionKnown();
     if (m_editing) {
-        m_context_submenu->Append(m_menu_link_place, Tr("Link naar deze plek in de tekst",
-                                                        "Link to this place in the text"));
-        m_context_submenu->Append(m_menu_pin_note, Tr("Hier vastpinnen op de kaart",
-                                                      "Pin here on the chart"));
+        m_context_submenu->Append(m_menu_link_place, _("Link to this place in the text"));
+        m_context_submenu->Append(m_menu_pin_note, _("Pin here on the chart"));
         if (boat) {
             m_context_submenu->AppendSeparator();
-            m_context_submenu->Append(m_menu_link_boat, Tr("Positie van de boot in de tekst",
-                                                           "Boat's position in the text"));
-            m_context_submenu->Append(m_menu_pin_boat, Tr("Vastpinnen op de positie van de boot",
-                                                          "Pin to the boat's position"));
+            m_context_submenu->Append(m_menu_link_boat, _("Boat's position in the text"));
+            m_context_submenu->Append(m_menu_pin_boat, _("Pin to the boat's position"));
         }
     }
     else {
-        m_context_submenu->Append(m_menu_new_note, Tr("Nieuwe notitie hier", "New note here"));
+        m_context_submenu->Append(m_menu_new_note, _("New note here"));
         if (boat)
-            m_context_submenu->Append(m_menu_new_note_boat, Tr("Nieuwe notitie bij de boot",
-                                                               "New note at the boat"));
+            m_context_submenu->Append(m_menu_new_note_boat, _("New note at the boat"));
     }
     if (!m_menu_note_path.IsEmpty()) {
         m_context_submenu->AppendSeparator();
         const wxString quoted =
             wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
-        m_context_submenu->Append(m_menu_open_note,
-                                  m_dutch_names ? quoted + " openen" : "Open " + quoted);
+        m_context_submenu->Append(m_menu_open_note, wxString::Format(_("Open %s"), quoted));
         m_context_submenu->Append(m_menu_delete_note,
-                                  m_dutch_names ? quoted + wxString::FromUTF8(" verwijderen\u2026")
-                                                : "Delete " + quoted + wxString::FromUTF8("\u2026"));
+                                  wxString::Format(_("Delete %s\u2026"), quoted));
     }
     if (m_undo_move_valid) {
         m_context_submenu->AppendSeparator();
         const wxString quoted =
             wxString::FromUTF8("\u201C") + m_undo_move_title + wxString::FromUTF8("\u201D");
         m_context_submenu->Append(m_menu_undo_move,
-                                  m_dutch_names ? quoted + " terugzetten op de oude plek"
-                                                : "Put " + quoted + " back in its old place");
+                                  wxString::Format(_("Put %s back in its old place"), quoted));
     }
 }
 

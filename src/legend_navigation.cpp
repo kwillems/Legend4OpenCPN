@@ -592,25 +592,23 @@ wxString legend_pi::TapClockText() const
 {
     const bool nl = m_dutch_names;
     if (m_taps.empty() && !m_tap_down)
-        return nl ? "nog niet getikt" : "no taps yet";
+        return _("no taps yet");
 
     const wxLongLong now = wxGetUTCTimeMillis();
-    wxString text = wxString::Format(nl ? "%zu tikken" : "%zu taps", m_taps.size());
+    wxString text = wxString::Format(_("%zu taps"), m_taps.size());
     if (m_tap_down) {
         const double lit = (now - m_tap_origin).ToDouble() / 1000.0 - m_tap_start;
-        text << wxString::Format(nl ? " | licht %.1f s" : " | light %.1f s", lit);
+        text << wxString::Format(_(" | light %.1f s"), lit);
     }
     else {
         const double dark = (now - m_tap_last).ToDouble() / 1000.0;
         if (dark > 60.0)
-            text << (nl ? " | donker > 1 min: de volgende tik begint opnieuw"
-                        : " | dark > 1 min: the next tap starts again");
+            text << _(" | dark > 1 min: the next tap starts again");
         else if (dark > 40.0)
-            text << wxString::Format(nl ? " | donker %.0f s | over %.0f s begint het opnieuw"
-                                        : " | dark %.0f s | starts again in %.0f s",
+            text << wxString::Format(_(" | dark %.0f s | starts again in %.0f s"),
                                      std::floor(dark), std::ceil(60.0 - dark));
         else
-            text << wxString::Format(nl ? " | donker %.1f s" : " | dark %.1f s", dark);
+            text << wxString::Format(_(" | dark %.1f s"), dark);
     }
     if (nl)
         text.Replace(".", ",");
@@ -773,7 +771,7 @@ void legend_pi::ShowVhfAreas(const std::vector<VhfArea> &areas)
         if (said.insert(line).second)
             text << (text.IsEmpty() ? "" : "\n") << line;
     }
-    ShowNotice(said.size() > 1 ? Tr("Marifoongebieden", "VHF areas") : Tr("Marifoongebied", "VHF area"),
+    ShowNotice(said.size() > 1 ? _("VHF areas") : _("VHF area"),
                text, false);
     m_vhf_highlight.Show(areas);
 }
@@ -791,12 +789,10 @@ void legend_pi::ShowVhfHere(double lat, double lon)
             text << (text.IsEmpty() ? "" : "\n") << line;
     }
     if (m_vhf_areas.IsEmpty())
-        text = Tr("Geen marifoongebieden geladen (laag VHFinfo Nederland).",
-                  "No VHF areas loaded (layer VHFinfo Nederland).");
+        text = _("No VHF areas loaded (layer VHFinfo Nederland).");
     else if (text.IsEmpty())
-        text = Tr("Hier geldt geen marifoongebied uit VHFinfo Nederland.",
-                  "No VHF area from VHFinfo Nederland applies here.");
-    ShowNotice(Tr("Marifoonkanaal op deze locatie", "VHF channel at this location"), text, false);
+        text = _("No VHF area from VHFinfo Nederland applies here.");
+    ShowNotice(_("VHF channel at this location"), text, false);
     if (!parts.empty())
         m_vhf_highlight.Show(parts);
 }
@@ -841,7 +837,7 @@ void legend_pi::CheckVhfAreaChange()
     wxString text;
     for (const VhfArea *area : entered)
         text << (text.IsEmpty() ? "" : "\n") << VhfAreaLine(*area, m_dutch_names);
-    ShowNotice(Tr("Nieuw marifoongebied", "New VHF area"), text, true);
+    ShowNotice(_("New VHF area"), text, true);
     m_vhf_highlight.Show(m_vhf_areas.WithPartsAt(m_ship_lat, m_ship_lon));
 }
 
@@ -856,7 +852,7 @@ void legend_pi::ShowNotice(const wxString &title, const wxString &text, bool sou
     colours.text = palette.text;
     colours.frame = palette.headerRule;
     colours.accent = palette.active;
-    m_notice.SetCloseLabel(Tr("Sluiten", "Close"));
+    m_notice.SetCloseLabel(_("Close"));
     m_notice.Show(title, text, sound, colours, action, actionLabel);
 }
 

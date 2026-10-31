@@ -1,0 +1,790 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: legend_pi\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-31 23:17+0100\n"
+"PO-Revision-Date: 2026-10-31 23:17+0100\n"
+"Last-Translator: Koen Willems\n"
+"Language-Team: Dutch\n"
+"Language: nl_NL\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid " &middot; middle of the chart, no GPS"
+msgstr " &middot; midden van de kaart, geen GPS"
+
+msgid " Chart symbols come from the charts in view."
+msgstr " Kaartsymbolen komen uit de kaarten in beeld."
+
+msgid " Click a heading to fold or unfold the group."
+msgstr " Klik op een kopje om de groep in of uit te klappen."
+
+msgid ""
+" Grey rows are hidden at this scale; a click zooms in until they are visible."
+msgstr ""
+" Grijze rijen zijn op deze schaal verborgen; een klik zoomt in tot ze "
+"zichtbaar zijn."
+
+msgid ""
+" Light characteristics are written out in words; the rhythm below is drawn "
+"schematically. A click makes the light shine on the chart in that rhythm."
+msgstr ""
+" Lichtkarakters staan voluit in woorden; het ritme eronder is schematisch "
+"getekend. Een klik laat het licht op de kaart branden in dat ritme."
+
+msgid ""
+" Symbols hidden at this scale only count with &lsquo;Also show hidden at this "
+"scale&rsquo;."
+msgstr ""
+" Symbolen die op deze schaal verborgen zijn, tellen pas mee met &lsquo;Ook op "
+"deze schaal verborgen tonen&rsquo;."
+
+msgid " chart objects"
+msgstr " kaartobjecten"
+
+msgid " hidden at this scale"
+msgstr " op deze schaal verborgen"
+
+msgid " in view"
+msgstr " in beeld"
+
+msgid " light characteristics"
+msgstr " lichtkarakters"
+
+msgid " of "
+msgstr " van "
+
+msgid " of the "
+msgstr " van de "
+
+msgid " symbol, "
+msgstr " symbool, "
+
+msgid " symbols"
+msgstr " symbolen"
+
+msgid " symbols in view match &lsquo;"
+msgstr " symbolen in beeld passen bij &lsquo;"
+
+msgid " symbols, "
+msgstr " symbolen, "
+
+#, c-format
+msgid " | dark %.0f s | starts again in %.0f s"
+msgstr " | donker %.0f s | over %.0f s begint het opnieuw"
+
+#, c-format
+msgid " | dark %.1f s"
+msgstr " | donker %.1f s"
+
+msgid " | dark > 1 min: the next tap starts again"
+msgstr " | donker > 1 min: de volgende tik begint opnieuw"
+
+#, c-format
+msgid " | light %.1f s"
+msgstr " | licht %.1f s"
+
+msgid " · radius "
+msgstr " · straal "
+
+#, c-format
+msgid "%zu hidden at this scale"
+msgstr "%zu op deze schaal verborgen"
+
+#, c-format
+msgid "%zu of %zu"
+msgstr "%zu van %zu"
+
+#, c-format
+msgid "%zu taps"
+msgstr "%zu tikken"
+
+msgid ", visible from "
+msgstr ", zichtbaar vanaf "
+
+msgid "; a click zooms in until the nearest instance is visible"
+msgstr "; een klik zoomt in tot het dichtstbijzijnde exemplaar zichtbaar is"
+
+msgid ""
+"A legend of exactly the buoys, beacons, signs and other symbols on screen, "
+"with what the lights do and what lies ahead on your course, plus your own "
+"legends and notes in Markdown."
+msgstr ""
+"Een legenda van precies de boeien, bakens, tekens en andere symbolen op het "
+"scherm, met wat de lichten doen en wat er op je koers ligt, en je eigen "
+"legenda's en notities in Markdown."
+
+msgid ""
+"A place on the chart: as a link in the text, or pin the whole note to the "
+"chart. For a place other than the centre: right-click the chart"
+msgstr ""
+"Een plek op de kaart: als link in de tekst, of de hele notitie vastpinnen op "
+"de kaart. Voor een andere plek dan het midden: klik met rechts op de kaart"
+
+msgid ""
+"Above the meaning of each row are the distance and the true bearing from the "
+"boat to the nearest instance. Click a row to go to the instance nearest to "
+"the boat; "
+msgstr ""
+"Boven de betekenis van elke rij staan de afstand en de ware peiling vanaf de "
+"boot naar het dichtstbijzijnde exemplaar. Klik op een rij om naar het "
+"exemplaar te gaan dat het dichtst bij de boot ligt; "
+
+msgid "Address of the link:"
+msgstr "Adres van de link:"
+
+msgid "Also show hidden at this scale"
+msgstr "Ook op deze schaal verborgen tonen"
+
+msgid "Amber"
+msgstr "Amber"
+
+msgid "An image from the Legend folder or elsewhere"
+msgstr "Een afbeelding uit de Legend-map of daarbuiten"
+
+msgid "Boat's position in the text"
+msgstr "Positie van de boot in de tekst"
+
+msgid "Bold (Cmd+B)"
+msgstr "Vet (Cmd+B)"
+
+msgid "Building the chart legend"
+msgstr "De kaartlegenda wordt opgebouwd"
+
+msgid "Bulleted list on or off"
+msgstr "Opsomming met bolletjes aan of uit"
+
+msgid "Cancel"
+msgstr "Annuleren"
+
+msgid "Change order…"
+msgstr "Volgorde wijzigen…"
+
+msgid "Changes are saved automatically"
+msgstr "Wijzigingen worden vanzelf bewaard"
+
+msgid "Channel "
+msgstr "Kanaal "
+
+msgid "Chart legend"
+msgstr "Kaartlegenda"
+
+msgid "Chart legend (in view)"
+msgstr "Kaartlegenda (in beeld)"
+
+msgid "Chart symbol "
+msgstr "Kaartsymbool "
+
+msgid "Chart symbols"
+msgstr "Kaartsymbolen"
+
+msgid "Charts still being read"
+msgstr "Kaarten worden nog gelezen"
+
+msgid "Checklist on or off; click a box to tick it"
+msgstr "Afvinklijst aan of uit; klik op een hokje om af te vinken"
+
+msgid "Choose an image"
+msgstr "Afbeelding kiezen"
+
+msgid "Clear taps"
+msgstr "Tikken wissen"
+
+msgid "Click a row to go to the nearest symbol; "
+msgstr "Klik op een rij om naar het dichtstbijzijnde symbool te gaan; "
+
+msgid "Click the colour of the light:"
+msgstr "Klik op de kleur van het licht:"
+
+msgid "Click to open the note"
+msgstr "Klik om de notitie te openen"
+
+msgid "Click to see the place on the chart"
+msgstr "Klik om de plek op de kaart te zien"
+
+msgid "Close"
+msgstr "Sluiten"
+
+msgid "Close Identify a light; the menu opens it again"
+msgstr "Licht herkennen sluiten; het menu opent het weer"
+
+msgid "Compare only lights of this colour"
+msgstr "Alleen lichten van deze kleur vergelijken"
+
+msgid "Could not change the note."
+msgstr "De notitie kon niet worden aangepast."
+
+msgid "Could not copy the image to the Legend folder."
+msgstr "De afbeelding kon niet naar de Legend-map worden gekopieerd."
+
+msgid "Could not create the note in\n"
+msgstr "De notitie kon niet worden aangemaakt in\n"
+
+msgid "Could not move the note."
+msgstr "De notitie kon niet worden verplaatst."
+
+msgid "Could not open the Markdown file."
+msgstr "Markdown-bestand kon niet worden geopend."
+
+msgid "Could not open this image."
+msgstr "Deze afbeelding kon niet worden geopend."
+
+msgid "Could not open this note."
+msgstr "Deze notitie kon niet worden geopend."
+
+msgid "Could not process the Markdown."
+msgstr "Markdown kon niet worden verwerkt."
+
+msgid "Could not read the whole Markdown file."
+msgstr "Markdown-bestand kon niet volledig worden gelezen."
+
+msgid "Could not rename the file."
+msgstr "Het bestand kon niet worden hernoemd."
+
+msgid "Could not save"
+msgstr "Kon niet bewaren"
+
+msgid "Could not save the new place in the note."
+msgstr "De nieuwe plek kon niet in de notitie worden bewaard."
+
+msgid "Delete"
+msgstr "Verwijderen"
+
+#, c-format
+msgid "Delete %s…"
+msgstr "%s verwijderen…"
+
+msgid "Delete note"
+msgstr "Notitie verwijderen"
+
+#, c-format
+msgid ""
+"Delete note \"%s\"?\n"
+"\n"
+"The file goes to the folder \"Verwijderd\" in the Legend folder; you can get "
+"it back from there."
+msgstr ""
+"Notitie \"%s\" verwijderen?\n"
+"\n"
+"Het bestand gaat naar de map \"Verwijderd\" in de Legend-map; daar kun je het "
+"terughalen."
+
+msgid "Delete this note (into the folder Verwijderd)"
+msgstr "Deze notitie verwijderen (naar de map Verwijderd)"
+
+msgid "Discard the tapped rhythm and start again"
+msgstr "Het getikte ritme weggooien en opnieuw beginnen"
+
+msgid "Distance and bearing from the boat"
+msgstr "Afstand en peiling vanaf de boot"
+
+msgid "Done"
+msgstr "Klaar"
+
+msgid "Edit note"
+msgstr "Notitie bewerken"
+
+msgid "Edit this note"
+msgstr "Deze notitie bewerken"
+
+msgid "Empty Markdown file."
+msgstr "Leeg Markdown-bestand."
+
+msgid "Enter a length from 0.5 to 50 nautical miles, for example 3 or 12.5."
+msgstr "Vul een lengte in van 0,5 tot 50 zeemijl, bijvoorbeeld 3 of 12,5."
+
+msgid "Enter a radius in nautical miles, for example 0.5."
+msgstr "Vul een straal in zeemijl in, bijvoorbeeld 0,5."
+
+msgid "Explains what is on the chart, keeps a lookout and shows notes"
+msgstr "Legt uit wat er op de kaart staat, houdt de uitkijk en toont notities"
+
+msgid "Fold all"
+msgstr "Alles inklappen"
+
+msgid "Fold group"
+msgstr "Groep inklappen"
+
+msgid "Give this note another name"
+msgstr "Deze notitie een andere naam geven"
+
+msgid "Grey"
+msgstr "Grijs"
+
+#, c-format
+msgid "Heading %d"
+msgstr "Kop %d"
+
+msgid "Heading down"
+msgstr "Kopje omlaag"
+
+msgid "Heading level: heading 1 to 6, or plain text"
+msgstr "Kopniveau: kop 1 tot en met 6, of gewone tekst"
+
+msgid "Heading up"
+msgstr "Kopje omhoog"
+
+msgid "Highlight the VHF area on the chart"
+msgstr "Het marifoongebied op de kaart laten oplichten"
+
+msgid "Hold down while the light is on (or the space bar)"
+msgstr "Ingedrukt houden zolang het licht brandt (of de spatiebalk)"
+
+msgid ""
+"Hold the pad or the space bar while the light shines and let go while it is "
+"dark, for two or three periods."
+msgstr ""
+"Houd het vlak of de spatiebalk ingedrukt zolang het licht brandt en laat los "
+"als het donker is, twee of drie perioden lang."
+
+msgid "Identify a light"
+msgstr "Licht herkennen"
+
+msgid "Image"
+msgstr "Afbeelding"
+
+msgid "Images"
+msgstr "Afbeeldingen"
+
+msgid "In view: "
+msgstr "In beeld: "
+
+msgid "Italic (Cmd+I)"
+msgstr "Cursief (Cmd+I)"
+
+msgid "Legend"
+msgstr "Legenda"
+
+msgid "Length of the lookout beam in nautical miles (0.5 to 50):"
+msgstr "Lengte van de uitkijkbundel in zeemijlen (0,5 tot 50):"
+
+msgid "Light characteristics"
+msgstr "Lichtkarakters"
+
+msgid "Lights"
+msgstr "Lichten"
+
+msgid "Link to the centre of the chart in the text"
+msgstr "Link naar het midden van de kaart in de tekst"
+
+msgid "Link to this place in the text"
+msgstr "Link naar deze plek in de tekst"
+
+msgid "Loading waypoints"
+msgstr "Waypoints worden geladen"
+
+msgid "Lookout"
+msgstr "Uitkijk"
+
+msgid "Lookout beam on the chart"
+msgstr "Uitkijkbundel op de kaart"
+
+msgid "Lookout beam: colour"
+msgstr "Uitkijkbundel: kleur"
+
+msgid "Lookout beam: length"
+msgstr "Uitkijkbundel: lengte"
+
+msgid "Lookout beam: width"
+msgstr "Uitkijkbundel: breedte"
+
+msgid "Make a link of the selected text"
+msgstr "Van de geselecteerde tekst een link maken"
+
+msgid "Make all lights in view with this characteristic shine, in their rhythm"
+msgstr "Alle lichten met dit karakter in beeld laten branden, in hun ritme"
+
+msgid "Make all lights shine"
+msgstr "Alle lichten laten branden"
+
+msgid "Make this light shine on the chart"
+msgstr "Dit licht op de kaart laten branden"
+
+msgid "Medium (30°)"
+msgstr "Middel (30°)"
+
+msgid "Move note"
+msgstr "Notitie verplaatsen"
+
+msgid "Narrow (15°)"
+msgstr "Smal (15°)"
+
+msgid "New VHF area"
+msgstr "Nieuw marifoongebied"
+
+msgid "New note"
+msgstr "Nieuwe notitie"
+
+msgid "New note at the boat"
+msgstr "Nieuwe notitie bij de boot"
+
+msgid "New note here"
+msgstr "Nieuwe notitie hier"
+
+msgid "New title of the note:"
+msgstr "Nieuwe titel van de notitie:"
+
+msgid "Next  ›"
+msgstr "Volgende  ›"
+
+msgid "Night preview"
+msgstr "Nachtvoorbeeld"
+
+msgid "No GPS position has come in during the last minute."
+msgstr "Er is de laatste minuut geen GPS-positie binnengekomen."
+
+msgid "No VHF area from VHFinfo Nederland applies here."
+msgstr "Hier geldt geen marifoongebied uit VHFinfo Nederland."
+
+msgid "No VHF areas loaded (layer VHFinfo Nederland)."
+msgstr "Geen marifoongebieden geladen (laag VHFinfo Nederland)."
+
+msgid "No chart for part of the beam"
+msgstr "Geen kaart voor een deel van de bundel"
+
+msgid "No legends or notes found."
+msgstr "Geen legenda's of notities gevonden."
+
+msgid "No light in view fits this rhythm."
+msgstr "Geen licht in beeld past bij dit ritme."
+
+msgid "No lights in view to compare with."
+msgstr "Geen lichten in beeld om mee te vergelijken."
+
+msgid "No longer pin the note to the chart"
+msgstr "De notitie niet meer op de kaart vastpinnen"
+
+msgid "No position of the boat"
+msgstr "Geen positie van de boot"
+
+msgid "No symbols in view match &lsquo;"
+msgstr "Geen symbolen in beeld die passen bij &lsquo;"
+
+msgid "No visible waypoints in this chart view."
+msgstr "Geen zichtbare waypoints in dit kaartbeeld."
+
+msgid "Not drawn at this scale"
+msgstr "Op deze schaal niet getekend"
+
+msgid "Not saved yet…"
+msgstr "Nog niet bewaard…"
+
+msgid "Note"
+msgstr "Notitie"
+
+msgid "Note "
+msgstr "Notitie "
+
+msgid "Note moved"
+msgstr "Notitie verplaatst"
+
+msgid "Note nearby"
+msgstr "Notitie in de buurt"
+
+msgid "Note: "
+msgstr "Notitie: "
+
+msgid "Notes"
+msgstr "Notities"
+
+msgid "Notice on entering a VHF area"
+msgstr "Melding bij nieuw marifoongebied"
+
+msgid "Notice when near a note"
+msgstr "Melding bij notitie in de buurt"
+
+msgid "Numbered list on or off"
+msgstr "Genummerde lijst aan of uit"
+
+#, c-format
+msgid "Open %s"
+msgstr "%s openen"
+
+msgid "Open the note"
+msgstr "De notitie openen"
+
+msgid "Orange (searchlight)"
+msgstr "Oranje (zoeklicht)"
+
+msgid "Other"
+msgstr "Overig"
+
+msgid "Other…"
+msgstr "Anders…"
+
+msgid "Pin here on the chart"
+msgstr "Hier vastpinnen op de kaart"
+
+msgid "Pin note to the boat's position"
+msgstr "Notitie vastpinnen op de positie van de boot"
+
+msgid "Pin note to the centre of the chart"
+msgstr "Notitie vastpinnen op het midden van de kaart"
+
+msgid "Pin to the boat's position"
+msgstr "Vastpinnen op de positie van de boot"
+
+msgid "Pinned at "
+msgstr "Vastgepind op "
+
+msgid "Plain text"
+msgstr "Gewone tekst"
+
+msgid "Point out all instances in view at once"
+msgstr "Alle exemplaren in beeld tegelijk aanwijzen"
+
+msgid "Point out on the chart"
+msgstr "Op de kaart aanwijzen"
+
+msgid "Press = light on"
+msgstr "Indrukken = licht aan"
+
+#, c-format
+msgid "Put %s back in its old place"
+msgstr "%s terugzetten op de oude plek"
+
+msgid "Put a PNG or Markdown file in:"
+msgstr "Plaats een PNG- of Markdown-bestand in:"
+
+msgid "Put back"
+msgstr "Terugzetten"
+
+msgid "Radius"
+msgstr "Straal"
+
+msgid ""
+"Radius in nautical miles: within this distance you get a notice of this note "
+"under way."
+msgstr ""
+"Straal in zeemijl: binnen deze afstand krijg je onderweg een melding van deze "
+"notitie."
+
+msgid "Reading charts"
+msgstr "Kaarten worden gelezen"
+
+msgid "Refresh: read charts and layers again"
+msgstr "Ververs: kaarten en lagen opnieuw inlezen"
+
+msgid "Rename note"
+msgstr "Notitie hernoemen"
+
+msgid "Save"
+msgstr "Opslaan"
+
+msgid "Save and finish editing (Esc)"
+msgstr "Opslaan en klaar met bewerken (Esc)"
+
+msgid "Saved"
+msgstr "Bewaard"
+
+msgid "Saved at "
+msgstr "Bewaard om "
+
+msgid "Search the legend"
+msgstr "Zoek in de legenda"
+
+msgid "Settings: what the legend shows"
+msgstr "Instellingen: wat de legenda toont"
+
+msgid "Show in legend"
+msgstr "Toon in legenda"
+
+msgid "Show or hide the legend"
+msgstr "Toon of verberg de legenda"
+
+msgid "Show the next legend or note"
+msgstr "Toon de volgende legenda of notitie"
+
+msgid "Show the previous legend or note"
+msgstr "Toon de vorige legenda of notitie"
+
+msgid ""
+"Shows only the symbols whose name, heading or icon name contains all typed "
+"words (Cmd+F)"
+msgstr ""
+"Toont alleen de symbolen waarvan de naam, het kopje of de icoonnaam alle "
+"getypte woorden bevat (Cmd+F)"
+
+msgid ""
+"Tap or click &#9650; or &#9660; to move a heading. The order of the headings "
+"is saved in symbolen.txt, that of the blocks at the top in the settings. "
+"'Other' is always at the bottom."
+msgstr ""
+"Tik of klik op &#9650; of &#9660; om een kopje te verplaatsen. De volgorde "
+"van de kopjes wordt in symbolen.txt bewaard, die van de blokken bovenaan in "
+"de instellingen. 'Overig' staat altijd onderaan."
+
+msgid ""
+"The chart position is not known yet. Move the chart a little and then click "
+"Refresh."
+msgstr ""
+"De kaartpositie is nog niet bekend. Beweeg de kaart een klein stukje en klik "
+"daarna op Ververs."
+
+msgid ""
+"The nearest light with this characteristic shines on the chart in its rhythm; "
+"another click goes to the next one. Period and groups come from the chart; "
+"the length of a flash or eclipse is a common value"
+msgstr ""
+"Het dichtstbijzijnde licht met dit karakter gaat op de kaart branden in zijn "
+"ritme; nog een klik gaat naar het volgende. Periode en groepen komen uit de "
+"kaart, de duur van een schittering of verduistering is een gangbare waarde"
+
+msgid ""
+"The search looks in the names in the list, the headings and the icon names, "
+"only of what is in view now. Pan the chart, zoom out, or clear the search "
+"field."
+msgstr ""
+"Er wordt gezocht in de namen in de lijst, de kopjes en de icoonnamen, alleen "
+"van wat nu in beeld is. Verschuif de kaart, zoom uit, of maak het zoekveld "
+"leeg."
+
+msgid "There is already a note named \""
+msgstr "Er is al een notitie met de naam \""
+
+msgid "This note is pinned to the chart:"
+msgstr "Deze notitie is vastgepind op de kaart:"
+
+msgid "Title of the new note:"
+msgstr "Titel van de nieuwe notitie:"
+
+msgid "To the nearest instance; another click goes to the next one"
+msgstr ""
+"Naar het dichtstbijzijnde exemplaar; nog een klik gaat naar het volgende"
+
+msgid "Unfold all"
+msgstr "Alles uitklappen"
+
+msgid "Unfold group"
+msgstr "Groep uitklappen"
+
+msgid "Unpin"
+msgstr "Losmaken"
+
+msgid "VHF"
+msgstr "Marifoon"
+
+msgid "VHF area"
+msgstr "Marifoongebied"
+
+msgid "VHF area "
+msgstr "Marifoongebied "
+
+msgid "VHF area stays highlighted"
+msgstr "Marifoongebied blijft oplichten"
+
+msgid "VHF areas"
+msgstr "Marifoongebieden"
+
+msgid "VHF channel at this location"
+msgstr "Marifoonkanaal op deze locatie"
+
+msgid "Which VHF channel here?"
+msgstr "Welk marifoonkanaal hier?"
+
+msgid "Wide (45°)"
+msgstr "Breed (45°)"
+
+msgid "Within what distance you get a notice under way"
+msgstr "Binnen welke afstand je onderweg een melding krijgt"
+
+msgid ""
+"another click goes to the next one. Click &#9678; to point out all instances "
+"in view at once. The list follows by itself as you pan or zoom the chart."
+msgstr ""
+"nog een klik gaat naar het volgende. Klik op &#9678; om alle exemplaren in "
+"beeld tegelijk aan te wijzen. De lijst past zich vanzelf aan als je de kaart "
+"verschuift of zoomt."
+
+msgid "any colour"
+msgstr "elke"
+
+msgid "at the top of the list"
+msgstr "bovenaan de lijst"
+
+msgid "changed"
+msgstr "gewijzigd"
+
+msgid "channel "
+msgstr "kanaal "
+
+msgid "dead ahead"
+msgstr "recht vooruit"
+
+msgid "fair fit"
+msgstr "past redelijk"
+
+msgid "gone"
+msgstr "weg"
+
+msgid "good fit"
+msgstr "past goed"
+
+msgid "green"
+msgstr "groen"
+
+#, c-format
+msgid "in %d min"
+msgstr "over %d min"
+
+msgid "looks like "
+msgstr "lijkt op "
+
+msgid "new"
+msgstr "nieuw"
+
+msgid "no VHFinfo area here"
+msgstr "geen VHFinfo-gebied hier"
+
+msgid "no taps yet"
+msgstr "nog niet getikt"
+
+msgid "nothing in the beam"
+msgstr "niets in de bundel"
+
+msgid "nothing in view"
+msgstr "niets in beeld"
+
+msgid "now"
+msgstr "nu"
+
+msgid "port"
+msgstr "bakboord"
+
+msgid "radius"
+msgstr "straal"
+
+msgid "red"
+msgstr "rood"
+
+msgid "right astern"
+msgstr "recht achter"
+
+msgid "starboard"
+msgstr "stuurboord"
+
+msgid "tap along with the light"
+msgstr "tik mee met het licht"
+
+msgid "up to "
+msgstr "tot "
+
+msgid "weak fit"
+msgstr "past matig"
+
+msgid "white"
+msgstr "wit"
+
+msgid "width "
+msgstr "breedte "
+
+msgid "yellow"
+msgstr "geel"
+
+msgid "” is in a new place."
+msgstr "” staat op een nieuwe plek."
+
+msgid "‹  Previous"
+msgstr "‹  Vorige"

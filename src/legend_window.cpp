@@ -359,8 +359,8 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
         }
         enum { kPlain = 1, kBoat };
         wxMenu menu;
-        menu.Append(kPlain, Tr("Nieuwe notitie", "New note"));
-        menu.Append(kBoat, Tr("Nieuwe notitie bij de boot", "New note at the boat"));
+        menu.Append(kPlain, _("New note"));
+        menu.Append(kBoat, _("New note at the boat"));
         const int choice = m_new_button->GetPopupMenuSelectionFromUser(menu);
         if (choice == kPlain)
             NewNote();
@@ -397,9 +397,9 @@ wxWindow *legend_pi::CreateFormatBar(wxPanel *panel)
             return;
         const int current = m_editor->HeadingLevel();
         wxMenu menu;
-        menu.AppendRadioItem(100, Tr("Gewone tekst", "Plain text"))->Check(current == 0);
+        menu.AppendRadioItem(100, _("Plain text"))->Check(current == 0);
         for (int level = 1; level <= 6; ++level)
-            menu.AppendRadioItem(100 + level, wxString::Format(Tr("Kop %d", "Heading %d"), level))
+            menu.AppendRadioItem(100 + level, wxString::Format(_("Heading %d"), level))
                 ->Check(current == level);
         const int choice = headingButton->GetPopupMenuSelectionFromUser(menu);
         if (choice >= 100 && choice <= 106)
@@ -420,14 +420,11 @@ wxWindow *legend_pi::CreateFormatBar(wxPanel *panel)
             return;
         enum { kLink = 1, kBelongs, kBoatLink, kBoatPin };
         wxMenu menu;
-        menu.Append(kLink, Tr("Link naar het midden van de kaart in de tekst",
-                              "Link to the centre of the chart in the text"));
-        menu.Append(kBelongs, Tr("Notitie vastpinnen op het midden van de kaart",
-                                 "Pin note to the centre of the chart"));
+        menu.Append(kLink, _("Link to the centre of the chart in the text"));
+        menu.Append(kBelongs, _("Pin note to the centre of the chart"));
         menu.AppendSeparator();
-        menu.Append(kBoatLink, Tr("Positie van de boot in de tekst", "Boat's position in the text"));
-        menu.Append(kBoatPin, Tr("Notitie vastpinnen op de positie van de boot",
-                                 "Pin note to the boat's position"));
+        menu.Append(kBoatLink, _("Boat's position in the text"));
+        menu.Append(kBoatPin, _("Pin note to the boat's position"));
         const bool boat = BoatPositionKnown();
         menu.Enable(kBoatLink, boat);
         menu.Enable(kBoatPin, boat);
@@ -896,38 +893,30 @@ wxString legend_pi::LegendTip(const Hit &hit) const
     wxString tip;
     switch (hit.kind) {
     case HitKind::All:
-        tip = Tr("Alle exemplaren in beeld tegelijk aanwijzen", "Point out all instances in view at once");
+        tip = _("Point out all instances in view at once");
         if (hit.index >= 0 &&
             static_cast<size_t>(hit.index) < m_dynamic_groups.size() &&
             m_dynamic_groups[hit.index].lightCharacter)
-            tip = Tr("Alle lichten met dit karakter in beeld laten branden, in hun ritme",
-                     "Make all lights in view with this characteristic shine, in their rhythm");
+            tip = _("Make all lights in view with this characteristic shine, in their rhythm");
         break;
     case HitKind::Row:
-        tip = Tr("Naar het dichtstbijzijnde exemplaar; nog een klik gaat naar het volgende",
-                 "To the nearest instance; another click goes to the next one");
+        tip = _("To the nearest instance; another click goes to the next one");
         // The symbol name is what symbolen.txt needs for a chart
         // symbol; the list itself shows only the description.
         if (hit.index >= 0 &&
             static_cast<size_t>(hit.index) < m_dynamic_groups.size()) {
             const DynamicGroup &group = m_dynamic_groups[hit.index];
             if (group.hiddenAtScale) {
-                tip = Tr("Op deze schaal niet getekend", "Not drawn at this scale");
+                tip = _("Not drawn at this scale");
                 if (group.visibleFrom > 0)
-                    tip << Tr(", zichtbaar vanaf ", ", visible from ")
+                    tip << _(", visible from ")
                         << FormatScaleShort(group.visibleFrom, m_dutch_names);
-                tip << Tr("; een klik zoomt in tot het dichtstbijzijnde exemplaar zichtbaar is",
-                          "; a click zooms in until the nearest instance is visible");
+                tip << _("; a click zooms in until the nearest instance is visible");
             }
             if (group.chartSymbol)
-                tip = Tr("Kaartsymbool ", "Chart symbol ") + group.symbol + ". " + tip;
+                tip = _("Chart symbol ") + group.symbol + ". " + tip;
             if (group.lightCharacter)
-                tip = Tr("Het dichtstbijzijnde licht met dit karakter gaat op "
-                         "de kaart branden in zijn ritme; nog een klik gaat "
-                         "naar het volgende. Periode en groepen komen uit de "
-                         "kaart, de duur van een schittering of verduistering "
-                         "is een gangbare waarde",
-                         "The nearest light with this characteristic shines on "
+                tip = _("The nearest light with this characteristic shines on "
                          "the chart in its rhythm; another click goes to the "
                          "next one. Period and groups come from the chart; "
                          "the length of a flash or eclipse is a common value");
@@ -939,47 +928,42 @@ wxString legend_pi::LegendTip(const Hit &hit) const
                           m_rendered_headings.size() &&
                       m_collapsed_sections.count(
                           m_rendered_headings[hit.index]) > 0
-                  ? Tr("Groep uitklappen", "Unfold group")
-                  : Tr("Groep inklappen", "Fold group");
+                  ? _("Unfold group")
+                  : _("Fold group");
         break;
     case HitKind::MoveUp:
     case HitKind::MoveBlockUp:
-        tip = Tr("Kopje omhoog", "Heading up");
+        tip = _("Heading up");
         break;
     case HitKind::MoveDown:
     case HitKind::MoveBlockDown:
-        tip = Tr("Kopje omlaag", "Heading down");
+        tip = _("Heading down");
         break;
     case HitKind::Ahead:
-        tip = Tr("Op de kaart aanwijzen", "Point out on the chart");
+        tip = _("Point out on the chart");
         break;
     case HitKind::AheadVhf:
     case HitKind::VhfArea:
-        tip = Tr("Het marifoongebied op de kaart laten oplichten", "Highlight the VHF area on the chart");
+        tip = _("Highlight the VHF area on the chart");
         break;
     case HitKind::AheadNote:
     case HitKind::Note:
-        tip = Tr("De notitie openen", "Open the note");
+        tip = _("Open the note");
         break;
     case HitKind::Tap:
-        tip = Tr("Ingedrukt houden zolang het licht brandt (of de spatiebalk)",
-                 "Hold down while the light is on (or the space bar)");
+        tip = _("Hold down while the light is on (or the space bar)");
         break;
     case HitKind::Match:
-        tip = Tr("Dit licht op de kaart laten branden", "Make this light shine on the chart");
+        tip = _("Make this light shine on the chart");
         break;
     case HitKind::Button:
-        tip = hit.index == 0   ? Tr("Het getikte ritme weggooien en opnieuw beginnen",
-                                    "Discard the tapped rhythm and start again")
-              : hit.index == 1 ? Tr("Licht herkennen sluiten; het menu opent het weer",
-                                    "Close Identify a light; the menu opens it again")
-                               : Tr("Alleen lichten van deze kleur vergelijken",
-                                    "Compare only lights of this colour");
+        tip = hit.index == 0   ? _("Discard the tapped rhythm and start again")
+              : hit.index == 1 ? _("Close Identify a light; the menu opens it again")
+                               : _("Compare only lights of this colour");
         break;
     case HitKind::Tip:
-        tip = hit.index == 0 ? Tr("Instellingen: wat de legenda toont", "Settings: what the legend shows")
-                             : Tr("Ververs: kaarten en lagen opnieuw inlezen",
-                                  "Refresh: read charts and layers again");
+        tip = hit.index == 0 ? _("Settings: what the legend shows")
+                             : _("Refresh: read charts and layers again");
         break;
     case HitKind::None:
         break;
@@ -1003,7 +987,7 @@ void legend_pi::CreateNoteEditor()
             return;
         m_note_dirty = true;
         if (m_save_status)
-            m_save_status->SetLabel(Tr("Nog niet bewaard\u2026", "Not saved yet\u2026"));
+            m_save_status->SetLabel(_("Not saved yet\u2026"));
         m_save_timer.StartOnce(1500);
     });
 }
@@ -1042,38 +1026,31 @@ wxWindow *legend_pi::CreateEditFooter(wxPanel *panel)
 wxString legend_pi::ButtonTip(const wxString &icon) const
 {
     if (icon == "edit")
-        return Tr("Deze notitie bewerken", "Edit this note");
+        return _("Edit this note");
     if (icon == "rename")
-        return Tr("Deze notitie een andere naam geven", "Give this note another name");
+        return _("Give this note another name");
     if (icon == "trash")
-        return Tr("Deze notitie verwijderen (naar de map Verwijderd)",
-                  "Delete this note (into the folder Verwijderd)");
+        return _("Delete this note (into the folder Verwijderd)");
     if (icon == "new")
-        return Tr("Nieuwe notitie", "New note");
+        return _("New note");
     if (icon == "heading")
-        return Tr("Kopniveau: kop 1 tot en met 6, of gewone tekst",
-                  "Heading level: heading 1 to 6, or plain text");
+        return _("Heading level: heading 1 to 6, or plain text");
     if (icon == "bold")
-        return Tr("Vet (Cmd+B)", "Bold (Cmd+B)");
+        return _("Bold (Cmd+B)");
     if (icon == "italic")
-        return Tr("Cursief (Cmd+I)", "Italic (Cmd+I)");
+        return _("Italic (Cmd+I)");
     if (icon == "bullets")
-        return Tr("Opsomming met bolletjes aan of uit", "Bulleted list on or off");
+        return _("Bulleted list on or off");
     if (icon == "numbers")
-        return Tr("Genummerde lijst aan of uit", "Numbered list on or off");
+        return _("Numbered list on or off");
     if (icon == "tasks")
-        return Tr("Afvinklijst aan of uit; klik op een hokje om af te vinken",
-                  "Checklist on or off; click a box to tick it");
+        return _("Checklist on or off; click a box to tick it");
     if (icon == "link")
-        return Tr("Van de geselecteerde tekst een link maken", "Make a link of the selected text");
+        return _("Make a link of the selected text");
     if (icon == "image")
-        return Tr("Een afbeelding uit de Legend-map of daarbuiten",
-                  "An image from the Legend folder or elsewhere");
+        return _("An image from the Legend folder or elsewhere");
     if (icon == "place")
-        return Tr("Een plek op de kaart: als link in de tekst, of de hele notitie vastpinnen "
-                  "op de kaart. Voor een andere plek dan het midden: klik met rechts op de "
-                  "kaart",
-                  "A place on the chart: as a link in the text, or pin the whole note to "
+        return _("A place on the chart: as a link in the text, or pin the whole note to "
                   "the chart. For a place other than the centre: right-click the chart");
     return wxEmptyString;
 }
@@ -1082,31 +1059,24 @@ void legend_pi::ApplyWindowLanguage()
 {
     if (!m_legend_window)
         return;
-    m_legend_window->SetTitle(Tr("Legenda", "Legend"));
+    m_legend_window->SetTitle(_("Legend"));
     for (const auto &button : m_format_icons)
         button.first->SetToolTip(ButtonTip(button.second));
-    m_save_button->SetLabel(Tr("Opslaan", "Save"));
-    m_save_button->SetToolTip(Tr("Opslaan en klaar met bewerken (Esc)",
-                                 "Save and finish editing (Esc)"));
-    m_radius_button->SetLabel(Tr("Straal", "Radius"));
-    m_radius_button->SetToolTip(Tr("Binnen welke afstand je onderweg een melding krijgt",
-                                   "Within what distance you get a notice under way"));
-    m_loose_button->SetLabel(Tr("Losmaken", "Unpin"));
-    m_loose_button->SetToolTip(Tr("De notitie niet meer op de kaart vastpinnen",
-                                  "No longer pin the note to the chart"));
-    m_search->SetDescriptiveText(Tr("Zoek in de legenda", "Search the legend"));
-    m_search->SetToolTip(Tr("Toont alleen de symbolen waarvan de naam, het kopje of de "
-                            "icoonnaam alle getypte woorden bevat (Cmd+F)",
-                            "Shows only the symbols whose name, heading or icon name "
+    m_save_button->SetLabel(_("Save"));
+    m_save_button->SetToolTip(_("Save and finish editing (Esc)"));
+    m_radius_button->SetLabel(_("Radius"));
+    m_radius_button->SetToolTip(_("Within what distance you get a notice under way"));
+    m_loose_button->SetLabel(_("Unpin"));
+    m_loose_button->SetToolTip(_("No longer pin the note to the chart"));
+    m_search->SetDescriptiveText(_("Search the legend"));
+    m_search->SetToolTip(_("Shows only the symbols whose name, heading or icon name "
                             "contains all typed words (Cmd+F)"));
-    m_previous_button->SetLabel(Tr("\u2039  Vorige", "\u2039  Previous"));
-    m_next_button->SetLabel(Tr("Volgende  \u203a", "Next  \u203a"));
-    m_previous_button->SetToolTip(Tr("Toon de vorige legenda of notitie",
-                                     "Show the previous legend or note"));
-    m_next_button->SetToolTip(Tr("Toon de volgende legenda of notitie",
-                                 "Show the next legend or note"));
+    m_previous_button->SetLabel(_("\u2039  Previous"));
+    m_next_button->SetLabel(_("Next  \u203a"));
+    m_previous_button->SetToolTip(_("Show the previous legend or note"));
+    m_next_button->SetToolTip(_("Show the next legend or note"));
     if (!m_editing)
-        m_save_status->SetLabel(Tr("Bewaard", "Saved"));
+        m_save_status->SetLabel(_("Saved"));
     if (wxWindow *panel = m_save_button->GetParent())
         panel->Layout();
 }
@@ -1323,7 +1293,7 @@ void legend_pi::ToggleLegendWindow()
         // can take a second, and a window that does not come looks broken.
         if (m_legend_index == 0 && m_markdown_view && m_content_book) {
             m_content_book->SetSelection(1);
-            RenderProgressPage(Tr("De kaartlegenda wordt opgebouwd", "Building the chart legend"), 0, 0);
+            RenderProgressPage(_("Building the chart legend"), 0, 0);
         }
         m_legend_window->Show();
         m_legend_window->Raise();
@@ -1369,10 +1339,10 @@ wxString legend_pi::SectionTitle(int section) const
     if (section >= 0 && section < static_cast<int>(m_symbol_meanings.Sections().size()))
         return PickLanguage(m_symbol_meanings.Sections()[static_cast<size_t>(section)]);
     if (section == -2)
-        return m_dutch_names ? "Kaartsymbolen" : "Chart symbols";
+        return _("Chart symbols");
     if (section == -3)
-        return m_dutch_names ? "Lichtkarakters" : "Light characteristics";
-    return m_dutch_names ? "Overig" : "Other";
+        return _("Light characteristics");
+    return _("Other");
 }
 
 wxString legend_pi::SectionName(int section) const
@@ -1504,9 +1474,8 @@ void legend_pi::AskAheadMiles()
     text.Replace(" NM", "");
     for (;;) {
         wxTextEntryDialog dialog(m_legend_window,
-                                 Tr("Lengte van de uitkijkbundel in zeemijlen (0,5 tot 50):",
-                                    "Length of the lookout beam in nautical miles (0.5 to 50):"),
-                                 Tr("Uitkijkbundel: lengte", "Lookout beam: length"), text);
+                                 _("Length of the lookout beam in nautical miles (0.5 to 50):"),
+                                 _("Lookout beam: length"), text);
         if (dialog.ShowModal() != wxID_OK)
             return;
         text = dialog.GetValue();
@@ -1523,16 +1492,10 @@ void legend_pi::AskAheadMiles()
                 return;
             }
         }
-        wxMessageBox(Tr("Vul een lengte in van 0,5 tot 50 zeemijl, bijvoorbeeld 3 of 12,5.",
-                        "Enter a length from 0.5 to 50 nautical miles, for example 3 or 12.5."),
-                     Tr("Uitkijkbundel: lengte", "Lookout beam: length"), wxOK | wxICON_INFORMATION,
+        wxMessageBox(_("Enter a length from 0.5 to 50 nautical miles, for example 3 or 12.5."),
+                     _("Lookout beam: length"), wxOK | wxICON_INFORMATION,
                      m_legend_window);
     }
-}
-
-bool legend_pi::OpenCpnIsDutch()
-{
-    return GetLocaleCanonicalName().StartsWith("nl");
 }
 
 // OpenCPN can change its language while running. The plugin follows when
@@ -1540,10 +1503,11 @@ bool legend_pi::OpenCpnIsDutch()
 // window, the chart's right-click menu and the page.
 void legend_pi::FollowOpenCpnLanguage()
 {
-    const bool dutch = OpenCpnIsDutch();
-    if (dutch == m_dutch_names)
+    const wxString locale = GetLocaleCanonicalName();
+    if (locale == m_locale)
         return;
-    m_dutch_names = dutch;
+    m_locale = locale;
+    m_dutch_names = locale.StartsWith("nl");
     ApplyWindowLanguage();
     RemoveContextMenuItems();
     AddContextMenuItems();
@@ -1577,49 +1541,44 @@ void legend_pi::ShowSettingsMenu()
     };
 
     wxMenu menu;
-    menu.AppendCheckItem(kLights, Tr("Lichten", "Lights"))->Check(m_show_lights);
-    menu.AppendCheckItem(kHidden, Tr("Ook op deze schaal verborgen tonen",
-                                     "Also show hidden at this scale"))
+    menu.AppendCheckItem(kLights, _("Lights"))->Check(m_show_lights);
+    menu.AppendCheckItem(kHidden, _("Also show hidden at this scale"))
         ->Check(m_show_hidden_at_scale);
-    menu.AppendCheckItem(kDistance, Tr("Afstand en peiling vanaf de boot",
-                                       "Distance and bearing from the boat"))
+    menu.AppendCheckItem(kDistance, _("Distance and bearing from the boat"))
         ->Check(m_show_distance);
 
     menu.AppendSeparator();
     if (m_show_lights && (m_menu_has_lights || m_all_lights.IsOn()))
-        menu.AppendCheckItem(kAllLights, Tr("Alle lichten laten branden", "Make all lights shine"))
+        menu.AppendCheckItem(kAllLights, _("Make all lights shine"))
             ->Check(m_all_lights.IsOn());
     if (m_show_lights && (m_menu_has_lights || m_night_preview))
-        menu.AppendCheckItem(kNight, Tr("Nachtvoorbeeld", "Night preview"))->Check(m_night_preview);
+        menu.AppendCheckItem(kNight, _("Night preview"))->Check(m_night_preview);
     if (m_show_lights && (m_menu_has_lights || m_identify_on))
-        menu.AppendCheckItem(kIdentify, Tr("Licht herkennen", "Identify a light"))
+        menu.AppendCheckItem(kIdentify, _("Identify a light"))
             ->Check(m_identify_on);
     EnsureVhfAreas();
     if (!m_vhf_areas.IsEmpty()) {
         menu.AppendSeparator();
-        menu.AppendCheckItem(kVhfKeep, Tr("Marifoongebied blijft oplichten",
-                                          "VHF area stays highlighted"))
+        menu.AppendCheckItem(kVhfKeep, _("VHF area stays highlighted"))
             ->Check(m_vhf_keep_lit);
-        menu.AppendCheckItem(kVhfNotice, Tr("Melding bij nieuw marifoongebied",
-                                            "Notice on entering a VHF area"))
+        menu.AppendCheckItem(kVhfNotice, _("Notice on entering a VHF area"))
             ->Check(m_vhf_notice_on);
     }
     if (!m_note_places.empty())
-        menu.AppendCheckItem(kNoteNotice, Tr("Melding bij notitie in de buurt",
-                                             "Notice when near a note"))
+        menu.AppendCheckItem(kNoteNotice, _("Notice when near a note"))
             ->Check(m_note_notice_on);
 
     menu.AppendSeparator();
-    menu.AppendCheckItem(kAheadFan, Tr("Uitkijkbundel op de kaart", "Lookout beam on the chart"))
+    menu.AppendCheckItem(kAheadFan, _("Lookout beam on the chart"))
         ->Check(m_ahead_fan_shown);
     auto *width = new wxMenu;
-    width->AppendRadioItem(kAhead15, Tr("Smal (15\u00b0)", "Narrow (15\u00b0)"))
+    width->AppendRadioItem(kAhead15, _("Narrow (15\u00b0)"))
         ->Check(m_ahead_angle == 15);
-    width->AppendRadioItem(kAhead30, Tr("Middel (30\u00b0)", "Medium (30\u00b0)"))
+    width->AppendRadioItem(kAhead30, _("Medium (30\u00b0)"))
         ->Check(m_ahead_angle == 30);
-    width->AppendRadioItem(kAhead45, Tr("Breed (45\u00b0)", "Wide (45\u00b0)"))
+    width->AppendRadioItem(kAhead45, _("Wide (45\u00b0)"))
         ->Check(m_ahead_angle == 45);
-    menu.AppendSubMenu(width, Tr("Uitkijkbundel: breedte", "Lookout beam: width"));
+    menu.AppendSubMenu(width, _("Lookout beam: width"));
     auto *ahead = new wxMenu;
     // Each length with the time it takes at the present speed.
     // A length of the user's own is ticked at "Anders…", with its length.
@@ -1634,7 +1593,7 @@ void legend_pi::ShowSettingsMenu()
         own = own && !chosen;
         ahead->AppendRadioItem(kAheadNm1 + n, label)->Check(chosen);
     }
-    wxString ownLabel = Tr("Anders\u2026", "Other\u2026");
+    wxString ownLabel = _("Other\u2026");
     if (own) {
         ownLabel << " (" << FormatMiles(m_ahead_miles, m_dutch_names);
         const wxString time = AheadTimeText(m_ahead_miles);
@@ -1643,19 +1602,19 @@ void legend_pi::ShowSettingsMenu()
         ownLabel << ")";
     }
     ahead->AppendRadioItem(kAheadOwn, ownLabel)->Check(own);
-    menu.AppendSubMenu(ahead, Tr("Uitkijkbundel: lengte", "Lookout beam: length"));
+    menu.AppendSubMenu(ahead, _("Lookout beam: length"));
     auto *colours = new wxMenu;
     const wxString colourLabels[kAheadColourCount] = {
-        Tr("Amber", "Amber"), Tr("Oranje (zoeklicht)", "Orange (searchlight)"),
-        Tr("Grijs", "Grey")};
+        _("Amber"), _("Orange (searchlight)"),
+        _("Grey")};
     for (int n = 0; n < kAheadColourCount; ++n)
         colours->AppendRadioItem(kAheadColour0 + n, colourLabels[n])->Check(m_ahead_colour == n);
-    menu.AppendSubMenu(colours, Tr("Uitkijkbundel: kleur", "Lookout beam: colour"));
+    menu.AppendSubMenu(colours, _("Lookout beam: colour"));
     if (m_menu_has_headings) {
         menu.AppendSeparator();
-        menu.Append(kFold, m_menu_any_open ? Tr("Alles inklappen", "Fold all")
-                                           : Tr("Alles uitklappen", "Unfold all"));
-        menu.Append(kReorder, Tr("Volgorde wijzigen\u2026", "Change order\u2026"));
+        menu.Append(kFold, m_menu_any_open ? _("Fold all")
+                                           : _("Unfold all"));
+        menu.Append(kReorder, _("Change order\u2026"));
     }
 
     const int selection = m_markdown_view->GetPopupMenuSelectionFromUser(menu);
@@ -1854,15 +1813,14 @@ void legend_pi::MoveTopBlock(int index, int delta)
 
 wxString legend_pi::TopBlockTitle(const wxString &key) const
 {
-    const bool nl = m_dutch_names;
     if (key == "@marifoon")
-        return nl ? "Marifoon" : "VHF";
+        return _("VHF");
     if (key == "@vooruit")
-        return nl ? "Uitkijk" : "Lookout";
+        return _("Lookout");
     if (key == "@notities")
-        return nl ? "Notities" : "Notes";
+        return _("Notes");
     if (key == "@herkennen")
-        return nl ? "Licht herkennen" : "Identify a light";
+        return _("Identify a light");
     return key;
 }
 
