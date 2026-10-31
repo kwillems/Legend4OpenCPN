@@ -365,7 +365,7 @@ het donkere grijs van overdag op de donkere kaart zou wegvallen.
 Op de bundel zie je hoe ver hij reikt:
 
 - Bij de stuurboordhoek van het eind staat de lengte met de vaartijd, zoals
-  *3 NM · ± 20 min*. Het midden, recht vooruit, blijft zo vrij.
+  *3 NM, ± 20 min*. Het midden, recht vooruit, blijft zo vrij.
 - Dunne stippellijnen dwars over de bundel markeren de zeemijlen: bij elke
   zeemijl tot en met 5 NM, bij elke 5 zeemijl tot en met 25 NM en daarboven
   bij elke 10. Zo zie je meteen of een ton voor of na een mijlgrens ligt.
