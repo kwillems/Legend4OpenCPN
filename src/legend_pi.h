@@ -224,8 +224,13 @@ private:
     void GroupIcons(const DynamicGroup &group, const wxColour &iconBackground,
                     const wxColour &muted, double iconScale, wxImage *icon, wxImage *image2);
     void RenderTitleBar(DynamicPage &page);
+    // The icons beside the folded heading of the Uitkijk: its first rows
+    // in order of arrival, as in its list, with the number of the others.
+    wxString AheadStrip(const DynamicPage &page,
+                        const std::map<size_t, std::pair<wxImage, wxImage>> &icons);
     bool RenderExtraHeading(DynamicPage &page, const wxString &key,
-                            const wxString &title, const wxString &summary);
+                            const wxString &title, const wxString &summary,
+                            const wxString &strip = wxString());
     void RenderVhfBlock(DynamicPage &page);
     void RenderAheadBlock(DynamicPage &page);
     void RenderNotesBlock(DynamicPage &page);

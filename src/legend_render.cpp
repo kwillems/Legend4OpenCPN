@@ -717,16 +717,18 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
 }
 
 // A heading of a block at the top of the list (Marifoon, Uitkijk, ...),
-// with a summary after it; true when it is open.
+// with a summary after it and, on the right, a strip of icons as beside a
+// folded heading of the legend; true when it is open.
 bool legend_pi::RenderExtraHeading(DynamicPage &page, const wxString &key,
-                                   const wxString &title, const wxString &summary)
+                                   const wxString &title, const wxString &summary,
+                                   const wxString &strip)
 {
     const bool folded = m_collapsed_sections.count(key) > 0;
     const wxString sectionId = wxString::Format(
         "%s%zu", kLegendSectionIdPrefix, m_rendered_headings.size());
     m_rendered_headings.push_back(key);
     page.html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
-              << "<tr><td height=\"6\"></td></tr>"
+              << "<tr><td colspan=\"2\" height=\"6\"></td></tr>"
               << "<tr><td id=\"" << sectionId << "\" valign=\"middle\">"
               << "<font size=\"+3\">" << (folded ? "&#9654;" : "&#9660;")
               << "</font>&nbsp;<b>" << title << "</b>";
@@ -734,10 +736,15 @@ bool legend_pi::RenderExtraHeading(DynamicPage &page, const wxString &key,
         page.html << " <font color=\"" << HtmlColour(page.palette.muted) << "\">&middot; "
                   << summary << "</font>";
     }
-    page.html << "</td></tr>"
-              << "<tr><td height=\"4\"></td></tr>"
-              << "<tr><td bgcolor=\"" << HtmlColour(page.palette.rule)
-              << "\" height=\"1\"></td></tr></table>";
+    page.html << "</td>";
+    if (!strip.IsEmpty())
+        page.html << "<td id=\"" << sectionId << "\" align=\"right\" valign=\"middle\">"
+                  << strip << "</td>";
+    const int columns = strip.IsEmpty() ? 1 : 2;
+    page.html << "</tr>"
+              << "<tr><td colspan=\"" << columns << "\" height=\"4\"></td></tr>"
+              << "<tr><td colspan=\"" << columns << "\" bgcolor=\""
+              << HtmlColour(page.palette.rule) << "\" height=\"1\"></td></tr></table>";
     return !folded;
 }
 
@@ -882,14 +889,6 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     else if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
         summary << " &middot; " << (nl ? "niets in de bundel" : "nothing in the beam");
 
-    // The key "@vooruit" is the block's name before; the folded state is
-    // kept under it.
-    if (!RenderExtraHeading(page, "@vooruit", nl ? "Uitkijk" : "Lookout", summary))
-        return;
-
-    // The icons as large as in the rows of the legend: each its own size,
-    // in a square as large as the largest of them, on a tile when the
-    // rows have one.
     // The icons of the Uitkijk's own groups: it lists more than the rows
     // in view.
     const wxColour iconBackground =
@@ -902,6 +901,21 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         GroupIcons(m_ahead_groups[item.group], iconBackground, muted, m_rendered_icon_scale,
                    &pair.first, &pair.second);
     }
+
+    // Folded, the heading shows what comes first, as a folded heading of
+    // the legend shows its symbols: the icons of the first rows in order
+    // of arrival, with the number of the others.
+    // The key "@vooruit" is the block's name before; the folded state is
+    // kept under it.
+    wxString strip;
+    if (m_collapsed_sections.count("@vooruit") > 0)
+        strip = AheadStrip(page, icons);
+    if (!RenderExtraHeading(page, "@vooruit", nl ? "Uitkijk" : "Lookout", summary, strip))
+        return;
+
+    // The icons as large as in the rows of the legend: each its own size,
+    // in a square as large as the largest of them, on a tile when the
+    // rows have one.
     int box = page.iconBox;
     for (const AheadItem &item : m_ahead) {
         const wxImage &icon = icons[item.group].first;
@@ -1054,6 +1068,77 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
             noteRow(nextNote++);
     }
     html << "</table>";
+}
+
+wxString legend_pi::AheadStrip(const DynamicPage &page,
+                               const std::map<size_t, std::pair<wxImage, wxImage>> &icons)
+{
+    const LegendPalette &palette = page.palette;
+    const wxColour &background = palette.background;
+    const wxColour *tile = palette.iconTiles ? &palette.tile : nullptr;
+
+    // The rows in the order of the list: by time, a VHF area before a note
+    // before an object at the same minute.
+    struct Entry
+    {
+        double minutes;
+        int kind; // 0 VHF area, 1 note, 2 object
+        size_t index;
+    };
+    std::vector<Entry> entries;
+    for (size_t v = 0; v < m_ahead_vhf.size(); ++v)
+        entries.push_back({m_ahead_vhf[v].minutes, 0, v});
+    for (size_t n = 0; n < m_ahead_notes.size(); ++n)
+        entries.push_back({m_ahead_notes[n].minutes, 1, n});
+    for (size_t k = 0; k < m_ahead.size(); ++k)
+        entries.push_back({m_ahead[k].minutes, 2, k});
+    std::stable_sort(entries.begin(), entries.end(), [](const Entry &a, const Entry &b) {
+        return a.minutes < b.minutes || (a.minutes == b.minutes && a.kind < b.kind);
+    });
+
+    wxString strip;
+    size_t shown = 0;
+    for (const Entry &entry : entries) {
+        if (shown == kStripIcons)
+            break;
+        wxImage icon;
+        wxImage icon2;
+        bool hidden = false;
+        if (entry.kind == 0) {
+            const wxString &channel = m_ahead_vhf[entry.index].area.channel;
+            icon = VhfBadgeImage(channel, background, 20);
+            icon2 = VhfBadgeImage(channel, background, 40);
+        }
+        else if (entry.kind == 1) {
+            icon = NoteSignImage(background, 20);
+            icon2 = NoteSignImage(background, 40);
+            hidden = m_ahead_notes[entry.index].hidden;
+        }
+        else {
+            const AheadItem &item = m_ahead[entry.index];
+            const auto found = icons.find(item.group);
+            if (found == icons.end() || !found->second.first.IsOk())
+                continue;
+            icon = NormalizeIcon(found->second.first, background, 20, tile, tile ? 2 : 0);
+            icon2 = NormalizeIcon(found->second.second, background, 40, tile, tile ? 4 : 0);
+            hidden = m_ahead_groups[item.group].hiddenAtScale;
+        }
+        if (hidden) {
+            icon = FadeImage(icon, background, 0.55);
+            if (icon2.IsOk())
+                icon2 = FadeImage(icon2, background, 0.55);
+        }
+        const wxString name = AddDynamicImage(
+            wxString::Format("legend_dyn_%d_aheadstrip_%zu.png", m_dynamic_generation, shown),
+            icon, icon2);
+        strip << "<img src=\"memory:" << name << "\"> ";
+        ++shown;
+    }
+    if (entries.size() > shown && shown > 0) {
+        strip << "<font color=\"" << HtmlColour(palette.muted) << "\">+"
+              << entries.size() - shown << "</font>";
+    }
+    return strip;
 }
 
 // Notities: notes whose place is in view, nearest first.
