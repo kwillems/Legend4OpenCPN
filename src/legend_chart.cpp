@@ -24,6 +24,7 @@
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/log.h>
 #include <wx/menu.h>
 
@@ -118,6 +119,7 @@ void DrawTextGL(const wxString &text, const wxFont &font, const wxColour &colour
                 const wxColour &ground, const wxPoint &anchor, double dx, double dy,
                 double gap, int margin)
 {
+#ifndef __ANDROID__
     wxBitmap probe(1, 1, 24);
     wxMemoryDC dc(probe);
     dc.SetFont(font);
@@ -178,6 +180,9 @@ void DrawTextGL(const wxString &text, const wxFont &font, const wxColour &colour
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
     glDeleteTextures(1, &texture);
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+#endif
 }
 
 } // namespace
@@ -1018,6 +1023,7 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     int canvasIndex,
     int priority)
 {
+#ifndef __ANDROID__
     (void)pcontext;
     (void)canvasIndex;
 
@@ -1120,6 +1126,10 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     glPopAttrib();
 
     return true;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }
 
 // Nachtvoorbeeld: the chart as it looks from the water at night. A dark
@@ -1304,6 +1314,7 @@ bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
 
 bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
 {
+#ifndef __ANDROID__
     const std::vector<wxPoint> points = AheadFanPixels(vp);
     if (points.empty())
         return false;
@@ -1371,4 +1382,8 @@ bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
     glPopClientAttrib();
     glPopAttrib();
     return true;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }

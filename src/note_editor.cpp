@@ -16,6 +16,7 @@
 #include <wx/dcclient.h>
 #include <wx/filename.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/image.h>
 #include <wx/settings.h>
 #include <wx/tokenzr.h>

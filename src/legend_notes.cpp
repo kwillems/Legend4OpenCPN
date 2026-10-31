@@ -23,6 +23,7 @@
 #include <wx/glcanvas.h>
 #include <wx/dc.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -716,6 +717,7 @@ bool legend_pi::DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp)
 
 bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
 {
+#ifndef __ANDROID__
     if (m_note_places.empty())
         return false;
     wxColour fill;
@@ -796,6 +798,10 @@ bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
     glLineWidth(1.0f);
     glPopAttrib();
     return drew;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }
 
 // With every fix: a notice when the boat comes within the radius of a

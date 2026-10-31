@@ -20,6 +20,7 @@
 #endif
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/image.h>
