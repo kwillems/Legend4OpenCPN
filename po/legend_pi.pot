@@ -1,0 +1,1025 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the legend_pi package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: legend_pi\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-31 23:29+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/legend_chart.cpp:213
+msgid "Note: "
+msgstr ""
+
+#: src/legend_chart.cpp:287
+msgid "Note moved"
+msgstr ""
+
+#: src/legend_chart.cpp:289
+msgid "” is in a new place."
+msgstr ""
+
+#: src/legend_chart.cpp:291
+msgid "Put back"
+msgstr ""
+
+#: src/legend_chart.cpp:391
+msgid "Link to this place in the text"
+msgstr ""
+
+#: src/legend_chart.cpp:392
+msgid "Pin here on the chart"
+msgstr ""
+
+#: src/legend_chart.cpp:395 src/legend_window.cpp:426
+msgid "Boat's position in the text"
+msgstr ""
+
+#: src/legend_chart.cpp:396
+msgid "Pin to the boat's position"
+msgstr ""
+
+#: src/legend_chart.cpp:400
+msgid "New note here"
+msgstr ""
+
+#: src/legend_chart.cpp:402 src/legend_window.cpp:363
+msgid "New note at the boat"
+msgstr ""
+
+#: src/legend_chart.cpp:408
+#, c-format
+msgid "Open %s"
+msgstr ""
+
+#: src/legend_chart.cpp:410
+#, c-format
+msgid "Delete %s…"
+msgstr ""
+
+#: src/legend_chart.cpp:417
+#, c-format
+msgid "Put %s back in its old place"
+msgstr ""
+
+#: src/legend_collect.cpp:91
+msgid ""
+"# Meanings and grouping of the symbols in the dynamic legend of\n"
+"# Legend4OpenCPN.\n"
+"#\n"
+"# One per line: icon name = meaning\n"
+"# The icon name is the file name of the icon without .png or .svg,\n"
+"# as the legend shows it in grey while no meaning is known.\n"
+"#\n"
+"# A '*' in the icon name stands for any piece of text. A '*' in the\n"
+"# meaning is replaced by that piece. Exact names come first, then\n"
+"# the first matching pattern counts.\n"
+"#\n"
+"# A line [Heading] starts a group in the legend. Headings and lines\n"
+"# appear in the order of this file; what falls under none goes\n"
+"# under 'Other'. An empty meaning ('vhf_* =') only groups an icon;\n"
+"# the text then comes from the description of the waypoints.\n"
+"#\n"
+"# Two languages: 'betekenis | meaning' and '[Kopje | Heading]'. The\n"
+"# legend shows the Dutch part when OpenCPN is in Dutch, otherwise\n"
+"# the English part; when that is missing, the other.\n"
+"#\n"
+"# Lines starting with # are skipped. Changes show after Refresh or\n"
+"# as soon as the chart moves.\n"
+"#\n"
+"# Example:\n"
+"# [Marifoon | VHF]\n"
+"# vhf_b11b_*    = Meldplicht marifoon, kanaal * | Report on VHF, channel *\n"
+"# vhf_*         =\n"
+"#\n"
+"# [Betonning | Buoyage]\n"
+"# 011           = Groene spitse ton | Green conical buoy\n"
+"\n"
+msgstr ""
+
+#: src/legend_collect.cpp:636
+msgid "Loading waypoints"
+msgstr ""
+
+#: src/legend_collect.cpp:666 src/legend_collect.cpp:682
+msgid "Reading charts"
+msgstr ""
+
+#: src/legend_collect.cpp:705 src/legend_render.cpp:648
+msgid "Chart legend"
+msgstr ""
+
+#: src/legend_collect.cpp:726
+msgid " of "
+msgstr ""
+
+#: src/legend_navigation.cpp:595
+msgid "no taps yet"
+msgstr ""
+
+#: src/legend_navigation.cpp:598
+#, c-format
+msgid "%zu taps"
+msgstr ""
+
+#: src/legend_navigation.cpp:601
+#, c-format
+msgid " | light %.1f s"
+msgstr ""
+
+#: src/legend_navigation.cpp:606
+msgid " | dark > 1 min: the next tap starts again"
+msgstr ""
+
+#: src/legend_navigation.cpp:608
+#, c-format
+msgid " | dark %.0f s | starts again in %.0f s"
+msgstr ""
+
+#: src/legend_navigation.cpp:611
+#, c-format
+msgid " | dark %.1f s"
+msgstr ""
+
+#: src/legend_navigation.cpp:774
+msgid "VHF areas"
+msgstr ""
+
+#: src/legend_navigation.cpp:774
+msgid "VHF area"
+msgstr ""
+
+#: src/legend_navigation.cpp:792
+msgid "No VHF areas loaded (layer VHFinfo Nederland)."
+msgstr ""
+
+#: src/legend_navigation.cpp:794
+msgid "No VHF area from VHFinfo Nederland applies here."
+msgstr ""
+
+#: src/legend_navigation.cpp:795
+msgid "VHF channel at this location"
+msgstr ""
+
+#: src/legend_navigation.cpp:840
+msgid "New VHF area"
+msgstr ""
+
+#: src/legend_navigation.cpp:855 src/legend_render.cpp:1412
+msgid "Close"
+msgstr ""
+
+#: src/legend_notes.cpp:82
+msgid "Could not open this note."
+msgstr ""
+
+#: src/legend_notes.cpp:83
+msgid "Edit note"
+msgstr ""
+
+#: src/legend_notes.cpp:103
+msgid "Changes are saved automatically"
+msgstr ""
+
+#: src/legend_notes.cpp:142
+msgid "Saved at "
+msgstr ""
+
+#: src/legend_notes.cpp:147
+msgid "Could not save"
+msgstr ""
+
+#: src/legend_notes.cpp:158
+msgid "Title of the new note:"
+msgstr ""
+
+#: src/legend_notes.cpp:159 src/legend_notes.cpp:179 src/legend_window.cpp:362
+#: src/legend_window.cpp:1035
+msgid "New note"
+msgstr ""
+
+#: src/legend_notes.cpp:177
+msgid "Could not create the note in\n"
+msgstr ""
+
+#: src/legend_notes.cpp:216
+msgid "Address of the link:"
+msgstr ""
+
+#: src/legend_notes.cpp:235
+msgid "Choose an image"
+msgstr ""
+
+#: src/legend_notes.cpp:237
+msgid "Images"
+msgstr ""
+
+#: src/legend_notes.cpp:251
+msgid "Could not copy the image to the Legend folder."
+msgstr ""
+
+#: src/legend_notes.cpp:252 src/legend_notes.cpp:264
+msgid "Image"
+msgstr ""
+
+#: src/legend_notes.cpp:263
+msgid "Could not open this image."
+msgstr ""
+
+#: src/legend_notes.cpp:278 src/legend_pi.cpp:326
+msgid "Note"
+msgstr ""
+
+#: src/legend_notes.cpp:303
+msgid "New title of the note:"
+msgstr ""
+
+#: src/legend_notes.cpp:304 src/legend_notes.cpp:318 src/legend_notes.cpp:344
+#: src/legend_notes.cpp:352
+msgid "Rename note"
+msgstr ""
+
+#: src/legend_notes.cpp:316
+msgid "There is already a note named \""
+msgstr ""
+
+#: src/legend_notes.cpp:343
+msgid "Could not change the note."
+msgstr ""
+
+#: src/legend_notes.cpp:351
+msgid "Could not rename the file."
+msgstr ""
+
+#: src/legend_notes.cpp:388
+#, c-format
+msgid ""
+"Delete note \"%s\"?\n"
+"\n"
+"The file goes to the folder \"Verwijderd\" in the Legend folder; you can get "
+"it back from there."
+msgstr ""
+
+#: src/legend_notes.cpp:391 src/legend_notes.cpp:408
+msgid "Delete note"
+msgstr ""
+
+#: src/legend_notes.cpp:393
+msgid "Delete"
+msgstr ""
+
+#: src/legend_notes.cpp:393
+msgid "Cancel"
+msgstr ""
+
+#: src/legend_notes.cpp:407
+msgid "Could not move the note."
+msgstr ""
+
+#: src/legend_notes.cpp:550
+msgid "No position of the boat"
+msgstr ""
+
+#: src/legend_notes.cpp:551
+msgid "No GPS position has come in during the last minute."
+msgstr ""
+
+#: src/legend_notes.cpp:844
+msgid "Note nearby"
+msgstr ""
+
+#: src/legend_notes.cpp:846
+msgid "Click to open the note"
+msgstr ""
+
+#: src/legend_notes.cpp:905
+msgid "Could not save the new place in the note."
+msgstr ""
+
+#: src/legend_notes.cpp:906
+msgid "Move note"
+msgstr ""
+
+#: src/legend_notes.cpp:935
+msgid ""
+"Radius in nautical miles: within this distance you get a notice of this note "
+"under way."
+msgstr ""
+
+#: src/legend_notes.cpp:937 src/legend_notes.cpp:947 src/legend_window.cpp:1067
+msgid "Radius"
+msgstr ""
+
+#: src/legend_notes.cpp:946
+msgid "Enter a radius in nautical miles, for example 0.5."
+msgstr ""
+
+#: src/legend_notes.cpp:967 src/legend_window.cpp:990
+msgid "Not saved yet…"
+msgstr ""
+
+#: src/legend_notes.cpp:984
+msgid "Pinned at "
+msgstr ""
+
+#: src/legend_notes.cpp:986
+msgid " · radius "
+msgstr ""
+
+#: src/legend_notes.cpp:987
+msgid "Click to see the place on the chart"
+msgstr ""
+
+#: src/legend_pi.cpp:256 src/legend_window.cpp:1062
+msgid "Legend"
+msgstr ""
+
+#: src/legend_pi.cpp:257
+msgid "Show or hide the legend"
+msgstr ""
+
+#: src/legend_pi.cpp:296
+msgid "Show in legend"
+msgstr ""
+
+#: src/legend_pi.cpp:300
+msgid "Which VHF channel here?"
+msgstr ""
+
+#: src/legend_pi.cpp:459
+msgid "Explains what is on the chart, keeps a lookout and shows notes"
+msgstr ""
+
+#: src/legend_pi.cpp:464
+msgid ""
+"A legend of exactly the buoys, beacons, signs and other symbols on screen, "
+"with what the lights do and what lies ahead on your course, plus your own "
+"legends and notes in Markdown."
+msgstr ""
+
+#: src/legend_pi.cpp:513
+msgid "Chart legend (in view)"
+msgstr ""
+
+#: src/legend_pi.cpp:916
+msgid "Could not open the Markdown file."
+msgstr ""
+
+#: src/legend_pi.cpp:921
+msgid "Empty Markdown file."
+msgstr ""
+
+#: src/legend_pi.cpp:927
+msgid "Could not read the whole Markdown file."
+msgstr ""
+
+#: src/legend_pi.cpp:969
+msgid "This note is pinned to the chart:"
+msgstr ""
+
+#: src/legend_pi.cpp:971
+msgid "radius"
+msgstr ""
+
+#: src/legend_pi.cpp:1001
+msgid "Could not process the Markdown."
+msgstr ""
+
+#: src/legend_pi.cpp:1073
+msgid "No legends or notes found."
+msgstr ""
+
+#: src/legend_pi.cpp:1074
+msgid "Put a PNG or Markdown file in:"
+msgstr ""
+
+#: src/legend_pi.cpp:1176
+#, c-format
+msgid "%zu of %zu"
+msgstr ""
+
+#: src/legend_render.cpp:192
+msgid "No visible waypoints in this chart view."
+msgstr ""
+
+#: src/legend_render.cpp:610
+msgid "new"
+msgstr ""
+
+#: src/legend_render.cpp:611
+msgid "changed"
+msgstr ""
+
+#: src/legend_render.cpp:612
+msgid "gone"
+msgstr ""
+
+#: src/legend_render.cpp:652
+msgid ""
+"The chart position is not known yet. Move the chart a little and then click "
+"Refresh."
+msgstr ""
+
+#: src/legend_render.cpp:658
+msgid " of the "
+msgstr ""
+
+#: src/legend_render.cpp:660
+msgid " symbols in view match &lsquo;"
+msgstr ""
+
+#: src/legend_render.cpp:667
+msgid "Done"
+msgstr ""
+
+#: src/legend_render.cpp:771
+msgid "no VHFinfo area here"
+msgstr ""
+
+#: src/legend_render.cpp:776 src/legend_render.cpp:862
+msgid "channel "
+msgstr ""
+
+#: src/legend_render.cpp:783
+msgid " &middot; middle of the chart, no GPS"
+msgstr ""
+
+#: src/legend_render.cpp:785 src/legend_window.cpp:1817
+msgid "VHF"
+msgstr ""
+
+#: src/legend_render.cpp:797
+msgid "Channel "
+msgstr ""
+
+#: src/legend_render.cpp:834 src/legend_render.cpp:856
+msgid "now"
+msgstr ""
+
+#: src/legend_render.cpp:835 src/legend_render.cpp:857
+#, c-format
+msgid "in %d min"
+msgstr ""
+
+#: src/legend_render.cpp:842
+msgid "right astern"
+msgstr ""
+
+#: src/legend_render.cpp:844 src/legend_render.cpp:987
+msgid "dead ahead"
+msgstr ""
+
+#: src/legend_render.cpp:846 src/legend_render.cpp:988
+msgid "starboard"
+msgstr ""
+
+#: src/legend_render.cpp:847 src/legend_render.cpp:989
+msgid "port"
+msgstr ""
+
+#: src/legend_render.cpp:875
+msgid "up to "
+msgstr ""
+
+#: src/legend_render.cpp:879
+msgid "width "
+msgstr ""
+
+#: src/legend_render.cpp:885
+msgid "Charts still being read"
+msgstr ""
+
+#: src/legend_render.cpp:889
+msgid "No chart for part of the beam"
+msgstr ""
+
+#: src/legend_render.cpp:892
+msgid "nothing in the beam"
+msgstr ""
+
+#: src/legend_render.cpp:915 src/legend_window.cpp:1819
+msgid "Lookout"
+msgstr ""
+
+#: src/legend_render.cpp:969
+msgid "VHF area "
+msgstr ""
+
+#: src/legend_render.cpp:991
+msgid "Note "
+msgstr ""
+
+#: src/legend_render.cpp:1202
+#, c-format
+msgid "%zu hidden at this scale"
+msgstr ""
+
+#: src/legend_render.cpp:1205 src/legend_window.cpp:1821
+msgid "Notes"
+msgstr ""
+
+#: src/legend_render.cpp:1300
+msgid "tap along with the light"
+msgstr ""
+
+#: src/legend_render.cpp:1302
+msgid "looks like "
+msgstr ""
+
+#: src/legend_render.cpp:1307 src/legend_window.cpp:1557
+#: src/legend_window.cpp:1823
+msgid "Identify a light"
+msgstr ""
+
+#: src/legend_render.cpp:1318
+msgid ""
+"Hold the pad or the space bar while the light shines and let go while it is "
+"dark, for two or three periods."
+msgstr ""
+
+#: src/legend_render.cpp:1324
+msgid "Press = light on"
+msgstr ""
+
+#: src/legend_render.cpp:1332
+msgid "Click the colour of the light:"
+msgstr ""
+
+#: src/legend_render.cpp:1335
+msgid "any colour"
+msgstr ""
+
+#: src/legend_render.cpp:1335
+msgid "white"
+msgstr ""
+
+#: src/legend_render.cpp:1335
+msgid "red"
+msgstr ""
+
+#: src/legend_render.cpp:1335
+msgid "green"
+msgstr ""
+
+#: src/legend_render.cpp:1335
+msgid "yellow"
+msgstr ""
+
+#: src/legend_render.cpp:1367
+msgid "No lights in view to compare with."
+msgstr ""
+
+#: src/legend_render.cpp:1381
+msgid "good fit"
+msgstr ""
+
+#: src/legend_render.cpp:1382
+msgid "fair fit"
+msgstr ""
+
+#: src/legend_render.cpp:1383
+msgid "weak fit"
+msgstr ""
+
+#: src/legend_render.cpp:1392
+msgid "No light in view fits this rhythm."
+msgstr ""
+
+#: src/legend_render.cpp:1409
+msgid "Clear taps"
+msgstr ""
+
+#: src/legend_render.cpp:1462
+msgid "at the top of the list"
+msgstr ""
+
+#: src/legend_render.cpp:1516
+msgid "nothing in view"
+msgstr ""
+
+#: src/legend_render.cpp:1519 src/legend_render.cpp:1677
+msgid " symbol, "
+msgstr ""
+
+#: src/legend_render.cpp:1519 src/legend_render.cpp:1677
+msgid " symbols, "
+msgstr ""
+
+#: src/legend_render.cpp:1520 src/legend_render.cpp:1678
+msgid " in view"
+msgstr ""
+
+#: src/legend_render.cpp:1532
+msgid ""
+"Tap or click &#9650; or &#9660; to move a heading. The order of the headings "
+"is saved in symbolen.txt, that of the blocks at the top in the settings. "
+"'Other' is always at the bottom."
+msgstr ""
+
+#: src/legend_render.cpp:1545
+msgid "No symbols in view match &lsquo;"
+msgstr ""
+
+#: src/legend_render.cpp:1548
+msgid ""
+"The search looks in the names in the list, the headings and the icon names, "
+"only of what is in view now. Pan the chart, zoom out, or clear the search "
+"field."
+msgstr ""
+
+#: src/legend_render.cpp:1552
+msgid ""
+" Symbols hidden at this scale only count with &lsquo;Also show hidden at this "
+"scale&rsquo;."
+msgstr ""
+
+#: src/legend_render.cpp:1906
+msgid "In view: "
+msgstr ""
+
+#: src/legend_render.cpp:1907
+msgid " symbols"
+msgstr ""
+
+#: src/legend_render.cpp:1910
+msgid " chart objects"
+msgstr ""
+
+#: src/legend_render.cpp:1913
+msgid " light characteristics"
+msgstr ""
+
+#: src/legend_render.cpp:1916
+msgid " hidden at this scale"
+msgstr ""
+
+#: src/legend_render.cpp:1922
+msgid ""
+"Above the meaning of each row are the distance and the true bearing from the "
+"boat to the nearest instance. Click a row to go to the instance nearest to "
+"the boat; "
+msgstr ""
+
+#: src/legend_render.cpp:1925
+msgid "Click a row to go to the nearest symbol; "
+msgstr ""
+
+#: src/legend_render.cpp:1926
+msgid ""
+"another click goes to the next one. Click &#9678; to point out all instances "
+"in view at once. The list follows by itself as you pan or zoom the chart."
+msgstr ""
+
+#: src/legend_render.cpp:1930
+msgid " Click a heading to fold or unfold the group."
+msgstr ""
+
+#: src/legend_render.cpp:1932
+msgid " Chart symbols come from the charts in view."
+msgstr ""
+
+#: src/legend_render.cpp:1934
+msgid ""
+" Light characteristics are written out in words; the rhythm below is drawn "
+"schematically. A click makes the light shine on the chart in that rhythm."
+msgstr ""
+
+#: src/legend_render.cpp:1938
+msgid ""
+" Grey rows are hidden at this scale; a click zooms in until they are visible."
+msgstr ""
+
+#: src/legend_window.cpp:400
+msgid "Plain text"
+msgstr ""
+
+#: src/legend_window.cpp:402
+#, c-format
+msgid "Heading %d"
+msgstr ""
+
+#: src/legend_window.cpp:423
+msgid "Link to the centre of the chart in the text"
+msgstr ""
+
+#: src/legend_window.cpp:424
+msgid "Pin note to the centre of the chart"
+msgstr ""
+
+#: src/legend_window.cpp:427
+msgid "Pin note to the boat's position"
+msgstr ""
+
+#: src/legend_window.cpp:896
+msgid "Point out all instances in view at once"
+msgstr ""
+
+#: src/legend_window.cpp:900
+msgid "Make all lights in view with this characteristic shine, in their rhythm"
+msgstr ""
+
+#: src/legend_window.cpp:903
+msgid "To the nearest instance; another click goes to the next one"
+msgstr ""
+
+#: src/legend_window.cpp:910
+msgid "Not drawn at this scale"
+msgstr ""
+
+#: src/legend_window.cpp:912
+msgid ", visible from "
+msgstr ""
+
+#: src/legend_window.cpp:914
+msgid "; a click zooms in until the nearest instance is visible"
+msgstr ""
+
+#: src/legend_window.cpp:917
+msgid "Chart symbol "
+msgstr ""
+
+#: src/legend_window.cpp:919
+msgid ""
+"The nearest light with this characteristic shines on the chart in its rhythm; "
+"another click goes to the next one. Period and groups come from the chart; "
+"the length of a flash or eclipse is a common value"
+msgstr ""
+
+#: src/legend_window.cpp:931
+msgid "Unfold group"
+msgstr ""
+
+#: src/legend_window.cpp:932
+msgid "Fold group"
+msgstr ""
+
+#: src/legend_window.cpp:936
+msgid "Heading up"
+msgstr ""
+
+#: src/legend_window.cpp:940
+msgid "Heading down"
+msgstr ""
+
+#: src/legend_window.cpp:943
+msgid "Point out on the chart"
+msgstr ""
+
+#: src/legend_window.cpp:947
+msgid "Highlight the VHF area on the chart"
+msgstr ""
+
+#: src/legend_window.cpp:951
+msgid "Open the note"
+msgstr ""
+
+#: src/legend_window.cpp:954
+msgid "Hold down while the light is on (or the space bar)"
+msgstr ""
+
+#: src/legend_window.cpp:957
+msgid "Make this light shine on the chart"
+msgstr ""
+
+#: src/legend_window.cpp:960
+msgid "Discard the tapped rhythm and start again"
+msgstr ""
+
+#: src/legend_window.cpp:961
+msgid "Close Identify a light; the menu opens it again"
+msgstr ""
+
+#: src/legend_window.cpp:962
+msgid "Compare only lights of this colour"
+msgstr ""
+
+#: src/legend_window.cpp:965
+msgid "Settings: what the legend shows"
+msgstr ""
+
+#: src/legend_window.cpp:966
+msgid "Refresh: read charts and layers again"
+msgstr ""
+
+#: src/legend_window.cpp:1029
+msgid "Edit this note"
+msgstr ""
+
+#: src/legend_window.cpp:1031
+msgid "Give this note another name"
+msgstr ""
+
+#: src/legend_window.cpp:1033
+msgid "Delete this note (into the folder Verwijderd)"
+msgstr ""
+
+#: src/legend_window.cpp:1037
+msgid "Heading level: heading 1 to 6, or plain text"
+msgstr ""
+
+#: src/legend_window.cpp:1039
+msgid "Bold (Cmd+B)"
+msgstr ""
+
+#: src/legend_window.cpp:1041
+msgid "Italic (Cmd+I)"
+msgstr ""
+
+#: src/legend_window.cpp:1043
+msgid "Bulleted list on or off"
+msgstr ""
+
+#: src/legend_window.cpp:1045
+msgid "Numbered list on or off"
+msgstr ""
+
+#: src/legend_window.cpp:1047
+msgid "Checklist on or off; click a box to tick it"
+msgstr ""
+
+#: src/legend_window.cpp:1049
+msgid "Make a link of the selected text"
+msgstr ""
+
+#: src/legend_window.cpp:1051
+msgid "An image from the Legend folder or elsewhere"
+msgstr ""
+
+#: src/legend_window.cpp:1053
+msgid ""
+"A place on the chart: as a link in the text, or pin the whole note to the "
+"chart. For a place other than the centre: right-click the chart"
+msgstr ""
+
+#: src/legend_window.cpp:1065
+msgid "Save"
+msgstr ""
+
+#: src/legend_window.cpp:1066
+msgid "Save and finish editing (Esc)"
+msgstr ""
+
+#: src/legend_window.cpp:1068
+msgid "Within what distance you get a notice under way"
+msgstr ""
+
+#: src/legend_window.cpp:1069
+msgid "Unpin"
+msgstr ""
+
+#: src/legend_window.cpp:1070
+msgid "No longer pin the note to the chart"
+msgstr ""
+
+#: src/legend_window.cpp:1071
+msgid "Search the legend"
+msgstr ""
+
+#: src/legend_window.cpp:1072
+msgid ""
+"Shows only the symbols whose name, heading or icon name contains all typed "
+"words (Cmd+F)"
+msgstr ""
+
+#: src/legend_window.cpp:1074
+msgid "‹  Previous"
+msgstr ""
+
+#: src/legend_window.cpp:1075
+msgid "Next  ›"
+msgstr ""
+
+#: src/legend_window.cpp:1076
+msgid "Show the previous legend or note"
+msgstr ""
+
+#: src/legend_window.cpp:1077
+msgid "Show the next legend or note"
+msgstr ""
+
+#: src/legend_window.cpp:1079
+msgid "Saved"
+msgstr ""
+
+#: src/legend_window.cpp:1296
+msgid "Building the chart legend"
+msgstr ""
+
+#: src/legend_window.cpp:1342
+msgid "Chart symbols"
+msgstr ""
+
+#: src/legend_window.cpp:1344
+msgid "Light characteristics"
+msgstr ""
+
+#: src/legend_window.cpp:1345
+msgid "Other"
+msgstr ""
+
+#: src/legend_window.cpp:1477
+msgid "Length of the lookout beam in nautical miles (0.5 to 50):"
+msgstr ""
+
+#: src/legend_window.cpp:1478 src/legend_window.cpp:1496
+#: src/legend_window.cpp:1605
+msgid "Lookout beam: length"
+msgstr ""
+
+#: src/legend_window.cpp:1495
+msgid "Enter a length from 0.5 to 50 nautical miles, for example 3 or 12.5."
+msgstr ""
+
+#: src/legend_window.cpp:1544
+msgid "Lights"
+msgstr ""
+
+#: src/legend_window.cpp:1545
+msgid "Also show hidden at this scale"
+msgstr ""
+
+#: src/legend_window.cpp:1547
+msgid "Distance and bearing from the boat"
+msgstr ""
+
+#: src/legend_window.cpp:1552
+msgid "Make all lights shine"
+msgstr ""
+
+#: src/legend_window.cpp:1555
+msgid "Night preview"
+msgstr ""
+
+#: src/legend_window.cpp:1562
+msgid "VHF area stays highlighted"
+msgstr ""
+
+#: src/legend_window.cpp:1564
+msgid "Notice on entering a VHF area"
+msgstr ""
+
+#: src/legend_window.cpp:1568
+msgid "Notice when near a note"
+msgstr ""
+
+#: src/legend_window.cpp:1572
+msgid "Lookout beam on the chart"
+msgstr ""
+
+#: src/legend_window.cpp:1575
+msgid "Narrow (15°)"
+msgstr ""
+
+#: src/legend_window.cpp:1577
+msgid "Medium (30°)"
+msgstr ""
+
+#: src/legend_window.cpp:1579
+msgid "Wide (45°)"
+msgstr ""
+
+#: src/legend_window.cpp:1581
+msgid "Lookout beam: width"
+msgstr ""
+
+#: src/legend_window.cpp:1596
+msgid "Other…"
+msgstr ""
+
+#: src/legend_window.cpp:1608
+msgid "Amber"
+msgstr ""
+
+#: src/legend_window.cpp:1608
+msgid "Orange (searchlight)"
+msgstr ""
+
+#: src/legend_window.cpp:1609
+msgid "Grey"
+msgstr ""
+
+#: src/legend_window.cpp:1612
+msgid "Lookout beam: colour"
+msgstr ""
+
+#: src/legend_window.cpp:1615
+msgid "Fold all"
+msgstr ""
+
+#: src/legend_window.cpp:1616
+msgid "Unfold all"
+msgstr ""
+
+#: src/legend_window.cpp:1617
+msgid "Change order…"
+msgstr ""
