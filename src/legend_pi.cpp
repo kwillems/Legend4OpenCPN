@@ -246,8 +246,6 @@ int legend_pi::Init()
     EnsureDirectories();
     LoadConfig();
 
-    // The tooltip stays in the language of the start; OpenCPN cannot
-    // change it afterwards.
     m_toolbar_item_id = InsertPlugInTool(
         "",
         &m_toolbar_bitmap,
@@ -610,8 +608,7 @@ void legend_pi::LoadConfig()
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
     config.Read("DeletedFolder", &m_deleted_folder, "Verwijderd");
-    m_locale = GetLocaleCanonicalName();
-    m_dutch_names = DutchInterface(m_locale);
+    m_dutch_names = DutchInterface();
 
     // Keys missing from the saved order (a new block) go at the end;
     // unknown ones are dropped.
@@ -1277,10 +1274,8 @@ void legend_pi::OnLegendSelected(wxCommandEvent &event)
 
 void legend_pi::OnToolbarToolCallback(int id)
 {
-    if (id == m_toolbar_item_id) {
-        FollowOpenCpnLanguage();
+    if (id == m_toolbar_item_id)
         ToggleLegendWindow();
-    }
 }
 
 

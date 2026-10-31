@@ -239,7 +239,7 @@ void legend_pi::CreateLegendWindow()
     m_next_button->Disable();
 
     panel->SetSizer(mainSizer);
-    ApplyWindowLanguage();
+    SetWindowTexts();
 
     RestoreWindowState();
     BindWindowEvents();
@@ -1056,7 +1056,7 @@ wxString legend_pi::ButtonTip(const wxString &icon) const
     return wxEmptyString;
 }
 
-void legend_pi::ApplyWindowLanguage()
+void legend_pi::SetWindowTexts()
 {
     if (!m_legend_window)
         return;
@@ -1499,36 +1499,11 @@ void legend_pi::AskAheadMiles()
     }
 }
 
-bool legend_pi::DutchInterface(const wxString &locale)
+bool legend_pi::DutchInterface()
 {
     const wxTranslations *translations = wxTranslations::Get();
-    return locale.StartsWith("nl") && translations &&
+    return GetLocaleCanonicalName().StartsWith("nl") && translations &&
            translations->IsLoaded("opencpn-legend_pi");
-}
-
-// OpenCPN can change its language while running. The plugin follows when
-// the legend is opened or its settings menu is: at once everywhere, the
-// window, the chart's right-click menu and the page.
-void legend_pi::FollowOpenCpnLanguage()
-{
-    const wxString locale = GetLocaleCanonicalName();
-    if (locale == m_locale)
-        return;
-    m_locale = locale;
-    m_dutch_names = DutchInterface(locale);
-    ApplyWindowLanguage();
-    RemoveContextMenuItems();
-    AddContextMenuItems();
-    UpdatePlaceBar();
-    RebuildLegendChoice();
-    // Labels are made when the list is collected.
-    CollectDynamicLegend();
-    if (m_current_legend_path == kDynamicGpxId)
-        RenderDynamicLegend(true);
-    else if (!m_legend_files.IsEmpty())
-        ShowLegend(m_legend_index);
-    else
-        ShowEmptyState();
 }
 
 // The menu behind "Instellingen": what is shown, with a tick when it is on,
@@ -1537,7 +1512,6 @@ void legend_pi::ShowSettingsMenu()
 {
     if (!m_markdown_view)
         return;
-    FollowOpenCpnLanguage();
 
     enum
     {

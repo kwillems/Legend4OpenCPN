@@ -161,9 +161,8 @@ private:
     void CreateNoteEditor();
     wxWindow *CreateNavigation(wxPanel *panel);
     wxWindow *CreateEditFooter(wxPanel *panel);
-    // The window's labels and tooltips in the chosen language; again when
-    // the language changes.
-    void ApplyWindowLanguage();
+    // The window's labels and tooltips, set once the window is made.
+    void SetWindowTexts();
     wxString ButtonTip(const wxString &icon) const;
     void BindWindowEvents();
     void OnLegendKey(wxKeyEvent &event);
@@ -411,8 +410,7 @@ private:
     int m_menu_pin_boat = -1;
     wxString m_menu_note_path;           // note whose sign was under the mouse
     void PrepareContextMenu(int canvasIndex) override;
-    // The items in the chart's right-click menu, made again when the
-    // language changes.
+    // The items in the chart's right-click menu.
     void AddContextMenuItems();
     void RemoveContextMenuItems();
     void DeleteNoteFile(const wxString &path);
@@ -555,13 +553,11 @@ private:
     // Meanings, chart names, light characters and numbers in Dutch or
     // English, as OpenCPN; the interface itself is translated by gettext.
     bool m_dutch_names = true;
-    wxString m_locale;            // OpenCPN's language at the last look, "nl_NL"
     // Dutch only when the Dutch translation of the interface is loaded, so
     // meanings and interface never differ: without the translation (a
-    // build without gettext) both are English.
-    static bool DutchInterface(const wxString &locale);
-    // Takes over OpenCPN's language when it changed since the last look.
-    void FollowOpenCpnLanguage();
+    // build without gettext) both are English. After a change of language
+    // OpenCPN starts the plugin again, so this is decided once.
+    static bool DutchInterface();
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
     S57Source m_s57;
