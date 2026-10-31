@@ -317,7 +317,10 @@ Het kopje **Uitkijk** laat zien wat je op koers tegenkomt. Het verschijnt
 zodra de boot vaart: een recente GPS-positie en minstens een halve knoop.
 Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld *tot 2 NM,
 ± 20 min · breedte 30°*, en *niets in de bundel* als er niets ligt. De tijd
-is een schatting bij je snelheid van dit moment.
+is een schatting bij je snelheid van dit moment. Klap je de Uitkijk in, dan
+staan rechts naast het kopje de iconen van wat je het eerst tegenkomt, op
+volgorde van aankomst (ook marifoongebieden en notities), met het aantal van
+de rest erachter, zoals *+4*.
 
 Elke regel begint klein met wanneer en waar, met de beschrijving eronder:
 
@@ -354,7 +357,8 @@ breedte**: smal (15°), middel (30°, standaard) of breed (45°) aan
 weerszijden van de koers.
 
 Met **Uitkijkbundel op de kaart** (standaard aan) staat de bundel heel licht
-op de kaart, zolang de legenda open is en de boot vaart. Zo zie je waarom een
+op de kaart, zolang het legendavenster open is en de boot vaart, ook als je
+er even een notitie in bekijkt. Zo zie je waarom een
 ton wel of niet in de lijst staat. Uitzetten verbergt alleen de tekening; de
 lijst blijft. De kleur kies je met **Uitkijkbundel: kleur**: amber
 (standaard), oranje of grijs. Kleuren die op de kaart iets betekenen (geel,
