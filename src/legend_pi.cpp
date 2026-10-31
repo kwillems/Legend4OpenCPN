@@ -609,6 +609,7 @@ void legend_pi::LoadConfig()
     m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
+    config.Read("DeletedFolder", &m_deleted_folder, "Verwijderd");
     m_locale = GetLocaleCanonicalName();
     m_dutch_names = DutchInterface(m_locale);
 
@@ -679,6 +680,7 @@ void legend_pi::SaveConfig() const
     config.Write("VhfKeepLit", m_vhf_keep_lit);
     config.Write("VhfNotice", m_vhf_notice_on);
     config.Write("NoteNotice", m_note_notice_on);
+    config.Write("DeletedFolder", m_deleted_folder);
 
     config.Flush();
 }

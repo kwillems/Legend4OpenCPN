@@ -246,7 +246,7 @@ void legend_pi::CreateLegendWindow()
 }
 
 // The header row: the choice of item, with buttons for notes: edit,
-// rename, delete (into the folder "Verwijderd") and a new one; while
+// rename, delete (into the folder for deleted notes) and a new one; while
 // editing, Opslaan.
 wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
 {
@@ -1031,7 +1031,7 @@ wxString legend_pi::ButtonTip(const wxString &icon) const
     if (icon == "rename")
         return _("Give this note another name");
     if (icon == "trash")
-        return _("Delete this note (into the folder Verwijderd)");
+        return wxString::Format(_("Delete this note (into the folder %s)"), _("Deleted"));
     if (icon == "new")
         return _("New note");
     if (icon == "heading")

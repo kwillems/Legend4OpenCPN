@@ -469,7 +469,7 @@ private:
     wxButton *m_edit_button = nullptr;    // pencil: edit this note
     wxButton *m_new_button = nullptr;     // plus: a new note
     wxButton *m_rename_button = nullptr;  // another name for this note
-    wxButton *m_delete_button = nullptr;  // into the folder "Verwijderd"
+    wxButton *m_delete_button = nullptr;  // into the folder for deleted notes
     wxButton *m_save_button = nullptr;    // while editing: save and stop
     wxPanel *m_format_bar = nullptr;      // buttons that format the note
     std::vector<std::pair<wxBitmapButton *, wxString>> m_format_icons; // and their icons
@@ -665,6 +665,10 @@ private:
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
     bool m_note_notice_on = true;        // setting
+    // The folder for deleted notes, by the name it had the last time; a
+    // Legend folder from before it was remembered has "Verwijderd".
+    wxString m_deleted_folder = "Verwijderd";
+    wxString DeletedFolder();
     wxTimer m_note_notice_timer;         // waits for a VHF notice to go
     wxString m_pending_note_title;
     wxString m_pending_note_text;
