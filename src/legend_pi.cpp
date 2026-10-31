@@ -464,6 +464,23 @@ wxString legend_pi::GetLongDescription()
              "plus your own legends and notes in Markdown.");
 }
 
+// The icon on the Plugins tab of OpenCPN's options, also asked for while
+// the plugin is not enabled (before Init): the toolbar icon with its
+// symbols as coloured buoys. The toolbar keeps its own grey icon.
+wxBitmap *legend_pi::GetPlugInBitmap()
+{
+    if (!m_plugin_bitmap.IsOk()) {
+        const wxString path = GetPluginDataDir("legend_pi") + wxFileName::GetPathSeparator() +
+                              "data" + wxFileName::GetPathSeparator() + "legend_plugin.svg";
+        // Drawn here rather than with GetBitmapFromSVGFile: OpenCPN keeps
+        // those in a cache by file name and size, so a changed icon would
+        // not show. At 64 pixels, as OpenCPN scales it down to the list.
+        const wxSize size(64, 64);
+        m_plugin_bitmap = wxBitmapBundle::FromSVGFile(path, size).GetBitmap(size);
+    }
+    return &m_plugin_bitmap;
+}
+
 wxString legend_pi::GetLegendDirectory() const
 {
     return
