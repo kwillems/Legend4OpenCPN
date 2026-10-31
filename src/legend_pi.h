@@ -552,14 +552,10 @@ private:
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
     ChartNames m_chart_names;     // names of chart objects (s57-nl.txt)
-    bool m_dutch_names = true;    // the interface and names in Dutch or English, as OpenCPN
-    // The Dutch or the English text (UTF-8), in the chosen language.
-    wxString Tr(const char *dutch, const char *english) const
-    {
-        return wxString::FromUTF8(m_dutch_names ? dutch : english);
-    }
-    // OpenCPN's language: Dutch when it is Dutch, English otherwise.
-    static bool OpenCpnIsDutch();
+    // Meanings, chart names, light characters and numbers in Dutch or
+    // English, as OpenCPN; the interface itself is translated by gettext.
+    bool m_dutch_names = true;
+    wxString m_locale;            // OpenCPN's language at the last look, "nl_NL"
     // Takes over OpenCPN's language when it changed since the last look.
     void FollowOpenCpnLanguage();
     bool m_chart_symbols_tried = false;

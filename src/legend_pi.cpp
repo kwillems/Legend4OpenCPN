@@ -165,6 +165,10 @@ legend_pi::legend_pi(void *ppimgr)
       m_window_width(560),
       m_window_height(460)
 {
+    // The translations of the interface: po/<language>.po, installed as
+    // opencpn-legend_pi.mo.
+    AddLocaleCatalog("opencpn-legend_pi");
+
     m_viewport = PlugIn_ViewPort();
     m_collected_viewport = PlugIn_ViewPort();
     m_pending_viewport = PlugIn_ViewPort();
@@ -249,8 +253,8 @@ int legend_pi::Init()
         &m_toolbar_bitmap,
         &m_toolbar_bitmap,
         wxITEM_NORMAL,
-        Tr("Legenda", "Legend"),
-        Tr("Toon of verberg de legenda", "Show or hide the legend"),
+        _("Legend"),
+        _("Show or hide the legend"),
         nullptr,
         -1,
         0,
@@ -289,11 +293,11 @@ int legend_pi::Init()
 void legend_pi::AddContextMenuItems()
 {
     m_menu_reveal = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, Tr("Toon in legenda", "Show in legend")), this);
+        new wxMenuItem(nullptr, wxID_ANY, _("Show in legend")), this);
     m_menu_actions.push_back(m_menu_reveal);
     m_menu_vhf = AddCanvasContextMenuItem(
         new wxMenuItem(nullptr, wxID_ANY,
-                       Tr("Welk marifoonkanaal hier?", "Which VHF channel here?")),
+                       _("Which VHF channel here?")),
         this);
     m_menu_actions.push_back(m_menu_vhf);
 
@@ -319,7 +323,7 @@ void legend_pi::AddContextMenuItems()
     m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
     m_context_submenu = new wxMenu();
     m_menu_parent = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, Tr("Notitie", "Note"), wxEmptyString, wxITEM_NORMAL,
+        new wxMenuItem(nullptr, wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
                        m_context_submenu),
         this);
     PrepareContextMenu(0);
@@ -452,12 +456,14 @@ wxString legend_pi::GetCommonName()
 
 wxString legend_pi::GetShortDescription()
 {
-    return "Configurable legend for OpenCPN";
+    return _("Explains what is on the chart, keeps a lookout and shows notes");
 }
 
 wxString legend_pi::GetLongDescription()
 {
-    return "Displays PNG legends and Markdown notes in OpenCPN, plus a dynamic legend of the waypoint symbols visible on screen.";
+    return _("A legend of exactly the buoys, beacons, signs and other symbols on "
+             "screen, with what the lights do and what lies ahead on your course, "
+             "plus your own legends and notes in Markdown.");
 }
 
 wxString legend_pi::GetLegendDirectory() const
@@ -504,7 +510,7 @@ void legend_pi::EnsureDirectories() const
 wxString legend_pi::MakeDisplayTitle(const wxString &path) const
 {
     if (path == kDynamicGpxId)
-        return Tr("Kaartlegenda (in beeld)", "Chart legend (in view)");
+        return _("Chart legend (in view)");
 
     wxFileName filename(path);
     wxString ext = filename.GetExt().Lower();
@@ -603,7 +609,8 @@ void legend_pi::LoadConfig()
     m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
-    m_dutch_names = OpenCpnIsDutch();
+    m_locale = GetLocaleCanonicalName();
+    m_dutch_names = m_locale.StartsWith("nl");
 
     // Keys missing from the saved order (a new block) go at the end;
     // unknown ones are dropped.
@@ -906,18 +913,18 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     wxFile file(path);
 
     if (!file.IsOpened())
-        return "<html>" + LegendBodyTag() + "<p>" + Tr("Markdown-bestand kon niet worden geopend.", "Could not open the Markdown file.") + "</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not open the Markdown file.") + "</p></body></html>";
 
     wxFileOffset len = file.Length();
 
     if (len <= 0)
-        return "<html>" + LegendBodyTag() + "<p>" + Tr("Leeg Markdown-bestand.", "Empty Markdown file.") + "</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Empty Markdown file.") + "</p></body></html>";
 
     std::string markdown;
     markdown.resize(static_cast<size_t>(len));
 
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
-        return "<html>" + LegendBodyTag() + "<p>" + Tr("Markdown-bestand kon niet volledig worden gelezen.", "Could not read the whole Markdown file.") + "</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not read the whole Markdown file.") + "</p></body></html>";
 
     // The block with the note's place is not shown as text; a line on top
     // says where the note belongs, as a link that takes the chart there.
@@ -959,9 +966,9 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         line << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" bgcolor=\""
              << HtmlColour(fill) << "\"><tr><td width=\"20\" valign=\"middle\"><img src=\"memory:"
              << pin << "\"></td><td valign=\"middle\"><font size=\"-1\" color=\"" << HtmlColour(ink)
-             << "\">" << Tr("Deze notitie is vastgepind op de kaart:", "This note is pinned to the chart:") << " <a href=\"geo:"
+             << "\">" << _("This note is pinned to the chart:") << " <a href=\"geo:"
              << wxString::FromCDouble(front.lat, 5) << "," << wxString::FromCDouble(front.lon, 5)
-             << "\">" << FormatPosition(front.lat, front.lon) << "</a> &middot; " << Tr("straal", "radius") << " " << radius
+             << "\">" << FormatPosition(front.lat, front.lon) << "</a> &middot; " << _("radius") << " " << radius
              << " NM</font></td></tr></table><br>";
         const int bodyTag = html.Find("<body");
         const int bodyEnd = bodyTag == wxNOT_FOUND ? wxNOT_FOUND : html.find('>', bodyTag);
@@ -991,7 +998,7 @@ wxString legend_pi::RenderMarkdownText(const std::string &markdown) const
         0);
 
     if (result != 0)
-        return "<html>" + LegendBodyTag() + "<p>" + Tr("Markdown kon niet worden verwerkt.", "Could not process the Markdown.") + "</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not process the Markdown.") + "</p></body></html>";
 
     html = ShowTaskLists(html);
 
@@ -1063,8 +1070,8 @@ void legend_pi::ShowEmptyState()
         wxString html;
         html << "<html>" << LegendBodyTag()
              << "<font size=\"+1\">"
-             << "<p><b>" << Tr("Geen legenda's of notities gevonden.", "No legends or notes found.") << "</b></p>"
-             << "<p>" << Tr("Plaats een PNG- of Markdown-bestand in:", "Put a PNG or Markdown file in:") << "</p>"
+             << "<p><b>" << _("No legends or notes found.") << "</b></p>"
+             << "<p>" << _("Put a PNG or Markdown file in:") << "</p>"
              << "<p><code>" << legend_dir << "</code></p>"
              << "</font>"
              << "</body></html>";
@@ -1166,7 +1173,7 @@ void legend_pi::ShowLegend(size_t index)
         if (m_legend_position) {
             m_legend_position->SetLabel(
                 wxString::Format(
-                    Tr("%zu van %zu", "%zu of %zu"),
+                    _("%zu of %zu"),
                     m_legend_index + 1,
                     m_legend_files.GetCount()));
         }
