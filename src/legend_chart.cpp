@@ -44,6 +44,9 @@ namespace {
 // and land; inside, by day, a faint white that lights the water without
 // changing the chart's colours below. In dusk and night white would hurt
 // night vision: a dim orange inside then.
+//
+// Grey is black seen through by day; on the dark chart of dusk and night
+// black would vanish, so there it turns a light grey, dimmed as the rest.
 void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
 {
     // Fill and edge: the edge a darker shade of the fill.
@@ -74,6 +77,12 @@ void AheadFanColours(int colour, wxColour *fill, wxColour *edge)
     auto shade = [dim](int value) { return static_cast<unsigned char>(value * dim); };
     *fill = wxColour(shade(c[0]), shade(c[1]), shade(c[2]), fillAlpha);
     *edge = wxColour(shade(c[3]), shade(c[4]), shade(c[5]), edgeAlpha);
+    const bool dark = LegendScheme() == PI_GLOBAL_COLOR_SCHEME_DUSK ||
+                      LegendScheme() == PI_GLOBAL_COLOR_SCHEME_NIGHT;
+    if (c == kColours[2] && dark) {
+        *fill = wxColour(shade(200), shade(200), shade(200), fillAlpha);
+        *edge = wxColour(shade(220), shade(220), shade(220), edgeAlpha);
+    }
     if (c == kColours[1]) {
         *edge = wxColour(edge->Red(), edge->Green(), edge->Blue(), edgeAlpha + 50);
         if (LegendScheme() == PI_GLOBAL_COLOR_SCHEME_DAY ||
