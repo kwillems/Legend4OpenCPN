@@ -1217,9 +1217,9 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
         label->text << ", " << time;
     // At the starboard corner of the far end, beyond it as seen from the
     // boat: the middle of the far end, straight ahead, stays clear.
-    const auto far = FanArc(m_ship_lat, m_ship_lon, m_ship_cog, range, m_ahead_angle,
-                            kAheadMinHalfWidth);
-    const wxPoint corner = pixel(far.back().first, far.back().second);
+    const auto farEnd = FanArc(m_ship_lat, m_ship_lon, m_ship_cog, range, m_ahead_angle,
+                               kAheadMinHalfWidth);
+    const wxPoint corner = pixel(farEnd.back().first, farEnd.back().second);
     const double reach = std::hypot(corner.x - boat.x, corner.y - boat.y);
     label->anchor = corner;
     label->dx = reach > 0.0 ? (corner.x - boat.x) / reach : 0.0;
