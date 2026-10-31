@@ -31,6 +31,7 @@
 #include <wx/textfile.h>
 #include <wx/wrapsizer.h>
 #include <wx/tokenzr.h>
+#include <wx/translation.h>
 #include <wx/utils.h>
 
 #include <algorithm>
@@ -1498,6 +1499,13 @@ void legend_pi::AskAheadMiles()
     }
 }
 
+bool legend_pi::DutchInterface(const wxString &locale)
+{
+    const wxTranslations *translations = wxTranslations::Get();
+    return locale.StartsWith("nl") && translations &&
+           translations->IsLoaded("opencpn-legend_pi");
+}
+
 // OpenCPN can change its language while running. The plugin follows when
 // the legend is opened or its settings menu is: at once everywhere, the
 // window, the chart's right-click menu and the page.
@@ -1507,7 +1515,7 @@ void legend_pi::FollowOpenCpnLanguage()
     if (locale == m_locale)
         return;
     m_locale = locale;
-    m_dutch_names = locale.StartsWith("nl");
+    m_dutch_names = DutchInterface(locale);
     ApplyWindowLanguage();
     RemoveContextMenuItems();
     AddContextMenuItems();
