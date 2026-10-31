@@ -1,390 +1,415 @@
 # Legend4OpenCPN
 
-Legend4OpenCPN is een plugin voor [OpenCPN](https://opencpn.org) die naast de
-kaart uitlegt wat je ziet. Hij houdt een legenda bij van precies de boeien,
-bakens, tekens en andere symbolen die op dat moment op je scherm staan, en
-verandert mee als je de kaart verschuift of zoomt. Daarnaast vertelt hij wat
-de lichten doen en houdt hij voor je de uitkijk: wat er op je koers ligt en
-hoe ver het weg is. Ook toont hij je eigen legenda's, notities en
-routebeschrijvingen.
+English | [Nederlands](README.nl.md)
 
-> Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
-> Silicon) met OpenCPN 5.14.
+Legend4OpenCPN is a plugin for [OpenCPN](https://opencpn.org) that explains
+what you see on the chart. It keeps a legend of exactly the buoys, beacons,
+signs and other symbols on your screen at that moment, and it changes as you
+pan or zoom the chart. It also tells you what the lights do and keeps a
+lookout for you: what lies on your course and how far away it is. It shows
+your own legends, notes and route descriptions too.
 
-> **Gebruik op eigen risico.** Legend4OpenCPN is een hulpmiddel, geen
-> navigatiemiddel. De uitleg, lichtkarakters, kanalen en andere informatie
-> kunnen onvolledig, verouderd of fout zijn. Vertrouw er nooit alleen op:
-> gebruik officiële kaarten en berichten, en blijf zelf goed uitkijken. De
-> maker is niet aansprakelijk voor schade of ongelukken door het gebruik van
-> deze plugin.
+> Status: alpha. The plugin is developed and tested on macOS (Apple Silicon)
+> with OpenCPN 5.14.
 
-## In het kort
+> **Use at your own risk.** Legend4OpenCPN is an aid, not a means of
+> navigation. The explanations, light characteristics, channels and other
+> information may be incomplete, out of date or wrong. Never rely on it
+> alone: use official charts and notices, and keep a proper lookout
+> yourself. The author is not liable for any damage or accidents caused by
+> using this plugin.
 
-**Kaartlegenda**
+> **Language.** The plugin's interface is in Dutch for now; an English
+> interface is planned. Symbol meanings can already be shown in English.
+> This README gives each menu item and button as it appears in the plugin,
+> followed by an English translation in parentheses.
 
-- **Precies wat er nu op je scherm staat:** elke soort boei, baken, topteken,
-  licht, meerpaal en ander symbool in beeld, één rij per soort met het aantal.
-  Verschuif, zoom of draai je de kaart, of zet je een laag aan of uit, dan
-  past de lijst zich vanzelf aan.
-- **Ook als je ver uitzoomt:** symbolen die de kaart op die schaal weglaat,
-  kunnen grijs in de lijst blijven staan, met de schaal waarop ze verschijnen.
-  Zo weet je wat er in het gebied ligt; een klik zoomt erheen.
-- Uit waypoint-lagen (zoals Nautin), o-charts en ENC-kaarten, met hun
-  betekenis in het Nederlands of Engels, volgens de termen van Kaart 1.
-- Klik op een rij en de plugin wijst het symbool aan op de kaart; klik op de
-  kaart en de plugin wijst de rij aan. De teller ◎ wijst alle exemplaren
-  tegelijk aan.
-- Onderweg desgewenst boven de betekenis van elke rij de **afstand en
-  peiling vanaf de boot** naar het dichtstbijzijnde exemplaar, zoals
-  *0,3 NM · 045°*.
-- Zelf in te delen onder kopjes, in te klappen en te ordenen, met een
-  zoekveld.
-- Eigen betekenissen in één tekstbestand; iconen als PNG of SVG.
+## At a glance
 
-**Lichten**
+**Chart legend**
 
-- Elk lichtkarakter in gewone woorden met een tekening van zijn ritme,
-  onder de ton of het baken waar het licht op staat; sectorlichten met hun
-  sectoren in woorden.
-- Een licht laten branden op de kaart, in zijn eigen ritme, of alle lichten in
-  beeld tegelijk.
-- **Nachtvoorbeeld:** de kaart donker, alleen de lichten branden, zoals je het
-  's nachts vanaf het water ziet.
+- **Exactly what is on your screen now:** every kind of buoy, beacon,
+  topmark, light, mooring post and other symbol in view, one row per kind
+  with its count. Pan, zoom or rotate the chart, or switch a layer on or
+  off, and the list follows by itself.
+- **Even when you zoom far out:** symbols the chart leaves out at that
+  scale can stay in the list in grey, with the scale at which they appear.
+  That way you know what lies in the area; one click zooms there.
+- From waypoint layers (such as Nautin), o-charts and ENC charts, with their
+  meaning in Dutch or English, using the terms of INT 1 (the Dutch edition
+  is called *Kaart 1*).
+- Click a row and the plugin points out the symbol on the chart; click the
+  chart and the plugin points out the row. The counter ◎ points out all
+  instances at once.
+- Under way, optionally the **distance and bearing from the boat** to the
+  nearest instance above each row's meaning, such as *0.3 NM · 045°*.
+- Group the rows under your own headings, fold and reorder them, and use
+  the search field.
+- Your own meanings in a single text file; icons as PNG or SVG.
 
-**Licht herkennen**
+**Lights**
 
-- Zie je een licht en weet je niet welk het is? Tik mee met zijn ritme, op een
-  groot vlak of de spatiebalk, en de plugin noemt de lichten in beeld die het
-  best passen. Een gemiste periode door de deining is geen probleem.
+- Every light characteristic in plain words with a drawing of its rhythm,
+  under the buoy or beacon that carries the light; sector lights with their
+  sectors in words.
+- Make a light shine on the chart in its own rhythm, or all lights in view
+  at once.
+- **Night preview:** the chart goes dark and only the lights shine, as you
+  would see it from the water at night.
 
-**Uitkijk**
+**Identify a light**
 
-- Tijdens het varen: wat je de komende 1, 2, 5, 10 of 20 zeemijl op koers
-  tegenkomt, of zo ver als je zelf invult (jij kiest), op volgorde van
-  aankomst, met wanneer je er bent, de kant waar het ligt, de afstand en zijn
-  licht, en het volgende marifoongebied. Ook wat je op dit moment passeert.
-- De uitkijkbundel staat licht op de kaart, zodat je ziet waar de uitkijk
-  kijkt; smal, middel of breed, in een kleur naar keuze, met dwarslijnen per
-  zeemijl en aan het eind hoe ver hij reikt. Alles wat in de bundel ligt,
-  staat in de lijst.
+- See a light and don't know which one it is? Tap along with its rhythm, on
+  a large pad or the space bar, and the plugin names the lights in view that
+  fit best. Missing a period because of the swell is no problem.
 
-**Marifoon**
+**Lookout**
 
-- Het kanaal van het gebied waar je vaart, met wat je moet doen en het
-  telefoonnummer.
-- Een klik op een VHF-icoon of rechtsklikken op de kaart laat het hele gebied
-  oplichten en noemt het kanaal; vaar je een nieuw gebied in, dan volgt een
-  melding met pieptonen.
+- While sailing: what you will meet on your course within the next 1, 2, 5,
+  10 or 20 nautical miles, or any distance you enter (your choice), in order
+  of arrival, with when you get there, which side it lies on, the distance
+  and its light, and the next VHF area. Also what you are passing right now.
+- The lookout beam is drawn faintly on the chart, so you can see where the
+  lookout is looking: narrow, medium or wide, in a colour of your choice,
+  with cross lines at every nautical mile and its reach at the end.
+  Everything inside the beam is in the list.
 
-**Eigen legenda's en notities**
+**VHF**
 
-- Notities in Markdown uit een vaste map, om doorheen te bladeren. Een losse
-  PNG in die map wordt vanzelf een notitie.
-- Notities schrijven en bewerken in het venster zelf, zoals in een
-  tekstverwerker: koppen, vet, lijsten, afvinklijsten, links en afbeeldingen.
-  Op schijf blijft het gewone Markdown.
+- The channel for the area you are sailing in, with what you have to do and
+  the phone number.
+- Clicking a VHF icon or right-clicking the chart highlights the whole area
+  and names the channel; when you sail into a new area, a notice appears
+  with beeps.
 
-**Notities op de kaart**
+**Your own legends and notes**
 
-- Pin een notitie vast op een plek: die staat als geel blaadje op de kaart,
-  onder *Notities* in de legenda en in de *Uitkijk*, en je krijgt een
-  melding als je in de buurt komt.
-- Een nieuwe notitie maak je met een rechtsklik op de kaart, meteen
-  vastgepind op die plek, of onderweg op de positie van de boot.
-- Sleep een blaadje naar een andere plek; per ongeluk verplaatst zet je met
-  één klik terug.
-- In de tekst een link naar een plek: een klik laat de kaart erheen gaan.
+- Notes in Markdown from a fixed folder, to page through. A loose PNG in
+  that folder becomes a note by itself.
+- Write and edit notes in the window itself, as in a word processor:
+  headings, bold, lists, checklists, links and images. On disk it stays
+  plain Markdown.
 
-**Weergave**
+**Notes on the chart**
 
-- Volgt de kleurenschema's dag, schemer en nacht van OpenCPN, scherp op een
-  Retina-scherm.
+- Pin a note to a place: it shows as a yellow sticky note on the chart,
+  under *Notities* (Notes) in the legend and in the *Uitkijk* (Lookout), and
+  you get a notice when you come near.
+- Create a new note by right-clicking the chart, pinned to that spot right
+  away, or under way at the boat's position.
+- Drag a sticky note to another place; moved it by accident? One click puts
+  it back.
+- A link to a place in the text: one click takes the chart there.
 
-## Installeren
+**Display**
 
-1. Download of bouw het pakket, bijvoorbeeld
+- Follows OpenCPN's day, dusk and night colour schemes, sharp on a Retina
+  display.
+
+## Installing
+
+1. Download or build the package, for example
    `Legend-v0.2.0-alpha27_darwin-wx32-10.13.6-arm64.tar.gz`.
-2. Kies in OpenCPN **Opties → Plugins → Import Plugin** en kies het pakket.
-3. Zet de plugin aan. In de werkbalk verschijnt de Legend-knop.
+2. In OpenCPN, choose **Options → Plugins → Import Plugin** and select the
+   package.
+3. Enable the plugin. The Legend button appears in the toolbar.
 
-Een nieuwe versie kun je over de oude heen importeren.
+You can import a new version over the old one.
 
-## Het venster
+## The window
 
-De Legend-knop opent en sluit het venster. Bovenin staat een keuzelijst met
-alle items, met daarnaast de positie (`2 van 12`). Het eerste item is altijd
-de **Kaartlegenda**; daarna volgen je notities op alfabet.
+The Legend button opens and closes the window. At the top is a drop-down
+list of all items, with the position next to it (`2 van 12`, 2 of 12). The
+first item is always the **Kaartlegenda** (Chart legend); your notes follow
+in alphabetical order.
 
-- Blader met **Vorige** en **Volgende**, of met `←` en `→`.
-- Heeft de keuzelijst de focus, dan werken ook `↑` en `↓`.
-- `Esc` sluit het venster.
-- Het laatst getoonde item, de vensterpositie en -grootte worden onthouden.
-  De scrollpositie van een Markdown-document blijft bewaard zolang OpenCPN
-  draait.
+- Page through with **Vorige** (Previous) and **Volgende** (Next), or with
+  `←` and `→`.
+- When the drop-down list has focus, `↑` and `↓` work too.
+- `Esc` closes the window.
+- The last item shown and the window's position and size are remembered.
+  The scroll position of a Markdown document is kept while OpenCPN is
+  running.
 
-## De kaartlegenda
+## The chart legend
 
-De kaartlegenda toont wat er nu in beeld is, per symbool één rij met het
-aantal (`×7`):
+The chart legend shows what is in view now, one row per symbol with its
+count (`×7`):
 
-- de symbolen van **waypoints** uit GPX-bestanden en GPX-lagen, met hun eigen
-  icoon;
-- de **kaartsymbolen** uit o-charts- en ENC-kaarten (boeien, bakens,
-  toptekens, meerpalen enzovoort), met het plaatje dat OpenCPN op de kaart
-  tekent;
-- de **lichtkarakters**, als ingesprongen rij onder de boei of het baken
-  waar het licht op staat.
+- the symbols of **waypoints** from GPX files and GPX layers, with their own
+  icon;
+- the **chart symbols** from o-charts and ENC charts (buoys, beacons,
+  topmarks, mooring posts and so on), with the picture OpenCPN draws on the
+  chart;
+- the **light characteristics**, as an indented row under the buoy or
+  beacon that carries the light.
 
-De lijst past zich vanzelf aan zodra de kaart stilstaat na verschuiven,
-zoomen of draaien, en ook als je een laag aan- of uitzet.
+The list updates by itself as soon as the chart comes to rest after
+panning, zooming or rotating, and also when you switch a layer on or off.
 
-### Aanwijzen
+### Pointing out
 
-- **Klik op een rij** en het dichtstbijzijnde exemplaar wordt op de kaart
-  gemarkeerd met een ring. Nog een klik gaat naar het volgende (`2/7`). Staat
-  het niet ruim in beeld, dan schuift de kaart ernaartoe. Staat *Afstand en
-  peiling vanaf de boot* aan, dan is dat het exemplaar dat het dichtst bij de
-  boot ligt (zie hieronder).
-- **Klik op de teller** (`×7 ◎`) en alle exemplaren in beeld worden tegelijk
-  aangewezen.
-- **Klik op de kaart** op een symbool terwijl de legenda open is, of kies
-  **Toon in legenda** in het rechtsklikmenu van de kaart. De plugin opent het
-  juiste kopje, scrolt naar de rij en laat die oplichten.
-- Boven alles wat je kunt aanklikken, zegt een tooltip wat een klik doet.
+- **Click a row** and the nearest instance is marked on the chart with a
+  ring. Another click moves to the next one (`2/7`). If it is not well in
+  view, the chart scrolls to it. With *Afstand en peiling vanaf de boot*
+  (Distance and bearing from the boat) on, that is the instance nearest to
+  the boat (see below).
+- **Click the counter** (`×7 ◎`) and all instances in view are pointed out
+  at once.
+- **Click a symbol on the chart** while the legend is open, or choose
+  **Toon in legenda** (Show in legend) in the chart's right-click menu. The
+  plugin opens the right heading, scrolls to the row and highlights it.
+- Everything you can click has a tooltip that says what a click does.
 
-### Kopblok en instellingen
+### Header and settings
 
-Bovenaan staat **Kaartlegenda** met rechts twee knoppen:
+At the top is **Kaartlegenda** with two buttons on the right:
 
-- het **tandwiel** opent het menu Instellingen;
-- de **pijl** (Ververs) leest alle waypoints, kaartcellen en marifoongebieden
-  opnieuw in. Gebruik dit als je een waypoint hebt veranderd terwijl de kaart
-  stilstaat.
+- the **gear** opens the *Instellingen* (Settings) menu;
+- the **arrow** (*Ververs*, Refresh) reads all waypoints, chart cells and
+  VHF areas again. Use it when you have changed a waypoint while the chart
+  is at rest.
 
-In het menu Instellingen:
+In the Settings menu:
 
-| Keuze | Wat het doet |
+| Menu item | What it does |
 |---|---|
-| Lichten | Lichtrijen tonen of verbergen |
-| Ook op deze schaal verborgen tonen | Ook symbolen die de kaart op deze schaal niet tekent (zie hieronder) |
-| Afstand en peiling vanaf de boot | Boven de betekenis van elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
-| Engelse namen | Betekenissen in het Engels in plaats van het Nederlands |
-| Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
-| Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
-| Licht herkennen | Een licht herkennen aan zijn ritme |
-| Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
-| Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
-| Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
-| Uitkijkbundel op de kaart | De uitkijkbundel licht getekend op de kaart; standaard aan |
-| Uitkijkbundel: breedte ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
-| Uitkijkbundel: lengte ▸ | 1, 2, 5, 10 of 20 zeemijl, of *Anders…* om zelf een lengte in te vullen (0,5 tot 50 zeemijl); standaard 2. Tijdens het varen staat erachter hoe lang je erover doet |
-| Uitkijkbundel: kleur ▸ | Amber (standaard), Oranje of Grijs |
-| Alles inklappen / uitklappen | Alle kopjes tegelijk |
-| Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
+| Lichten (Lights) | Show or hide light rows |
+| Ook op deze schaal verborgen tonen (Also show hidden at this scale) | Also symbols the chart does not draw at this scale (see below) |
+| Afstand en peiling vanaf de boot (Distance and bearing from the boat) | Above each row's meaning, the distance and bearing to the nearest instance (see below); off by default |
+| Engelse namen (English names) | Meanings in English instead of Dutch |
+| Alle lichten laten branden (Make all lights shine) | All lights in view shine on the chart |
+| Nachtvoorbeeld (Night preview) | The chart as you see it at night |
+| Licht herkennen (Identify a light) | Identify a light by its rhythm |
+| Marifoongebied blijft oplichten (VHF area stays highlighted) | A clicked VHF area stays red until the next click on the chart, instead of fading after six seconds |
+| Melding bij nieuw marifoongebied (Notice on new VHF area) | A notice with beeps when the boat enters a new VHF area |
+| Melding bij notitie in de buurt (Notice when near a note) | A notice with beeps when the boat comes within the radius of a pinned note |
+| Uitkijkbundel op de kaart (Lookout beam on the chart) | The lookout beam drawn faintly on the chart; on by default |
+| Uitkijkbundel: breedte ▸ (Lookout beam: width) | Narrow (15°), Medium (30°) or Wide (45°) on either side of the course |
+| Uitkijkbundel: lengte ▸ (Lookout beam: length) | 1, 2, 5, 10 or 20 nautical miles, or *Anders…* (Other…) to enter a length yourself (0.5 to 50 nautical miles); 2 by default. While sailing, each choice shows how long it takes you |
+| Uitkijkbundel: kleur ▸ (Lookout beam: colour) | Amber (default), Orange or Grey |
+| Alles inklappen / uitklappen (Fold / unfold all) | All headings at once |
+| Volgorde wijzigen… (Change order…) | Put the headings in a different order |
 
-Hoeveel symbolen, waypoints, kaartobjecten en lichtkarakters er in beeld zijn,
-staat onderaan de lijst.
+How many symbols, waypoints, chart objects and light characteristics are in
+view is shown at the bottom of the list.
 
-### Zoeken
+### Searching
 
-Boven de lijst staat een zoekveld (`Cmd+F`). Alleen rijen waarin alle getypte
-woorden voorkomen blijven over, ook onder ingeklapte kopjes. Hoofdletters en
-accenten tellen niet: `waterskien` vindt *Waterskiën*. Een boei en haar licht
-worden samen gevonden. `Esc` maakt eerst het zoekveld leeg en sluit pas daarna
-het venster.
+Above the list is a search field (`Cmd+F`). Only rows containing all the
+typed words remain, including those under folded headings. Case and accents
+don't matter: `waterskien` finds *Waterskiën*. A buoy and its light are
+found together. `Esc` first clears the search field and only then closes
+the window.
 
-### Kopjes
+### Headings
 
-De lijst is verdeeld in kopjes, die je zelf maakt in `symbolen.txt` (zie
-*Je eigen betekenissen*).
+The list is divided into headings, which you create yourself in
+`symbolen.txt` (see *Your own meanings*).
 
-- Klik op een kopje om het in of uit te klappen. Een ingeklapt kopje toont nog
-  het aantal en een strook met de eerste iconen. De plugin onthoudt welke
-  kopjes dicht zijn.
-- **Volgorde wijzigen** toont alleen de kopjes, met grote knoppen ▲ en ▼ die
-  ook op een aanraakscherm goed werken. De nieuwe volgorde wordt meteen in
-  `symbolen.txt` bewaard.
-- **Kaartsymbolen** en **Lichtkarakters** zijn kopjes van de plugin zelf: daar
-  staan kaartsymbolen zonder eigen betekenis en lichten die op niets uit de
-  lijst staan. Ze zijn net zo te verplaatsen als je eigen kopjes.
-- Symbolen onder geen enkel kopje staan onderaan bij **Overig**.
+- Click a heading to fold or unfold it. A folded heading still shows the
+  count and a strip with the first icons. The plugin remembers which
+  headings are folded.
+- **Volgorde wijzigen** (Change order) shows only the headings, with large
+  ▲ and ▼ buttons that also work well on a touch screen. The new order is
+  saved to `symbolen.txt` right away.
+- **Kaartsymbolen** (Chart symbols) and **Lichtkarakters** (Light
+  characteristics) are the plugin's own headings: they hold chart symbols
+  without a meaning of their own and lights that stand on nothing in the
+  list. They can be moved just like your own headings.
+- Symbols under no heading at all are at the bottom under **Overig**
+  (Other).
 
-### Verborgen op deze schaal
+### Hidden at this scale
 
-Sommige symbolen tekent de kaart pas als je ver genoeg inzoomt. Met **Ook op
-deze schaal verborgen tonen** krijgen ze een grijze rij. Boven de betekenis
-staan klein een gesloten oogje en de schaal waarop ze verschijnen (`1:200k`). Een klik zoomt in tot het
-dichtstbijzijnde exemplaar zichtbaar is. Wat je zelf hebt uitgezet bij
-*Gebruikers standaard* in OpenCPN blijft weg.
+Some symbols are drawn by the chart only when you zoom in far enough. With
+**Ook op deze schaal verborgen tonen** (Also show hidden at this scale) they
+get a grey row. Above the meaning, in small print, are a closed eye and the
+scale at which they appear (`1:200k`). A click zooms in until the nearest
+instance is visible. What you have switched off yourself under *User
+Standard* in OpenCPN stays out.
 
-### Afstand en peiling vanaf de boot
+### Distance and bearing from the boat
 
-Met **Afstand en peiling vanaf de boot** staat boven de betekenis van elke
-rij klein en grijs hoe ver het dichtstbijzijnde exemplaar van de boot af ligt
-en in welke richting: *0,3 NM · 045°* (ware peiling), of in meters onder een
-tiende zeemijl, zoals *150 m*. In de Uitkijk staat het bij elk object.
+With **Afstand en peiling vanaf de boot** (Distance and bearing from the
+boat), each row shows above its meaning, small and grey, how far the
+nearest instance is from the boat and in which direction: *0.3 NM · 045°*
+(true bearing), or in metres below a tenth of a nautical mile, such as
+*150 m*. In the Lookout it is shown for every object.
 
-- Een klik op een rij gaat dan naar het exemplaar dat het dichtst bij de boot
-  ligt; nog een klik naar het volgende, steeds verder weg. Klik je eerst een
-  andere rij aan, dan begint het weer bij het dichtstbijzijnde.
-- Het werkt alleen met een GPS-positie van de laatste minuut; anders blijven
-  de getallen weg en geldt het midden van de kaart, zoals altijd.
-- Onderweg worden de getallen hooguit eens per vijf seconden bijgewerkt.
-- Thuis uitproberen kan met de plugin ShipDriver.
+- A click on a row then goes to the instance nearest to the boat; another
+  click to the next one, further and further away. Click another row first
+  and it starts again at the nearest one.
+- It only works with a GPS position from the last minute; otherwise the
+  numbers stay away and the centre of the chart is used, as always.
+- Under way the numbers are updated at most once every five seconds.
+- You can try it at home with the ShipDriver plugin.
 
-## Lichten
+## Lights
 
-De plugin leest het lichtkarakter uit de kaart en uit waypoints. In een
-waypoint staat het na `Lichtkarakter:` in de beschrijving, of op een eigen
-regel van de naam, zoals in de Nautin-laag.
+The plugin reads the light characteristic from the chart and from
+waypoints. In a waypoint it follows `Lichtkarakter:` in the description, or
+stands on a line of its own in the name, as in the Nautin layer.
 
-- **In woorden.** Elk licht krijgt een lampje in zijn kleur, de afkorting
-  zoals op de kaart en de betekenis met de termen van Kaart 1, bijvoorbeeld
-  *Fl(2+1)G.10s — groen groepschitterlicht met samengestelde groep: 2+1
-  schitteringen, elke 10 seconden*. Daaronder staat het ritme als tekening.
-- **Laten branden.** Een klik op een lichtrij laat dat licht op de kaart
-  branden in zijn ritme, met een gloed en stralen. Periode en groepen komen
-  uit de kaart; hoe lang één schittering duurt is een gangbare waarde.
-- **Alle lichten laten branden** zet alle lichten in beeld aan, elk in zijn
-  eigen ritme, tot je het weer uitzet. Ze schuiven mee met de kaart.
-- **Sectorlichten** worden één licht met hun sectoren in woorden, zoals
-  *rood 090°–115°, wit 115°–120°* (peilingen naar het licht). Brandt het
-  licht op de kaart, dan staan de sectoren er als gekleurde taartpunten om.
+- **In words.** Each light gets a lamp in its colour, the abbreviation as on
+  the chart and its meaning in the terms of INT 1, for example
+  *Fl(2+1)G.10s — composite group-flashing green light: 2+1 flashes every
+  10 seconds*. Below it, the rhythm is drawn.
+- **Make it shine.** Clicking a light row makes that light shine on the
+  chart in its rhythm, with a glow and rays. Period and groups come from the
+  chart; how long a single flash lasts is a common value.
+- **Alle lichten laten branden** (Make all lights shine) switches on all
+  lights in view, each in its own rhythm, until you switch it off again.
+  They move along with the chart.
+- **Sector lights** become one light with their sectors in words, such as
+  *red 090°–115°, white 115°–120°* (bearings towards the light). When the
+  light shines on the chart, the sectors are drawn around it as coloured
+  wedges.
 
-### Nachtvoorbeeld
+### Night preview
 
-**Nachtvoorbeeld** legt een donkerblauwe laag over de kaart, waar kust en
-vaarwegen nog net doorheen schemeren. Daarop branden alle lichten in beeld in
-hun ritme. Zo zie je vooraf hoe een nachtelijke aankomst eruitziet. Je eigen
-schip en AIS-doelen blijven erboven zichtbaar, en het legendavenster gaat
-mee in de nachtkleuren.
+**Nachtvoorbeeld** (Night preview) lays a dark blue layer over the chart,
+through which the coast and fairways just show. On top of it all lights in
+view shine in their rhythm. This way you can see in advance what a night
+arrival looks like. Your own ship and AIS targets stay visible above it, and
+the legend window switches to the night colours too.
 
-### Licht herkennen
+### Identify a light
 
-Zie je een licht en weet je niet welk het is, kies dan **Licht herkennen**.
-Bovenaan de lijst verschijnt een kader met een groot vlak.
+If you see a light and don't know which one it is, choose **Licht
+herkennen** (Identify a light). A frame with a large pad appears at the top
+of the list.
 
-1. Houd het vlak of de spatiebalk ingedrukt zolang het licht brandt, en laat
-   los als het donker is. Doe dat twee of drie perioden lang. Het vlak licht
-   op zolang je drukt, en een regel telt de tikken en de seconden licht of
-   donker.
-2. Klik eventueel op de kleur van het licht.
-3. De plugin toont je ritme als tekening en in woorden, en de vijf lichten in
-   beeld die het best passen, met hoe goed ze passen. Een klik laat zo'n
-   licht op de kaart branden.
+1. Hold down the pad or the space bar while the light is on, and let go
+   when it is dark. Do this for two or three periods. The pad lights up
+   while you press, and a line counts the taps and the seconds of light or
+   dark.
+2. Optionally click the colour of the light.
+3. The plugin shows your rhythm as a drawing and in words, plus the five
+   lights in view that fit best, with how well they fit. A click makes such
+   a light shine on the chart.
 
-Een periode missen, bijvoorbeeld door de deining, is geen probleem. Pas na een
-minuut zonder tikken begint de plugin opnieuw; **Tikken wissen** doet dat
-meteen. **Sluiten** haalt het kader weg.
+Missing a period, for example because of the swell, is no problem. Only
+after a minute without taps does the plugin start over; **Tikken wissen**
+(Clear taps) does so right away. **Sluiten** (Close) removes the frame.
 
-## Onderweg
+## Under way
 
-### Marifoon
+### VHF
 
-Het kopje **Marifoon** staat bovenaan de lijst en toont het kanaal van het
-gebied waar de boot is: kanaal, oproepnaam, soort post, wat je moet doen
-(uitluisteren, melden of aanmelden) en het telefoonnummer. De gegevens komen
-uit de laag *VHFinfo Nederland* van
-[VHF2OpenCPN](https://github.com/kwillems/VHF2OpenCPN). Zonder recente
-GPS-positie geldt het midden van de kaart; dat staat er dan bij. Staat de
-laag uit, dan verdwijnt het kopje.
+The **Marifoon** (VHF) heading is at the top of the list and shows the
+channel for the area the boat is in: channel, call name, type of station,
+what you have to do (listen, report or check in) and the phone number. The
+data comes from the *VHFinfo Nederland* layer of
+[VHF2OpenCPN](https://github.com/kwillems/VHF2OpenCPN). Without a recent GPS
+position the centre of the chart is used; it then says so. When the layer
+is off, the heading disappears.
 
-Een marifoongebied kan op de kaart oplichten, lichtrood zoals op
+A VHF area can be highlighted on the chart, in light red as on
 [vhfinfo.org](https://vhfinfo.org/map.html):
 
-- **Klik op een VHF-icoon** van de laag op de kaart, op zijn rij in de
-  legenda of op een regel van het Marifoon-kopje: het hele gebied licht op en
-  bovenaan de kaart verschijnt een venstertje met het kanaal. Bestaat een
-  gebied uit meer stukken, dan lichten ze allemaal op. De teller ◎ van een
-  rij laat alle gebieden van dat icoon in beeld oplichten.
-- **Welk marifoonkanaal hier?** in het rechtsklikmenu van de kaart laat alle
-  gebieden op die plek oplichten en noemt hun kanalen in een venstertje. Dit
-  werkt ook als de laag in OpenCPN uit staat: de plugin leest de gebieden
-  zelf uit het GPX-bestand.
-- Een gebied licht zes seconden op en vervaagt dan, of blijft staan tot je
-  weer op de kaart klikt (instelling *Marifoongebied blijft oplichten*).
+- **Click a VHF icon** of the layer on the chart, its row in the legend or a
+  line of the VHF heading: the whole area lights up and a small window with
+  the channel appears at the top of the chart. If an area consists of
+  several parts, they all light up. A row's counter ◎ highlights all areas
+  of that icon in view.
+- **Welk marifoonkanaal hier?** (Which VHF channel here?) in the chart's
+  right-click menu highlights all areas at that spot and names their
+  channels in a small window. This works even when the layer is switched off
+  in OpenCPN: the plugin reads the areas from the GPX file itself.
+- An area lights up for six seconds and then fades, or stays until you click
+  the chart again (setting *Marifoongebied blijft oplichten*, VHF area stays
+  highlighted).
 
-**Melding bij een nieuw gebied.** Vaar je met GPS een marifoongebied binnen
-waar je net nog niet was, dan licht het op en verschijnt bovenaan de kaart
-een venstertje met het kanaal, bijvoorbeeld *kanaal 18 · Ketelbrug ·
-verkeerspost · melden*, met zes pieptonen. Het venstertje verdwijnt na twaalf
-seconden, met **Sluiten** of met een klik ernaast. Dit werkt ook als het legendavenster dicht is, en
-is uit te zetten met *Melding bij nieuw marifoongebied*.
+**Notice on a new area.** When you sail with GPS into a VHF area you were
+not in a moment ago, it lights up and a small window with the channel
+appears at the top of the chart, for example *kanaal 18 · Ketelbrug ·
+verkeerspost · melden* (channel 18 · Ketelbrug · traffic post · report), with
+six beeps. The window disappears after twelve seconds, with **Sluiten**
+(Close) or with a click outside it. This also works when the legend window
+is closed, and can be switched off with *Melding bij nieuw marifoongebied*
+(Notice on new VHF area).
 
-### Uitkijk
+### Lookout
 
-Het kopje **Uitkijk** laat zien wat je op koers tegenkomt. Het verschijnt
-zodra de boot vaart: een recente GPS-positie en minstens een halve knoop.
-Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld *tot 2 NM,
-± 20 min · breedte 30°*, en *niets in de bundel* als er niets ligt. De tijd
-is een schatting bij je snelheid van dit moment. Klap je de Uitkijk in, dan
-staan rechts naast het kopje de iconen van wat je het eerst tegenkomt, op
-volgorde van aankomst (ook marifoongebieden en notities), met het aantal van
-de rest erachter, zoals *+4*.
+The **Uitkijk** (Lookout) heading shows what you will meet on your course.
+It appears as soon as the boat is moving: a recent GPS position and at
+least half a knot. Next to the heading it says where the lookout is
+looking, for example *tot 2 NM, ± 20 min · breedte 30°* (up to 2 NM, ±
+20 min · width 30°), and *niets in de bundel* (nothing in the beam) when
+nothing is there. The time is an estimate at your current speed. When you
+fold the Lookout, the icons of what you will meet first are shown to the
+right of the heading, in order of arrival (VHF areas and notes too), with
+the count of the rest after them, such as *+4*.
 
-Elke regel begint klein met wanneer en waar, met de beschrijving eronder:
+Each line starts small with when and where, with the description below:
 
-- Alle objecten uit de legenda in de bundel, op volgorde van aankomst,
-  bijvoorbeeld *over 4 min · stuurboord · 0,6 NM · 038°* met daaronder *Rode
-  spitse ton* en het lichtkarakter. Afstand en peiling staan erbij als
-  *Afstand en peiling vanaf de boot* aan staat.
-- Met *Ook op deze schaal verborgen tonen* staan ook tonnen die de kaart op
-  deze schaal nog niet tekent erin, grijs, met het gesloten oogje en de
-  schaal, net als in de rest van de legenda. Een klik zoomt erheen.
-- Ook wat je op dit moment passeert: wat binnen 0,12 zeemijl (zo'n 220 meter)
-  naast of net achter je ligt, staat bovenaan als *nu*, tot het achter je uit
-  die cirkel valt.
-- Tot twee marifoongebieden waar de koers in gaat, op hun plek in de tijd,
-  bijvoorbeeld *over 12 min* met daaronder *Marifoongebied kanaal 22 ·
-  Houtribsluizen · melden*. Een klik laat het gebied oplichten. De tekens van de laag
-  *VHFinfo Nederland* zelf tellen niet als object; echte marifoonborden langs
-  het water (B11, E23) wel.
-- De vastgepinde notities op je koers, bijvoorbeeld *over 6 min ·
-  stuurboord* met daaronder *Notitie Ondiepte bij de Ketelbrug*. Een klik
-  opent de notitie; is hij op deze schaal verborgen, dan zoomt de klik erheen.
-- Een klik op een regel wijst het object aan op de kaart, of laat zijn licht
-  branden.
+- All objects from the legend inside the beam, in order of arrival, for
+  example *over 4 min · stuurboord · 0,6 NM · 038°* (in 4 min · starboard ·
+  0.6 NM · 038°) with *Rode spitse ton* (red conical buoy) and the light
+  characteristic below. Distance and bearing are shown when *Afstand en
+  peiling vanaf de boot* is on.
+- With *Ook op deze schaal verborgen tonen*, buoys the chart does not draw
+  yet at this scale are listed too, in grey, with the closed eye and the
+  scale, just as in the rest of the legend. A click zooms there.
+- Also what you are passing right now: anything within 0.12 nautical miles
+  (about 220 metres) beside you or just behind you is at the top as *nu*
+  (now), until it falls out of that circle behind you.
+- Up to two VHF areas your course enters, at their place in time, for
+  example *over 12 min* with *Marifoongebied kanaal 22 · Houtribsluizen ·
+  melden* (VHF area channel 22 · Houtribsluizen · report) below. A click
+  highlights the area. The signs of the *VHFinfo Nederland* layer itself
+  don't count as objects; real VHF signs along the water (B11, E23) do.
+- The pinned notes on your course, for example *over 6 min · stuurboord*
+  with *Notitie Ondiepte bij de Ketelbrug* (Note Shallows near the
+  Ketelbrug) below. A click opens the note; if it is hidden at this scale,
+  the click zooms there.
+- A click on a line points out the object on the chart, or makes its light
+  shine.
 
-**De uitkijkbundel.** De uitkijk kijkt vanuit een cirkel van 0,12 zeemijl om
-de boot in een waaier vooruit: dichtbij minstens 0,12 zeemijl breed aan elke
-kant, verderop breder. Het eind is rond: elk punt van de rand ligt even ver
-van de boot. Hoe ver hij reikt, kies je met **Uitkijkbundel: lengte**: 1, 2
-(standaard), 5, 10 of 20 zeemijl, of met *Anders…* een eigen lengte van 0,5
-tot 50 zeemijl. De lengte hangt niet af van je snelheid; in het menu staat
-achter elke keuze hoe lang je er bij je snelheid van nu over doet. Op druk
-vaarwater houdt een korte lengte de lijst overzichtelijk. Hoe breed de waaier uitloopt, kies je met **Uitkijkbundel:
-breedte**: smal (15°), middel (30°, standaard) of breed (45°) aan
-weerszijden van de koers.
+**The lookout beam.** The lookout looks from a circle of 0.12 nautical miles
+around the boat, in a fan ahead: close by at least 0.12 nautical miles wide
+on each side, wider further on. The end is round: every point of the edge
+is the same distance from the boat. You choose how far it reaches with
+**Uitkijkbundel: lengte** (Lookout beam: length): 1, 2 (default), 5, 10 or
+20 nautical miles, or with *Anders…* (Other…) a length of your own from 0.5
+to 50 nautical miles. The length does not depend on your speed; in the menu
+each choice shows how long it takes you at your current speed. On busy
+waters a short length keeps the list manageable. You choose how wide the
+fan opens with **Uitkijkbundel: breedte** (Lookout beam: width): narrow
+(15°), medium (30°, default) or wide (45°) on either side of the course.
 
-Met **Uitkijkbundel op de kaart** (standaard aan) staat de bundel heel licht
-op de kaart, zolang het legendavenster open is en de boot vaart, ook als je
-er even een notitie in bekijkt. Zo zie je waarom een
-ton wel of niet in de lijst staat. Uitzetten verbergt alleen de tekening; de
-lijst blijft. De kleur kies je met **Uitkijkbundel: kleur**: amber
-(standaard), oranje of grijs. Kleuren die op de kaart iets betekenen (geel,
-rood, groen, paars) zitten er bewust niet bij. Bij schemer en nacht wordt de
-bundel gedimd, maar blijft hij zichtbaar; grijs wordt dan lichtgrijs, omdat
-het donkere grijs van overdag op de donkere kaart zou wegvallen.
+With **Uitkijkbundel op de kaart** (Lookout beam on the chart, on by
+default) the beam is drawn very faintly on the chart, while the legend
+window is open and the boat is moving, even while you look at a note in it.
+That way you can see why a buoy is or isn't in the list. Switching it off
+hides only the drawing; the list stays. You choose the colour with
+**Uitkijkbundel: kleur** (Lookout beam: colour): amber (default), orange or
+grey. Colours that mean something on the chart (yellow, red, green, purple)
+are deliberately left out. At dusk and night the beam is dimmed but stays
+visible; grey then becomes light grey, because the dark grey of daytime
+would disappear on the dark chart.
 
-Op de bundel zie je hoe ver hij reikt:
+The beam shows how far it reaches:
 
-- Bij de stuurboordhoek van het eind staat de lengte met de vaartijd, zoals
-  *3 NM, ± 20 min*. Het midden, recht vooruit, blijft zo vrij.
-- Dunne stippellijnen dwars over de bundel markeren de zeemijlen: bij elke
-  zeemijl tot en met 5 NM, bij elke 5 zeemijl tot en met 25 NM en daarboven
-  bij elke 10. Zo zie je meteen of een ton voor of na een mijlgrens ligt.
-  Vlak voor het eind komt geen lijn; bij een bundel van 1 NM staat er alleen
-  het label.
-- Komen de lijnen op het scherm te dicht bij elkaar, dan verdwijnen ze; is de
-  hele bundel klein op het scherm, dan verdwijnt ook het label.
+- At the starboard corner of the end, the length is shown with the sailing
+  time, such as *3 NM, ± 20 min*. That keeps the middle, straight ahead,
+  clear.
+- Thin dotted lines across the beam mark the nautical miles: at every
+  nautical mile up to 5 NM, at every 5 nautical miles up to 25 NM and every
+  10 beyond that. So you can see at once whether a buoy lies before or after
+  a mile line. No line is drawn just before the end; a 1 NM beam only has
+  the label.
+- When the lines come too close together on screen, they disappear; when
+  the whole beam is small on screen, the label disappears too.
 
-Testen zonder te varen kan met de plugin ShipDriver.
+You can test without sailing with the ShipDriver plugin.
 
-## Je eigen betekenissen: `symbolen.txt`
+## Your own meanings: `symbolen.txt`
 
-De plugin maakt bij het eerste gebruik `symbolen.txt` aan in de Legend-map,
-met uitleg in commentaar. Daarin geef je symbolen een betekenis en deel je ze
-in onder kopjes:
+On first use the plugin creates `symbolen.txt` in the Legend folder, with an
+explanation in comments. In it you give symbols a meaning and group them
+under headings:
 
 ```text
 [Marifoon]
@@ -400,31 +425,33 @@ Sluis         = Sluis
 BOYPIL60      = Rode pilaarton | Red pillar buoy
 ```
 
-- Per regel `icoonnaam = betekenis`. De icoonnaam is de bestandsnaam van het
-  icoon zonder `.png` of `.svg`, of voor een kaartsymbool de S-52-naam (die
-  staat in de tooltip van de rij).
-- Een `*` in de naam staat voor willekeurige tekst; een `*` in de betekenis
-  wordt door die tekst vervangen. Exacte namen gaan voor.
-- `[Kopje]` begint een groep. Kopjes en regels verschijnen in de volgorde van
-  het bestand.
-- Twee talen: `betekenis | meaning` en `[Kopje | Heading]`. Is één kant
-  leeg, zoals `| Yellow buoy`, dan geldt in beide talen de andere.
-- Een lege betekenis (`vhf_* =`) deelt het symbool alleen in.
-- Regels die met `#` beginnen worden overgeslagen.
+- One `icon name = meaning` per line. The icon name is the file name of the
+  icon without `.png` or `.svg`, or for a chart symbol the S-52 name (shown
+  in the row's tooltip).
+- A `*` in the name stands for any text; a `*` in the meaning is replaced by
+  that text. Exact names take precedence.
+- `[Heading]` starts a group. Headings and lines appear in the order of the
+  file.
+- Two languages: `betekenis | meaning` and `[Kopje | Heading]`. If one side
+  is empty, such as `| Yellow buoy`, the other side is used in both
+  languages.
+- An empty meaning (`vhf_* =`) only puts the symbol under a heading.
+- Lines starting with `#` are skipped.
 
-Heeft een symbool geen regel, dan zoekt de plugin verder: de eerste regel van
-de beschrijving als alle waypoints met dat icoon die delen, dan de
-beschrijving die OpenCPN van het icoon kent, en anders de icoonnaam in grijs.
-Zo zie je welke symbolen nog een betekenis nodig hebben.
+If a symbol has no line, the plugin looks further: the first line of the
+description if all waypoints with that icon share it, then the description
+OpenCPN knows for the icon, and otherwise the icon name in grey. That way
+you can see which symbols still need a meaning.
 
-Kaartsymbolen krijgen een naam uit hun objectsoort en kenmerken, zoals
-*Laterale boei: bakboord, rood, stompe ton*. De Nederlandse termen komen uit
-Kaart 1 en het BPR (`data/s57-nl.txt`). Met een eigen `s57-nl.txt` in de
-Legend-map vul je ze aan of verbeter je ze.
+Chart symbols get a name from their object class and attributes, such as
+*Lateral buoy: port, red, can*. The Dutch terms come from Kaart 1 and the
+BPR, the Dutch inland navigation police regulations (`data/s57-nl.txt`).
+With your own `s57-nl.txt` in the Legend folder you can add to them or
+correct them.
 
-## Eigen legenda's en notities
+## Your own legends and notes
 
-Alle Markdown-bestanden in de Legend-map verschijnen in de keuzelijst:
+All Markdown files in the Legend folder appear in the drop-down list:
 
 ```text
 ~/Documents/OpenCPN/Legend/
@@ -432,241 +459,242 @@ Alle Markdown-bestanden in de Legend-map verschijnen in de keuzelijst:
 ├── Route-IJsselmeer.md
 ├── Checklist.md
 ├── symbolen.txt
-├── s57-nl.txt        (optioneel)
+├── s57-nl.txt        (optional)
 └── images/
     ├── brug.png
     ├── sluis.png
     └── VHF-Nederland.png
 ```
 
-- **Markdown** (`.md`, `.markdown`) wordt opgemaakt weergegeven, met
-  tabellen, lokale afbeeldingen en klikbare links. Is de eerste regel een kop
-  `# Titel`, dan wordt dat de titel in de keuzelijst; anders de bestandsnaam.
-- Een afbeelding die breder is dan het venster wordt verkleind tot hij past,
-  ook als je het venster smaller maakt; kleinere houden hun eigen maat.
-- **Een losse PNG** in de Legend-map, zoals een gescande legenda, wordt
-  vanzelf een notitie: de afbeelding verhuist naar `images/` en een notitie
-  met dezelfde naam toont hem. Zo kun je hem bewerken, hernoemen,
-  verwijderen en vastpinnen als elke andere notitie. Een PNG die al in een
-  notitie staat, blijft waar hij is.
+- **Markdown** (`.md`, `.markdown`) is shown formatted, with tables, local
+  images and clickable links. If the first line is a heading `# Title`, that
+  becomes the title in the drop-down list; otherwise the file name.
+- An image wider than the window is scaled down to fit, also when you make
+  the window narrower; smaller ones keep their own size.
+- **A loose PNG** in the Legend folder, such as a scanned legend, becomes a
+  note by itself: the image moves to `images/` and a note with the same name
+  shows it. You can then edit, rename, delete and pin it like any other
+  note. A PNG that is already used in a note stays where it is.
 
-Een voorbeeld:
+An example:
 
 ```markdown
 # Route IJsselmeer
 
-## Vertrek
+## Departure
 
-- Controleer weer en route.
-- Zet de marifoon op het juiste kanaal.
+- Check the weather and the route.
+- Set the VHF to the right channel.
 
-| Object | VHF | Opmerking |
+| Object | VHF | Remark |
 |---|---:|---|
-| Ketelbrug | 18 | Luister uit op kanaal 18 |
-| Houtribsluizen | 22 | Meld je voor passage |
+| Ketelbrug | 18 | Listen on channel 18 |
+| Houtribsluizen | 22 | Report before passage |
 
-![Brug](images/brug.png)
+![Bridge](images/brug.png)
 ```
 
-Markdown is een open tekstformaat: je kunt notities ook met elke andere
-editor schrijven en buiten OpenCPN gebruiken.
+Markdown is an open text format: you can also write notes with any other
+editor and use them outside OpenCPN.
 
-### Notities schrijven
+### Writing notes
 
-Naast de keuzelijst staan vier knoppen. Het potlood, de naam en de
-prullenbak verschijnen alleen bij een notitie:
+Next to the drop-down list are four buttons. The pencil, the name and the
+bin appear only with a note:
 
-| Knop | Wat het doet |
+| Button | What it does |
 |---|---|
-| Potlood | De notitie bewerken |
-| Tekstvak met cursor | Een andere titel geven: het bestand en de `# Titel` bovenaan veranderen mee |
-| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map `Verwijderd` in de Legend-map; zet het terug om het weer te gebruiken |
-| Plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
+| Pencil | Edit the note |
+| Text box with cursor | Give it another title: the file and the `# Title` at the top change along |
+| Bin | Delete, after confirmation. The file goes to the `Verwijderd` (Deleted) folder in the Legend folder; move it back to use it again |
+| Plus | A new note: you give a title and start writing right away |
 
-Tijdens het bewerken zie je de notitie zoals hij eruitziet, zonder
-Markdown-tekens. Bovenin staat een rij knoppen:
+While editing you see the note as it looks, without Markdown characters. At
+the top is a row of buttons:
 
-- **H** kiest het kopniveau: kop 1 tot en met 6, of gewone tekst;
-- **B** en *I* voor vet en cursief (ook `Cmd+B` en `Cmd+I`);
-- een lijst met bolletjes, een genummerde lijst of een afvinklijst; klik op
-  een hokje om het af te vinken;
-- een link van de geselecteerde tekst, en een afbeelding. Een afbeelding van
-  buiten de Legend-map wordt eerst naar `images/` gekopieerd;
-- de **speld** voor een plek op de kaart (zie *Notities op de kaart*).
+- **H** chooses the heading level: heading 1 to 6, or plain text;
+- **B** and *I* for bold and italic (also `Cmd+B` and `Cmd+I`);
+- a bulleted list, a numbered list or a checklist; click a box to tick it;
+- a link from the selected text, and an image. An image from outside the
+  Legend folder is first copied to `images/`;
+- the **pin** for a place on the chart (see *Notes on the chart*).
 
-Enter na een kop geeft weer gewone tekst, Enter op een lege lijstregel
-beëindigt de lijst en `Shift+Enter` begint een nieuwe regel binnen dezelfde
-alinea. Alles wordt vanzelf bewaard, anderhalve seconde nadat je stopt met
-typen; onderin staat wanneer. **Opslaan**, bovenin naast de keuzelijst, of
-`Esc` bewaart en brengt je terug naar de gewone weergave.
+Enter after a heading gives plain text again, Enter on an empty list line
+ends the list and `Shift+Enter` starts a new line within the same paragraph.
+Everything is saved by itself, a second and a half after you stop typing;
+the bottom shows when. **Opslaan** (Save), at the top next to the drop-down
+list, or `Esc` saves and takes you back to the normal view.
 
-Op schijf blijft een notitie gewone Markdown. Een tabel zie je tijdens het
-bewerken als Markdown-tekst in een vaste letter; zo kun je hem bewerken en
-blijft hij precies bewaard.
+On disk a note stays plain Markdown. While editing, a table is shown as
+Markdown text in a fixed-width font; that way you can edit it and it is
+saved exactly as is.
 
-### Notities op de kaart
+### Notes on the chart
 
-Een notitie kan op twee manieren met de kaart verbonden zijn.
+A note can be connected to the chart in two ways.
 
-**Een link naar een plek in de tekst.** Klik je er in de notitie op, dan gaat
-de kaart erheen en wijst de plek aan. Zo'n link maak je met de speld-knop
-(*Link naar het midden van de kaart in de tekst*), of met een rechtsklik op de
-kaart: *Notitie ▸ Link naar deze plek in de tekst*. Is er tekst geselecteerd,
-dan wordt die de link; anders komen de coördinaten in de tekst. In het
-bestand staat zo'n link als `[Ketelbrug](geo:52.58030,5.75120)`, een
-standaard die ook andere kaartprogramma's begrijpen.
+**A link to a place in the text.** Click it in the note and the chart goes
+there and points out the place. You create such a link with the pin button
+(*Link naar het midden van de kaart in de tekst*, Link to the centre of the
+chart in the text), or by right-clicking the chart: *Notitie ▸ Link naar
+deze plek in de tekst* (Note ▸ Link to this place in the text). If text is
+selected, it becomes the link; otherwise the coordinates go into the text.
+In the file such a link reads `[Ketelbrug](geo:52.58030,5.75120)`, a
+standard other chart programs understand too.
 
-**De hele notitie vastgepind op een plek.** Dat kan op drie manieren:
+**The whole note pinned to a place.** There are three ways to do this:
 
-- met een rechtsklik op de kaart: *Notitie ▸ Nieuwe notitie hier*. Je geeft
-  een titel, en de nieuwe notitie opent meteen vastgepind op die plek, ook als
-  het legendavenster dicht was;
-- tijdens het bewerken met een rechtsklik: *Notitie ▸ Hier vastpinnen op de
-  kaart*;
-- met de speld-knop: *Notitie vastpinnen op het midden van de kaart*.
+- by right-clicking the chart: *Notitie ▸ Nieuwe notitie hier* (Note ▸ New
+  note here). You give a title, and the new note opens right away, pinned to
+  that spot, even if the legend window was closed;
+- while editing, with a right-click: *Notitie ▸ Hier vastpinnen op de kaart*
+  (Note ▸ Pin here on the chart);
+- with the pin button: *Notitie vastpinnen op het midden van de kaart* (Pin
+  note to the centre of the chart).
 
-**Waar de boot nu is.** Met een GPS-positie van de laatste minuut kan het ook
-op de positie van de boot, waar je ook klikt:
+**Where the boat is now.** With a GPS position from the last minute, you can
+also use the boat's position, wherever you click:
 
-- de plus-knop in het venster vraagt dan *Nieuwe notitie* of *Nieuwe notitie
-  bij de boot*; met een rechtsklik: *Notitie ▸ Nieuwe notitie bij de boot*;
-- tijdens het bewerken, via de speld-knop of *Notitie ▸* in het
-  rechtsklikmenu: *Vastpinnen op de positie van de boot*, of *Positie van de
-  boot in de tekst*. Dat laatste zet de positie met de tijd als link in de
-  notitie, bijvoorbeeld *52°34,818′N 5°45,072′E (14:32)*: handig voor een
-  logboek.
+- the plus button in the window then asks *Nieuwe notitie* (New note) or
+  *Nieuwe notitie bij de boot* (New note at the boat); with a right-click:
+  *Notitie ▸ Nieuwe notitie bij de boot*;
+- while editing, via the pin button or *Notitie ▸* in the right-click menu:
+  *Vastpinnen op de positie van de boot* (Pin to the boat's position), or
+  *Positie van de boot in de tekst* (Boat's position in the text). The
+  latter puts the position with the time as a link in the note, for example
+  *52°34,818′N 5°45,072′E (14:32)*: handy for a logbook.
 
-Boven de tekst staat dan *Vastgepind op 52°34,818′N 5°45,072′E · straal
-0,5 NM*. Een klik daarop toont de plek; met **Straal** pas je de afstand voor
-de melding aan, met **Losmaken** maak je de notitie weer los. In de gewone
-weergave staat hetzelfde in een gekleurd balkje boven de notitie.
+Above the text it then says *Vastgepind op 52°34,818′N 5°45,072′E · straal
+0,5 NM* (Pinned at … · radius 0.5 NM). A click on it shows the place; with
+**Straal** (Radius) you adjust the distance for the notice, with
+**Losmaken** (Unpin) you unpin the note again. In the normal view the same
+appears in a coloured bar above the note.
 
-Een vastgepinde notitie:
+A pinned note:
 
-- staat als een **geel blaadje** op de kaart. Met de muis erboven zie je de
-  titel; een klik opent de notitie en toont de straal als stippellijn. Een
-  rechtsklik op het blaadje geeft *Notitie ▸ "…" openen* en *"…"
-  verwijderen*. **Sleep** het blaadje om de notitie te verplaatsen: de
-  straal schuift mee en bij het loslaten komt de nieuwe plek in de notitie.
-  Een melding biedt daarna **Terugzetten** en **Sluiten**; is die weg, dan
-  staat *Notitie ▸ "…" terugzetten op de oude plek* nog in het
-  rechtsklikmenu, voor de laatst verplaatste notitie. Net als tonnen en bakens verdwijnt het blaadje als je verder
-  uitzoomt dan 1:200 000;
-- staat onder het kopje **Notities** in de legenda zolang de plek in beeld
-  is, de dichtstbijzijnde eerst: klein de afstand, daaronder de titel en de
-  eerste regel tekst. Met
-  *Ook op deze schaal verborgen tonen* blijft een notitie voorbij zijn
-  schaalgrens er grijs staan, met een dicht oogje en de schaal; een klik zoomt
-  erheen;
-- staat in de **Uitkijk** als je koers erlangs gaat;
-- geeft onderweg een **melding** met pieptonen zodra je binnen de straal
-  komt. Een klik op de melding opent de notitie. Een notitie die je net
-  vastpint waar de boot is, of die je aan het bewerken bent, meldt zich niet;
-  pas als je wegvaart en terugkomt. Uit te zetten met *Melding bij notitie in
-  de buurt*.
+- shows as a **yellow sticky note** on the chart. Hover over it to see the
+  title; a click opens the note and shows the radius as a dotted line.
+  Right-clicking the sticky note gives *Notitie ▸ "…" openen* (open) and
+  *"…" verwijderen* (delete). **Drag** the sticky note to move the note: the
+  radius moves along, and when you let go the new place is written into the
+  note. A notice then offers **Terugzetten** (Put back) and **Sluiten**
+  (Close); once it is gone, *Notitie ▸ "…" terugzetten op de oude plek* (put
+  back in the old place) is still in the right-click menu, for the most
+  recently moved note. Like buoys and beacons, the sticky note disappears
+  when you zoom out beyond 1:200,000;
+- is listed under the **Notities** (Notes) heading in the legend while the
+  place is in view, nearest first: the distance in small print, below it
+  the title and the first line of text. With *Ook op deze schaal verborgen
+  tonen* a note beyond its scale limit stays there in grey, with a closed
+  eye and the scale; a click zooms there;
+- appears in the **Lookout** when your course passes it;
+- gives a **notice** with beeps under way as soon as you come within the
+  radius. A click on the notice opens the note. A note you have just pinned
+  where the boat is, or that you are editing, doesn't announce itself; only
+  once you sail away and come back. Can be switched off with *Melding bij
+  notitie in de buurt* (Notice when near a note).
 
-De plek staat bovenaan het bestand, in het blokje dat ook Obsidian gebruikt:
+The place is stored at the top of the file, in the block Obsidian uses too:
 
 ```markdown
 ---
 location: [52.58030, 5.75120]
 straal: 0.5
 ---
-# Ondiepte bij de Ketelbrug
+# Shallows near the Ketelbrug
 ```
 
-`location` schrijft de Obsidian-plugin *Map View* ook zo, dus de notitie
-verschijnt daar eveneens op de kaart. `straal` is in zeemijl. Met een regel
-`schaal: 1:50000` geef je een notitie een andere schaalgrens dan 1:200 000.
-Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
+The Obsidian plugin *Map View* writes `location` the same way, so the note
+shows up on its map as well. `straal` (radius) is in nautical miles. With a
+line `schaal: 1:50000` (scale) you give a note a different scale limit than
+1:200,000. Other lines you put in the block, such as `tags`, are kept.
 
-## Weergave
+## Display
 
-- De legenda volgt de kleurenschema's dag, schemer en nacht van OpenCPN:
-  venster, tekst, iconen en de markering dimmen mee. Overdag
-  volgt het venster de lichte of donkere weergave van macOS.
-- Iconen volgen de schaalfactor voor kaartobjecten uit de instellingen van
-  OpenCPN, zodat ze even groot zijn als op de kaart.
-- Op een Retina-scherm blijven iconen, lampjes en ritmes scherp.
-- Waypoint-iconen mogen PNG of SVG zijn. Staat er in `UserIcons` een SVG met
-  dezelfde naam als een PNG, dan gebruikt de legenda net als OpenCPN de SVG,
-  op zijn eigen formaat en op een Retina-scherm opnieuw getekend op dubbele
-  grootte in plaats van vergroot.
-- In een smal venster worden de ritmetekeningen smaller.
+- The legend follows OpenCPN's day, dusk and night colour schemes: window,
+  text, icons and the marker dim along. In daytime the window follows the
+  light or dark appearance of macOS.
+- Icons follow the scale factor for chart objects in OpenCPN's settings, so
+  they are the same size as on the chart.
+- On a Retina display, icons, lamps and rhythms stay sharp.
+- Waypoint icons may be PNG or SVG. If `UserIcons` contains an SVG with the
+  same name as a PNG, the legend uses the SVG just like OpenCPN does, at its
+  own size and, on a Retina display, redrawn at double size instead of
+  enlarged.
+- In a narrow window the rhythm drawings get narrower.
 
-## Waar de gegevens vandaan komen
+## Where the data comes from
 
-- **Waypoints van lagen** leest de plugin zelf uit de GPX-bestanden in de
-  map `layers` van OpenCPN; andere waypoints vraagt hij aan OpenCPN. Het
-  eerste inlezen gebeurt kort na het starten, met een voortgangsbalk.
-- **o-charts-kaarten** (`.oesu`) leest de plugin via de o-charts-plugin zelf,
-  zoals OpenCPN dat doet voor *Kaartobjectgegevens*. De o-charts-plugin doet
-  de ontsleuteling en de licentiecontrole; Legend4OpenCPN slaat geen
-  kaartgegevens op en exporteert niets.
-- **ENC-kaarten** (S-57, `.000` met bijwerkingen), zoals de gratis
-  binnenvaartkaarten van Rijkswaterstaat, leest de plugin met een eigen lezer.
-- Waar kaarten hetzelfde water bedekken, telt een object één keer.
-- De plugin toont dezelfde objecten als de kaart: hij vraagt OpenCPN welke
-  objectsoorten op dit moment getekend worden, met de weergavecategorie, de
-  aan- en uitgezette klassen en de schaalgrenzen.
-- **Marifoongebieden** leest de plugin uit de GPX-lagen in de map `layers`
-  van OpenCPN: de gesloten tracks met een regel `VHF-kanaal:` in de
-  beschrijving. Een nieuwe versie van zo'n laag ziet de plugin na een herstart
-  van OpenCPN.
+- **Layer waypoints** are read by the plugin itself from the GPX files in
+  OpenCPN's `layers` folder; other waypoints it asks OpenCPN for. The first
+  read happens shortly after start-up, with a progress bar.
+- **o-charts charts** (`.oesu`) are read through the o-charts plugin itself,
+  the way OpenCPN does for *Chart Object Query*. The o-charts plugin handles
+  decryption and the licence check; Legend4OpenCPN stores no chart data and
+  exports nothing.
+- **ENC charts** (S-57, `.000` with updates), such as the free inland charts
+  of Rijkswaterstaat, are read by the plugin with a reader of its own.
+- Where charts cover the same water, an object counts once.
+- The plugin shows the same objects as the chart: it asks OpenCPN which
+  object classes are being drawn at that moment, with the display category,
+  the classes switched on and off, and the scale limits.
+- **VHF areas** are read from the GPX layers in OpenCPN's `layers` folder:
+  the closed tracks with a `VHF-kanaal:` line in their description. The
+  plugin sees a new version of such a layer after OpenCPN is restarted.
 
-Instellingen en caches staan in de privémap van OpenCPN:
+Settings and caches are kept in OpenCPN's private folder:
 
 ```text
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-Daar staan `legend.ini` (laatste item, venster, ingeklapte kopjes en de
-keuzes uit Instellingen) en `ocharts-cells.txt` en `s57-cells.txt` met de
-dekking van de kaartcellen, zodat latere starts snel zijn.
+That holds `legend.ini` (last item, window, folded headings and the choices
+from Settings) and `ocharts-cells.txt` and `s57-cells.txt` with the coverage
+of the chart cells, so that later start-ups are fast.
 
-## Beperkingen
+## Limitations
 
-- Alleen puntobjecten uit o-charts- en S-57-kaarten; lijnen en vlakken
-  (kustlijn, dieptegebieden) en andere kaartformaten (CM93, rasterkaarten,
-  versleutelde S-63) doen niet mee.
-- Dezelfde boei kan twee keer in de lijst staan: als waypoint uit een laag en
-  als kaartsymbool.
-- Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
-- Lichten die de kaart op deze schaal niet tekent, branden niet mee.
-- De uitkijk leest zijn eigen gebied uit de kaartcellen, ook wat buiten beeld
-  ligt. Zolang er nog cellen worden geopend, of als een deel van de bundel
-  geen kaart heeft, staat dat naast het kopje. Wat de kaart op deze schaal
-  niet tekent, staat er alleen in met *Ook op deze schaal verborgen tonen*.
-- De lijnen en het label op de uitkijkbundel worden over de kaart heen
-  getekend, niet eronder; daarom zijn ze licht.
-- De markering op de kaart is getest met **OpenGL aan**.
-- Iconen worden gelezen uit de SVG- en PNG-bestanden van OpenCPN. Ontbreekt
-  het bestand, dan kan het icoon op macOS leeg blijven.
-- De Legend-map is nog niet instelbaar.
-- De notitie-editor heeft geen spellingcontrole. Een kop binnen een citaat
-  wordt bij het bewaren een gewone kop.
+- Only point objects from o-charts and S-57 charts; lines and areas
+  (coastline, depth areas) and other chart formats (CM93, raster charts,
+  encrypted S-63) are not included.
+- The same buoy can appear twice in the list: as a waypoint from a layer and
+  as a chart symbol.
+- Sectors come only from charts, not from waypoint layers.
+- Lights the chart does not draw at this scale don't shine.
+- The lookout reads its own area from the chart cells, including what lies
+  out of view. While cells are still being opened, or when part of the beam
+  has no chart, it says so next to the heading. What the chart does not draw
+  at this scale is only included with *Ook op deze schaal verborgen tonen*.
+- The lines and the label on the lookout beam are drawn on top of the chart,
+  not beneath it; that is why they are faint.
+- The marker on the chart has been tested with **OpenGL on**.
+- Icons are read from OpenCPN's SVG and PNG files. If the file is missing,
+  the icon may stay blank on macOS.
+- The Legend folder is not configurable yet.
+- The note editor has no spell checker. A heading inside a quote becomes a
+  normal heading when saved.
 
-## Ontwikkelen
+## Development
 
-### Broncode
+### Source code
 
-De repository gebruikt Git-submodules (`opencpn-libs` en `third_party/md4c`):
+The repository uses Git submodules (`opencpn-libs` and `third_party/md4c`):
 
 ```bash
 git clone --recurse-submodules https://github.com/kwillems/Legend4OpenCPN.git
 ```
 
-Al gekloond zonder submodules:
+Already cloned without submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### Bouwen op macOS
+### Building on macOS
 
-De ontwikkelomgeving is macOS op Apple Silicon met OpenCPN 5.14.2,
-wxWidgets 3.2.9, CMake en Apple Clang. De plugin moet gebouwd worden tegen
-dezelfde wxWidgets als OpenCPN; geef daarom `wx-config` expliciet op:
+The development environment is macOS on Apple Silicon with OpenCPN 5.14.2,
+wxWidgets 3.2.9, CMake and Apple Clang. The plugin must be built against the
+same wxWidgets as OpenCPN, so specify `wx-config` explicitly:
 
 ```bash
 mkdir build
@@ -675,17 +703,16 @@ cmake -DwxWidgets_CONFIG_EXECUTABLE=/opt/wxwidgets-3.2.9/bin/wx-config ..
 cmake --build . --target tarball -j8
 ```
 
-Daarna is `cmake ..` genoeg; de keuze blijft bewaard in `CMakeCache.txt`.
-De melding dat `wxWidgets_CONFIG_EXECUTABLE` niet gebruikt is, klopt niet en
-mag je negeren. Waarschuwingen over CMake-policies zijn ook onschuldig.
+After that `cmake ..` is enough; the choice is kept in `CMakeCache.txt`.
+The message that `wxWidgets_CONFIG_EXECUTABLE` was not used is wrong and
+can be ignored. Warnings about CMake policies are harmless too.
 
-Het pakket (`.tar.gz`) komt in `build/`. De naam komt uit de git-tag op de
-huidige commit, bijvoorbeeld `Legend-v0.2.0-alpha27_…tar.gz`; zonder tag
-volgt hij uit `Plugin.cmake` met datum en commit-id. Draai na een nieuwe tag
-opnieuw `cmake ..`.
+The package (`.tar.gz`) ends up in `build/`. Its name comes from the git tag
+on the current commit, for example `Legend-v0.2.0-alpha27_…tar.gz`; without
+a tag it follows from `Plugin.cmake` with the date and commit id. Run
+`cmake ..` again after a new tag.
 
-Meldingen van de plugin staan in het logboek van OpenCPN en beginnen met
-`Legend:`:
+The plugin's messages are in OpenCPN's log and start with `Legend:`:
 
 ```bash
 grep "Legend:" ~/Library/Logs/opencpn.log | tail -20
@@ -693,76 +720,76 @@ grep "Legend:" ~/Library/Logs/opencpn.log | tail -20
 
 ### Tests
 
-De onderdelen die zonder OpenCPN werken, hebben unit tests in `test/`:
-lichtkarakters, marifoongebieden, notities met een plek, `symbolen.txt`, het
-inlezen van laagwaypoints en afstanden, peilingen en de uitkijkbundel.
-Bouwen en draaien in de map `build/`:
+The parts that work without OpenCPN have unit tests in `test/`: light
+characteristics, VHF areas, notes with a place, `symbolen.txt`, reading
+layer waypoints, and distances, bearings and the lookout beam. Build and run
+in the `build/` folder:
 
 ```bash
 make legend-tests
 ctest --output-on-failure
 ```
 
-`./legend-tests` toont elke mislukte controle met het verwachte en het
-werkelijke resultaat. In CircleCI draaien de tests mee na het bouwen.
+`./legend-tests` shows each failed check with the expected and the actual
+result. In CircleCI the tests run after the build.
 
-### Projectstructuur
+### Project structure
 
 ```text
 Legend4OpenCPN/
 ├── data/
 │   ├── legend_toolbar.png
-│   └── s57-nl.txt           # Nederlandse namen van kaartobjecten
+│   └── s57-nl.txt           # Dutch names of chart objects
 ├── src/
-│   ├── legend_pi.cpp/.h        # de plugin: starten, instellingen, legendabestanden
-│   ├── legend_window.cpp       # het venster, klikken, toetsen, instellingenmenu
-│   ├── legend_collect.cpp      # waypoints, betekenissen en kaartobjecten verzamelen
-│   ├── legend_render.cpp       # de pagina van de kaartlegenda, blok voor blok
-│   ├── legend_chart.cpp        # klikken, menu en tekenen op de kaart
-│   ├── legend_notes.cpp        # notities schrijven en op de kaart
-│   ├── legend_navigation.cpp   # onderweg: positie, uitkijk, licht herkennen, marifoon
-│   ├── legend_html_window.*    # het HTML-venster van de legenda
-│   ├── legend_icons.*          # iconen inlezen en tekenen
-│   ├── legend_shared.*         # kleuren en hulpjes die alle delen gebruiken
-│   ├── symbol_meanings.*       # symbolen.txt lezen en opzoeken
-│   ├── geo.*                   # afstand, peiling en de uitkijkbundel
-│   ├── chart_symbols.*         # S-52-symbolen en S-57-catalogus van OpenCPN
-│   ├── ocharts_source.*        # kaartobjecten via de o-charts-plugin
-│   ├── s57_source.*            # kaartobjecten uit ENC-cellen (S-57)
-│   ├── display_settings.*      # wat de kaart nu tekent
-│   ├── chart_names.*           # namen van kaartobjecten (NL/EN)
-│   ├── layer_waypoints.*       # waypoints uit de GPX-lagen
-│   ├── light_character.*       # lichtkarakters: lezen, woorden, ritme, herkennen
-│   ├── shining_lights.*        # lichten laten branden op de kaart
-│   ├── note_editor.*           # notities bewerken: Markdown in en uit
-│   ├── note_places.*           # notities met een plek: het blokje bovenaan
-│   ├── vhf_areas.*             # marifoongebieden uit de lagen
-│   ├── vhf_highlight.*         # een marifoongebied laten oplichten
-│   └── chart_notice.*          # het venstertje bovenaan de kaart
+│   ├── legend_pi.cpp/.h        # the plugin: start-up, settings, legend files
+│   ├── legend_window.cpp       # the window, clicks, keys, settings menu
+│   ├── legend_collect.cpp      # collecting waypoints, meanings and chart objects
+│   ├── legend_render.cpp       # the chart legend page, block by block
+│   ├── legend_chart.cpp        # clicks, menu and drawing on the chart
+│   ├── legend_notes.cpp        # writing notes and notes on the chart
+│   ├── legend_navigation.cpp   # under way: position, lookout, identify a light, VHF
+│   ├── legend_html_window.*    # the legend's HTML window
+│   ├── legend_icons.*          # reading and drawing icons
+│   ├── legend_shared.*         # colours and helpers all parts use
+│   ├── symbol_meanings.*       # reading and looking up symbolen.txt
+│   ├── geo.*                   # distance, bearing and the lookout beam
+│   ├── chart_symbols.*         # OpenCPN's S-52 symbols and S-57 catalogue
+│   ├── ocharts_source.*        # chart objects through the o-charts plugin
+│   ├── s57_source.*            # chart objects from ENC cells (S-57)
+│   ├── display_settings.*      # what the chart is drawing now
+│   ├── chart_names.*           # names of chart objects (NL/EN)
+│   ├── layer_waypoints.*       # waypoints from the GPX layers
+│   ├── light_character.*       # light characteristics: reading, words, rhythm, identifying
+│   ├── shining_lights.*        # making lights shine on the chart
+│   ├── note_editor.*           # editing notes: Markdown in and out
+│   ├── note_places.*           # notes with a place: the block at the top
+│   ├── vhf_areas.*             # VHF areas from the layers
+│   ├── vhf_highlight.*         # highlighting a VHF area
+│   └── chart_notice.*          # the small window at the top of the chart
 ├── test/                    # unit tests (make legend-tests, ctest)
-├── third_party/md4c/        # Markdown-verwerking (submodule)
-├── opencpn-libs/            # OpenCPN-plugin-API (submodule)
+├── third_party/md4c/        # Markdown processing (submodule)
+├── opencpn-libs/            # OpenCPN plugin API (submodule)
 ├── Plugin.cmake
 └── CMakeLists.txt
 ```
 
-## Plannen
+## Plans
 
-Ideeën voor volgende versies:
+Ideas for future versions:
 
-- bruggen markeren waar de boot niet onder past;
-- het bereik van een licht laten zien in het nachtvoorbeeld;
-- betekenissen bewerken in het venster zelf;
-- een instelbare Legend-map;
-- builds voor Windows en Linux, en een Engelse vertaling van de bediening.
+- marking bridges the boat does not fit under;
+- showing the range of a light in the night preview;
+- editing meanings in the window itself;
+- a configurable Legend folder;
+- builds for Windows and Linux, and an English translation of the interface.
 
-## Licentie
+## License
 
-Legend4OpenCPN is vrije software onder de
-[GNU General Public License, versie 2](LICENSE) of, naar keuze, een latere
-versie (SPDX: `GPL-2.0-or-later`). Zoals die licentie zegt, komt de plugin
-zonder enige garantie; je gebruikt hem volledig op eigen risico.
+Legend4OpenCPN is free software under the
+[GNU General Public License, version 2](LICENSE) or, at your option, any
+later version (SPDX: `GPL-2.0-or-later`). As that license says, the plugin
+comes without any warranty; you use it entirely at your own risk.
 
-Externe onderdelen houden hun eigen licentie; MD4C valt bijvoorbeeld onder de
-MIT-licentie. De buildbestanden uit de OpenCPN-pluginsjabloon (zoals
-`CMakeLists.txt` en de map `cmake/`) houden hun eigen licentiekoppen.
+External components keep their own license; MD4C, for example, is under the
+MIT license. The build files from the OpenCPN plugin template (such as
+`CMakeLists.txt` and the `cmake/` folder) keep their own license headers.
