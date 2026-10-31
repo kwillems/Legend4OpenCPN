@@ -19,8 +19,11 @@ your own legends, notes and route descriptions too.
 > yourself. The author is not liable for any damage or accidents caused by
 > using this plugin.
 
-> **Language.** The plugin follows OpenCPN's language: Dutch when OpenCPN
-> is set to Dutch, English otherwise. This README uses the English names.
+> **Language.** The plugin follows OpenCPN's language. Its interface is
+> available in English and Dutch; in other languages it is English until a
+> translation exists (see *Translations* below). Symbol meanings and light
+> characteristics are in Dutch when OpenCPN is set to Dutch, otherwise in
+> English. This README uses the English names.
 
 ## At a glance
 
@@ -708,6 +711,37 @@ ctest --output-on-failure
 `./legend-tests` shows each failed check with the expected and the actual
 result. In CircleCI the tests run after the build.
 
+### Translations
+
+The interface is translated with gettext, as in OpenCPN and its other
+plugins. The texts in the code are English and marked with `_()`, such as
+`_("Night preview")`. The folder `po/` holds:
+
+- `legend_pi.pot`: the template with all texts to translate;
+- one file per language, such as `nl_NL.po` for Dutch;
+- `POTFILES.in`: the source files the texts are taken from.
+
+When building, each `.po` file becomes an `.mo` file in the package,
+installed as `opencpn-legend_pi.mo` in the folder of its language. The
+plugin registers these translations at start-up, and OpenCPN picks the one
+for its language. A text without a translation appears in English.
+
+After changing texts in the code, in the `build/` folder:
+
+```bash
+make legend-pot-update
+make legend-po-update
+```
+
+The first collects the texts into `po/legend_pi.pot`, the second merges
+them into every `.po` file; new texts then still need a translation there.
+A new language is a new `.po` file in `po/`, named like the folders of
+OpenCPN (`de_DE.po`, `fr_FR.po`), made from the template, for example with
+`msginit` or Poedit. Run `cmake ..` again so the build picks it up.
+
+Symbol meanings (`symbolen.txt`, `data/s57-nl.txt`) and the words for light
+characteristics are not part of gettext: they exist in Dutch and English.
+
 ### Project structure
 
 ```text
@@ -741,6 +775,7 @@ Legend4OpenCPN/
 │   ├── vhf_areas.*             # VHF areas from the layers
 │   ├── vhf_highlight.*         # highlighting a VHF area
 │   └── chart_notice.*          # the small window at the top of the chart
+├── po/                      # translations of the interface (gettext)
 ├── test/                    # unit tests (make legend-tests, ctest)
 ├── third_party/md4c/        # Markdown processing (submodule)
 ├── opencpn-libs/            # OpenCPN plugin API (submodule)
@@ -756,7 +791,9 @@ Ideas for future versions:
 - showing the range of a light in the night preview;
 - editing meanings in the window itself;
 - a configurable Legend folder;
-- builds for Windows and Linux.
+- builds for Windows and Linux;
+- translations into more languages, for example through OpenCPN's Crowdin
+  project.
 
 ## License
 
