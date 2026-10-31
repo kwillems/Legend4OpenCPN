@@ -13,6 +13,9 @@ routebeschrijvingen.
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
 
+> **Taal.** De plugin volgt de taal van OpenCPN: Nederlands als OpenCPN in
+> het Nederlands staat, anders Engels.
+
 > **Gebruik op eigen risico.** Legend4OpenCPN is een hulpmiddel, geen
 > navigatiemiddel. De uitleg, lichtkarakters, kanalen en andere informatie
 > kunnen onvolledig, verouderd of fout zijn. Vertrouw er nooit alleen op:
@@ -170,7 +173,6 @@ In het menu Instellingen:
 | Lichten | Lichtrijen tonen of verbergen |
 | Ook op deze schaal verborgen tonen | Ook symbolen die de kaart op deze schaal niet tekent (zie hieronder) |
 | Afstand en peiling vanaf de boot | Boven de betekenis van elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
-| Engelse namen | Betekenissen in het Engels in plaats van het Nederlands |
 | Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
 | Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
 | Licht herkennen | Een licht herkennen aan zijn ritme |
@@ -756,7 +758,7 @@ Ideeën voor volgende versies:
 - het bereik van een licht laten zien in het nachtvoorbeeld;
 - betekenissen bewerken in het venster zelf;
 - een instelbare Legend-map;
-- builds voor Windows en Linux, en een Engelse vertaling van de bediening.
+- builds voor Windows en Linux.
 
 ## Licentie
 
