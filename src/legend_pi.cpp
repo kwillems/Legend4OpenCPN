@@ -13,7 +13,6 @@
 #include "legend_html_window.h"
 #include "legend_shared.h"
 
-#include <wx/bmpbndl.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/file.h>
@@ -936,9 +935,8 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         const wxString pin = "legend_pin_" + HtmlColour(ink).Mid(1) + "_" +
                              HtmlColour(fill).Mid(1) + ".png";
         if (m_pin_images.insert(pin).second) {
-            const wxBitmapBundle bundle = NoteToolIcon("place", ink);
-            const wxImage image1x = FlattenImage(bundle.GetBitmap(wxSize(16, 16)).ConvertToImage(), fill);
-            const wxImage image2x = FlattenImage(bundle.GetBitmap(wxSize(32, 32)).ConvertToImage(), fill);
+            const wxImage image1x = FlattenImage(NoteToolImage("place", ink, 16), fill);
+            const wxImage image2x = FlattenImage(NoteToolImage("place", ink, 32), fill);
             wxMemoryFSHandler::AddFile(pin, image1x, wxBITMAP_TYPE_PNG);
             wxMemoryFSHandler::AddFile(pin.Left(pin.length() - 4) + "@2x.png", image2x,
                                        wxBITMAP_TYPE_PNG);

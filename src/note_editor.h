@@ -12,8 +12,18 @@
 
 #include <functional>
 
-#include <wx/bmpbndl.h>
 #include <wx/richtext/richtextctrl.h>
+#include <wx/version.h>
+
+// Bitmap bundles came with wxWidgets 3.1.6; the Android build of OpenCPN
+// has an older 3.1, where a tool icon is a plain bitmap.
+#if wxCHECK_VERSION(3, 1, 6)
+#include <wx/bmpbndl.h>
+typedef wxBitmapBundle NoteToolBitmap;
+#else
+#include <wx/bitmap.h>
+typedef wxBitmap NoteToolBitmap;
+#endif
 
 // A note edited as it looks: headings, bold, lists and links shown as they
 // are, without Markdown marks. The note is read from Markdown and written
@@ -84,6 +94,9 @@ private:
 // transparent background, sharp at twice the size: "heading", "bold",
 // "italic", "bullets", "numbers", "tasks", "link", "image", and for the
 // notes themselves "edit", "new", "rename", "trash" and "place" (a map pin).
-wxBitmapBundle NoteToolIcon(const wxString &name, const wxColour &colour);
+NoteToolBitmap NoteToolIcon(const wxString &name, const wxColour &colour);
+
+// One of those icons as an image of size by size pixels.
+wxImage NoteToolImage(const wxString &name, const wxColour &colour, int size);
 
 #endif

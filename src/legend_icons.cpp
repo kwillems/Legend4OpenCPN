@@ -14,7 +14,10 @@
 
 #include "legend_shared.h"
 
+#include <wx/version.h>
+#if wxCHECK_VERSION(3, 1, 6)
 #include <wx/bmpbndl.h>
+#endif
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
 #include <wx/file.h>
@@ -98,8 +101,13 @@ wxImage LoadIconFromFile(const wxString &key, const wxColour &background,
     if (!svg.IsEmpty()) {
         wxLogNull quiet;
         const wxSize size = SvgIconSize(svg);
-        const wxBitmap bitmap = wxBitmapBundle::FromSVGFile(svg, size)
-                                    .GetBitmap(size * std::max(1, scale));
+        const wxSize pixels = size * std::max(1, scale);
+#if wxCHECK_VERSION(3, 1, 6)
+        const wxBitmap bitmap = wxBitmapBundle::FromSVGFile(svg, size).GetBitmap(pixels);
+#else
+        // Older wxWidgets (Android) has no SVG support of its own.
+        const wxBitmap bitmap = GetBitmapFromSVGFile(svg, pixels.x, pixels.y);
+#endif
         if (bitmap.IsOk()) {
             const wxImage image = bitmap.ConvertToImage();
             if (image.IsOk())

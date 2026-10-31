@@ -1333,8 +1333,17 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
 
 } // namespace
 
-wxBitmapBundle NoteToolIcon(const wxString &name, const wxColour &colour)
+NoteToolBitmap NoteToolIcon(const wxString &name, const wxColour &colour)
 {
+#if wxCHECK_VERSION(3, 1, 6)
     return wxBitmapBundle::FromBitmaps(wxBitmap(DrawToolIcon(name, colour, 18)),
                                        wxBitmap(DrawToolIcon(name, colour, 36)));
+#else
+    return wxBitmap(DrawToolIcon(name, colour, 18));
+#endif
+}
+
+wxImage NoteToolImage(const wxString &name, const wxColour &colour, int size)
+{
+    return DrawToolIcon(name, colour, size);
 }
