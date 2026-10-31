@@ -62,4 +62,16 @@ std::vector<std::pair<double, double>> FanOutline(double lat0, double lon0, doub
                                                   double range, double halfAngle,
                                                   double minHalfWidth);
 
+// The distances from the boat of the lines across the fan: every sea mile
+// while it reaches 5 or less, every 5 up to 25, every 10 beyond; none
+// within half a step of its far end, which has its own label.
+std::vector<double> FanMileLines(double range);
+
+// A line across the fan at `distance` sea miles from the boat, as positions
+// (lat, lon) from port round to starboard: an arc, as the far end is, from
+// side to side of the fan.
+std::vector<std::pair<double, double>> FanArc(double lat0, double lon0, double course,
+                                              double distance, double halfAngle,
+                                              double minHalfWidth);
+
 #endif

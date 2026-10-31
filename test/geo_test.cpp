@@ -184,6 +184,38 @@ void TestFan()
         CHECK_NEAR(across, -0.12, 1e-6);
         CHECK_NEAR(along, std::sqrt(0.2 * 0.2 - 0.12 * 0.12), 1e-6);
     }
+
+    // The lines across the fan: every mile up to 5, every 5 up to 25, every
+    // 10 beyond, none close to the far end.
+    CHECK(FanMileLines(1.0).empty());
+    CHECK(FanMileLines(1.5).empty());
+    CHECK(FanMileLines(2.0) == std::vector<double>({1.0}));
+    CHECK(FanMileLines(2.5) == std::vector<double>({1.0}));
+    CHECK(FanMileLines(3.0) == std::vector<double>({1.0, 2.0}));
+    CHECK(FanMileLines(5.0) == std::vector<double>({1.0, 2.0, 3.0, 4.0}));
+    CHECK(FanMileLines(10.0) == std::vector<double>({5.0}));
+    CHECK(FanMileLines(20.0) == std::vector<double>({5.0, 10.0, 15.0}));
+    CHECK(FanMileLines(50.0) == std::vector<double>({10.0, 20.0, 30.0, 40.0}));
+
+    // Such a line: an arc at its distance, from the port side of the fan
+    // round to the starboard side.
+    auto arc = FanArc(lat, lon, 0.0, 1.0, 30.0, 0.12);
+    CHECK(arc.size() == 25);
+    for (const auto &point : arc) {
+        AlongAndAcross(lat, lon, 0.0, point.first, point.second, &along, &across);
+        CHECK_NEAR(std::sqrt(along * along + across * across), 1.0, 1e-6);
+        CHECK(InFan(along * 0.999, across * 0.999, 4.0, 30.0, 0.12));
+    }
+    if (arc.size() == 25) {
+        AlongAndAcross(lat, lon, 0.0, arc.front().first, arc.front().second, &along, &across);
+        CHECK_NEAR(across, -std::sin(30.0 * kDeg), 1e-6);
+        AlongAndAcross(lat, lon, 0.0, arc.back().first, arc.back().second, &along, &across);
+        CHECK_NEAR(across, std::sin(30.0 * kDeg), 1e-6);
+    }
+    // Within the strip near the boat it reaches the strip's sides.
+    auto near = FanArc(lat, lon, 0.0, 0.2, 15.0, 0.12);
+    AlongAndAcross(lat, lon, 0.0, near.front().first, near.front().second, &along, &across);
+    CHECK_NEAR(across, -0.12, 1e-6);
 }
 
 } // namespace
