@@ -1204,9 +1204,15 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     const wxString time = AheadTimeText(range);
     if (!time.IsEmpty())
         label->text << wxString::FromUTF8(" \u00b7 ") << time;
-    label->anchor = end;
-    label->dx = (end.x - boat.x) / length;
-    label->dy = (end.y - boat.y) / length;
+    // At the starboard corner of the far end, beyond it as seen from the
+    // boat: the middle of the far end, straight ahead, stays clear.
+    const auto far = FanArc(m_ship_lat, m_ship_lon, m_ship_cog, range, m_ahead_angle,
+                            kAheadMinHalfWidth);
+    const wxPoint corner = pixel(far.back().first, far.back().second);
+    const double reach = std::hypot(corner.x - boat.x, corner.y - boat.y);
+    label->anchor = corner;
+    label->dx = reach > 0.0 ? (corner.x - boat.x) / reach : 0.0;
+    label->dy = reach > 0.0 ? (corner.y - boat.y) / reach : -1.0;
 
     // Lines too close together on the screen say nothing: none then.
     const std::vector<double> miles = FanMileLines(range);
