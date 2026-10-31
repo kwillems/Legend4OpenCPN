@@ -1212,7 +1212,7 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     label->text = FormatMiles(range);
     const wxString time = AheadTimeText(range);
     if (!time.IsEmpty())
-        label->text << wxString::FromUTF8(" \u00b7 ") << time;
+        label->text << ", " << time;
     // At the starboard corner of the far end, beyond it as seen from the
     // boat: the middle of the far end, straight ahead, stays clear.
     const auto far = FanArc(m_ship_lat, m_ship_lon, m_ship_cog, range, m_ahead_angle,
