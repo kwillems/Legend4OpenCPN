@@ -161,6 +161,10 @@ private:
     void CreateNoteEditor();
     wxWindow *CreateNavigation(wxPanel *panel);
     wxWindow *CreateEditFooter(wxPanel *panel);
+    // The window's labels and tooltips in the chosen language; again when
+    // the language changes.
+    void ApplyWindowLanguage();
+    wxString ButtonTip(const wxString &icon) const;
     void BindWindowEvents();
     void OnLegendKey(wxKeyEvent &event);
     void OnLegendLink(wxHtmlLinkEvent &event);
@@ -407,9 +411,15 @@ private:
     int m_menu_pin_boat = -1;
     wxString m_menu_note_path;           // note whose sign was under the mouse
     void PrepareContextMenu(int canvasIndex) override;
+    // The items in the chart's right-click menu, made again when the
+    // language changes.
+    void AddContextMenuItems();
+    void RemoveContextMenuItems();
     void DeleteNoteFile(const wxString &path);
     wxPanel *m_place_bar = nullptr;      // "Hoort bij ..." while editing
     wxStaticText *m_place_text = nullptr;
+    wxButton *m_radius_button = nullptr; // Straal
+    wxButton *m_loose_button = nullptr;  // Losmaken
     wxString m_note_block;               // settings block of the note being edited
     mutable std::set<wxString> m_pin_images; // pins in the memory file system
     bool m_note_has_place = false;
@@ -542,7 +552,16 @@ private:
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
     ChartNames m_chart_names;     // names of chart objects (s57-nl.txt)
-    bool m_dutch_names = true;    // setting: names in Dutch or English
+    bool m_dutch_names = true;    // the interface and names in Dutch or English, as OpenCPN
+    // The Dutch or the English text (UTF-8), in the chosen language.
+    wxString Tr(const char *dutch, const char *english) const
+    {
+        return wxString::FromUTF8(m_dutch_names ? dutch : english);
+    }
+    // OpenCPN's language: Dutch when it is Dutch, English otherwise.
+    static bool OpenCpnIsDutch();
+    // Takes over OpenCPN's language when it changed since the last look.
+    void FollowOpenCpnLanguage();
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
     S57Source m_s57;

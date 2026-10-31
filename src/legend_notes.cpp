@@ -79,7 +79,8 @@ void legend_pi::StartEditing()
     wxString text;
     wxFile file(m_current_legend_path);
     if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
-        wxMessageBox("Deze notitie kon niet worden geopend.", "Notitie bewerken",
+        wxMessageBox(Tr("Deze notitie kon niet worden geopend.", "Could not open this note."),
+                     Tr("Notitie bewerken", "Edit note"),
                      wxOK | wxICON_WARNING, m_legend_window);
         return;
     }
@@ -99,7 +100,7 @@ void legend_pi::StartEditing()
     UpdatePlaceBar();
     m_editor->LoadMarkdown(front.body, wxFileName(m_editing_path).GetPath());
     if (m_save_status)
-        m_save_status->SetLabel("Wijzigingen worden vanzelf bewaard");
+        m_save_status->SetLabel(Tr("Wijzigingen worden vanzelf bewaard", "Changes are saved automatically"));
     m_content_book->SetSelection(2);
     UpdateNoteButtons();
     m_editor->SetFocus();
@@ -138,12 +139,12 @@ void legend_pi::SaveNote()
         m_note_block = SplitFrontMatter(text).block;
         RefreshNotePlaces();
         if (m_save_status)
-            m_save_status->SetLabel("Bewaard om " + wxDateTime::Now().Format("%H:%M"));
+            m_save_status->SetLabel(Tr("Bewaard om ", "Saved at ") + wxDateTime::Now().Format("%H:%M"));
     }
     else {
         wxLogMessage("Legend: could not save %s", m_editing_path);
         if (m_save_status)
-            m_save_status->SetLabel("Kon niet bewaren");
+            m_save_status->SetLabel(Tr("Kon niet bewaren", "Could not save"));
     }
 }
 
@@ -154,7 +155,8 @@ bool legend_pi::NewNote()
     if (m_editing)
         StopEditing();
 
-    wxTextEntryDialog dialog(m_legend_window, "Titel van de nieuwe notitie:", "Nieuwe notitie");
+    wxTextEntryDialog dialog(m_legend_window, Tr("Titel van de nieuwe notitie:", "Title of the new note:"),
+                             Tr("Nieuwe notitie", "New note"));
     if (dialog.ShowModal() != wxID_OK)
         return false;
 
@@ -172,8 +174,9 @@ bool legend_pi::NewNote()
 
     wxFile out;
     if (!out.Create(file.GetFullPath()) || !out.Write("# " + title + "\n\n", wxConvUTF8)) {
-        wxMessageBox("De notitie kon niet worden aangemaakt in\n" + GetLegendDirectory(),
-                     "Nieuwe notitie", wxOK | wxICON_WARNING, m_legend_window);
+        wxMessageBox(Tr("De notitie kon niet worden aangemaakt in\n", "Could not create the note in\n") +
+                         GetLegendDirectory(),
+                     Tr("Nieuwe notitie", "New note"), wxOK | wxICON_WARNING, m_legend_window);
         return false;
     }
     out.Close();
@@ -210,7 +213,8 @@ void legend_pi::InsertLink()
     if (!m_editor)
         return;
 
-    wxTextEntryDialog dialog(m_legend_window, "Adres van de link:", "Link", "https://");
+    wxTextEntryDialog dialog(m_legend_window, Tr("Adres van de link:", "Address of the link:"), "Link",
+                             "https://");
     if (dialog.ShowModal() != wxID_OK)
         return;
     wxString address = dialog.GetValue();
@@ -228,8 +232,9 @@ void legend_pi::InsertImage()
         return;
 
     const wxString legendDir = GetLegendDirectory();
-    wxFileDialog dialog(m_legend_window, "Afbeelding kiezen", legendDir, wxEmptyString,
-                        "Afbeeldingen (*.png;*.jpg;*.jpeg;*.gif)|*.png;*.jpg;*.jpeg;*.gif",
+    wxFileDialog dialog(m_legend_window, Tr("Afbeelding kiezen", "Choose an image"), legendDir,
+                        wxEmptyString,
+                        Tr("Afbeeldingen", "Images") + " (*.png;*.jpg;*.jpeg;*.gif)|*.png;*.jpg;*.jpeg;*.gif",
                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dialog.ShowModal() != wxID_OK)
         return;
@@ -243,8 +248,9 @@ void legend_pi::InsertImage()
         for (int n = 2; copy.FileExists(); ++n)
             copy.SetName(wxString::Format("%s %d", image.GetName(), n));
         if (!wxCopyFile(image.GetFullPath(), copy.GetFullPath())) {
-            wxMessageBox("De afbeelding kon niet naar de Legend-map worden gekopieerd.",
-                         "Afbeelding", wxOK | wxICON_WARNING, m_legend_window);
+            wxMessageBox(Tr("De afbeelding kon niet naar de Legend-map worden gekopieerd.",
+                            "Could not copy the image to the Legend folder."),
+                         Tr("Afbeelding", "Image"), wxOK | wxICON_WARNING, m_legend_window);
             return;
         }
         relative = copy;
@@ -255,7 +261,8 @@ void legend_pi::InsertImage()
     if (path.Contains(" "))
         path = "<" + path + ">";
     if (!m_editor->InsertNoteImage(path, image.GetName()))
-        wxMessageBox("Deze afbeelding kon niet worden geopend.", "Afbeelding",
+        wxMessageBox(Tr("Deze afbeelding kon niet worden geopend.", "Could not open this image."),
+                     Tr("Afbeelding", "Image"),
                      wxOK | wxICON_WARNING, m_legend_window);
 }
 
@@ -269,7 +276,7 @@ wxString legend_pi::NoteFileName(const wxString &title) const
     name.Trim(true).Trim(false);
     while (name.StartsWith("."))
         name.Remove(0, 1);
-    return name.IsEmpty() ? wxString("Notitie") : name;
+    return name.IsEmpty() ? Tr("Notitie", "Note") : name;
 }
 
 // Shows the note with this file name, after the folder changed.
@@ -294,7 +301,8 @@ void legend_pi::RenameNote()
 
     const wxString path = m_current_legend_path;
     const wxString oldTitle = MakeDisplayTitle(path);
-    wxTextEntryDialog dialog(m_legend_window, "Nieuwe titel van de notitie:", "Notitie hernoemen",
+    wxTextEntryDialog dialog(m_legend_window, Tr("Nieuwe titel van de notitie:", "New title of the note:"),
+                             Tr("Notitie hernoemen", "Rename note"),
                              oldTitle);
     if (dialog.ShowModal() != wxID_OK)
         return;
@@ -306,8 +314,9 @@ void legend_pi::RenameNote()
     wxFileName target(path);
     target.SetName(NoteFileName(title));
     if (target.GetFullPath() != path && target.FileExists()) {
-        wxMessageBox("Er is al een notitie met de naam \"" + target.GetName() + "\".",
-                     "Notitie hernoemen", wxOK | wxICON_INFORMATION, m_legend_window);
+        wxMessageBox(Tr("Er is al een notitie met de naam \"", "There is already a note named \"") +
+                         target.GetName() + "\".",
+                     Tr("Notitie hernoemen", "Rename note"), wxOK | wxICON_INFORMATION, m_legend_window);
         return;
     }
 
@@ -332,14 +341,16 @@ void legend_pi::RenameNote()
         text = front.block + body.Left(start) + "# " + title + body.Mid(end);
         wxTempFile out(path);
         if (!out.IsOpened() || !out.Write(text, wxConvUTF8) || !out.Commit()) {
-            wxMessageBox("De notitie kon niet worden aangepast.", "Notitie hernoemen",
+            wxMessageBox(Tr("De notitie kon niet worden aangepast.", "Could not change the note."),
+                         Tr("Notitie hernoemen", "Rename note"),
                          wxOK | wxICON_WARNING, m_legend_window);
             return;
         }
     }
 
     if (target.GetFullPath() != path && !wxRenameFile(path, target.GetFullPath(), false)) {
-        wxMessageBox("Het bestand kon niet worden hernoemd.", "Notitie hernoemen",
+        wxMessageBox(Tr("Het bestand kon niet worden hernoemd.", "Could not rename the file."),
+                     Tr("Notitie hernoemen", "Rename note"),
                      wxOK | wxICON_WARNING, m_legend_window);
         return;
     }
@@ -374,11 +385,15 @@ void legend_pi::DeleteNoteFile(const wxString &path)
     wxWindow *parent = m_legend_window && m_legend_window->IsShown()
                            ? static_cast<wxWindow *>(m_legend_window)
                            : GetOCPNCanvasWindow();
-    wxMessageDialog confirm(parent,
-                            "Notitie \"" + title + "\" verwijderen?\n\nHet bestand gaat naar de map "
-                            "\"Verwijderd\" in de Legend-map; daar kun je het terughalen.",
-                            "Notitie verwijderen", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
-    confirm.SetYesNoLabels("Verwijderen", "Annuleren");
+    const wxString question =
+        m_dutch_names
+            ? "Notitie \"" + title + "\" verwijderen?\n\nHet bestand gaat naar de map "
+              "\"Verwijderd\" in de Legend-map; daar kun je het terughalen."
+            : "Delete note \"" + title + "\"?\n\nThe file goes to the folder "
+              "\"Verwijderd\" in the Legend folder; you can get it back from there.";
+    wxMessageDialog confirm(parent, question, Tr("Notitie verwijderen", "Delete note"),
+                            wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    confirm.SetYesNoLabels(Tr("Verwijderen", "Delete"), Tr("Annuleren", "Cancel"));
     if (confirm.ShowModal() != wxID_YES)
         return;
 
@@ -392,7 +407,8 @@ void legend_pi::DeleteNoteFile(const wxString &path)
         StopEditing();
 
     if (!wxRenameFile(path, target.GetFullPath(), false)) {
-        wxMessageBox("De notitie kon niet worden verplaatst.", "Notitie verwijderen",
+        wxMessageBox(Tr("De notitie kon niet worden verplaatst.", "Could not move the note."),
+                     Tr("Notitie verwijderen", "Delete note"),
                      wxOK | wxICON_WARNING, parent);
         return;
     }
@@ -534,8 +550,10 @@ void legend_pi::NewNoteAtBoat()
 
 void legend_pi::ShowNoGpsNotice()
 {
-    ShowNotice("Geen positie van de boot",
-               "Er is de laatste minuut geen GPS-positie binnengekomen.", false,
+    ShowNotice(Tr("Geen positie van de boot", "No position of the boat"),
+               Tr("Er is de laatste minuut geen GPS-positie binnengekomen.",
+                  "No GPS position has come in during the last minute."),
+               false,
                wxColour(186, 117, 23));
 }
 
@@ -825,10 +843,11 @@ void legend_pi::CheckNotePlaces()
     const NotePlace &place = *entered.front();
     wxString distance = wxString::Format(
         "%.1f", SeaMiles(m_ship_lat, m_ship_lon, place.lat, place.lon));
-    distance.Replace(".", ",");
-    m_pending_note_title = "Notitie in de buurt";
-    m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance +
-                          " NM\nKlik om de notitie te openen";
+    if (m_dutch_names)
+        distance.Replace(".", ",");
+    m_pending_note_title = Tr("Notitie in de buurt", "Note nearby");
+    m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance + " NM\n" +
+                          Tr("Klik om de notitie te openen", "Click to open the note");
     m_pending_note_path = place.path;
     if (m_notice.IsShown())
         m_note_notice_timer.StartOnce(12500);
@@ -887,7 +906,9 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
         BlockWithPlace(front.block, true, lat, lon, front.radius) + front.body;
     wxTempFile out(path);
     if (!out.IsOpened() || !out.Write(moved, wxConvUTF8) || !out.Commit())
-        wxMessageBox("De nieuwe plek kon niet in de notitie worden bewaard.", "Notitie verplaatsen",
+        wxMessageBox(Tr("De nieuwe plek kon niet in de notitie worden bewaard.",
+                        "Could not save the new place in the note."),
+                     Tr("Notitie verplaatsen", "Move note"),
                      wxOK | wxICON_WARNING, GetOCPNCanvasWindow());
     RefreshNotePlaces();
 
@@ -913,11 +934,14 @@ void legend_pi::AskNoteRadius()
         value.RemoveLast();
     if (value.EndsWith("."))
         value.RemoveLast();
-    value.Replace(".", ",");
+    if (m_dutch_names)
+        value.Replace(".", ",");
     wxTextEntryDialog dialog(m_legend_window,
-                             "Straal in zeemijl: binnen deze afstand krijg je onderweg een "
-                             "melding van deze notitie.",
-                             "Straal", value);
+                             Tr("Straal in zeemijl: binnen deze afstand krijg je onderweg een "
+                                "melding van deze notitie.",
+                                "Radius in nautical miles: within this distance you get a "
+                                "notice of this note under way."),
+                             Tr("Straal", "Radius"), value);
     if (dialog.ShowModal() != wxID_OK)
         return;
     wxString text = dialog.GetValue();
@@ -926,7 +950,9 @@ void legend_pi::AskNoteRadius()
     text = text.BeforeFirst(' ');
     double radius = 0.0;
     if (!text.ToCDouble(&radius) || radius <= 0.0 || radius >= 100.0) {
-        wxMessageBox("Vul een straal in zeemijl in, bijvoorbeeld 0,5.", "Straal",
+        wxMessageBox(Tr("Vul een straal in zeemijl in, bijvoorbeeld 0,5.",
+                        "Enter a radius in nautical miles, for example 0.5."),
+                     Tr("Straal", "Radius"),
                      wxOK | wxICON_INFORMATION, m_legend_window);
         return;
     }
@@ -946,7 +972,7 @@ void legend_pi::NotePlaceChanged()
     UpdatePlaceBar();
     m_note_dirty = true;
     if (m_save_status)
-        m_save_status->SetLabel(wxString::FromUTF8("Nog niet bewaard\u2026"));
+        m_save_status->SetLabel(Tr("Nog niet bewaard\u2026", "Not saved yet\u2026"));
     m_save_timer.StartOnce(500);
     UpdateNoteButtons();
 }
@@ -961,11 +987,13 @@ void legend_pi::UpdatePlaceBar()
             radius.RemoveLast();
         if (radius.EndsWith("."))
             radius.RemoveLast();
-        radius.Replace(".", ",");
-        m_place_text->SetLabel(wxString::FromUTF8("Vastgepind op ") +
+        if (m_dutch_names)
+            radius.Replace(".", ",");
+        m_place_text->SetLabel(Tr("Vastgepind op ", "Pinned at ") +
                                FormatPosition(m_note_lat, m_note_lon) +
-                               wxString::FromUTF8(" \u00b7 straal ") + radius + " NM");
-        m_place_text->SetToolTip("Klik om de plek op de kaart te zien");
+                               Tr(" \u00b7 straal ", " \u00b7 radius ") + radius + " NM");
+        m_place_text->SetToolTip(Tr("Klik om de plek op de kaart te zien",
+                                    "Click to see the place on the chart"));
     }
     const LegendPalette palette = GetLegendPalette();
     const bool dim = IsDimScheme();

@@ -62,11 +62,15 @@ void TestFormat()
     CHECK_EQ(FormatDistance(9.94), "9,9 NM");
     CHECK_EQ(FormatDistance(9.96), "10 NM");
     CHECK_EQ(FormatDistance(12.4), "12 NM");
+    CHECK_EQ(FormatDistance(0.34, false), "0.3 NM");
+    CHECK_EQ(FormatDistance(0.05, false), "90 m");
 
     CHECK_EQ(FormatMiles(2.0), "2 NM");
     CHECK_EQ(FormatMiles(0.5), "0,5 NM");
     CHECK_EQ(FormatMiles(12.5), "12,5 NM");
     CHECK_EQ(FormatMiles(20.2), "20 NM");
+    CHECK_EQ(FormatMiles(12.5, false), "12.5 NM");
+    CHECK_EQ(FormatMiles(2.0, false), "2 NM");
 
     CHECK_EQ(FormatDuration(0.2, true), "1 min");
     CHECK_EQ(FormatDuration(7.4, true), "7 min");

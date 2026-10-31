@@ -50,7 +50,7 @@ double BearingDegrees(double lat1, double lon1, double lat2, double lon2)
     return bearing;
 }
 
-wxString FormatDistance(double seaMiles)
+wxString FormatDistance(double seaMiles, bool dutch)
 {
     if (seaMiles < 0.1) {
         const long metres = std::lround(seaMiles * 1852.0 / 10.0) * 10;
@@ -58,16 +58,17 @@ wxString FormatDistance(double seaMiles)
     }
     wxString text = seaMiles < 9.95 ? wxString::Format("%.1f NM", seaMiles)
                                     : wxString::Format("%.0f NM", seaMiles);
-    text.Replace(".", ",");
+    if (dutch)
+        text.Replace(".", ",");
     return text;
 }
 
-wxString FormatMiles(double seaMiles)
+wxString FormatMiles(double seaMiles, bool dutch)
 {
     const long halves = std::lround(seaMiles * 2.0);
     if (halves % 2 == 0)
         return wxString::Format("%ld NM", halves / 2);
-    return wxString::Format("%ld,5 NM", halves / 2);
+    return wxString::Format(dutch ? "%ld,5 NM" : "%ld.5 NM", halves / 2);
 }
 
 wxString FormatDuration(double minutes, bool dutch)
