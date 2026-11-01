@@ -783,18 +783,6 @@ Legend4OpenCPN/
 └── CMakeLists.txt
 ```
 
-## Plans
-
-Ideas for future versions:
-
-- marking bridges the boat does not fit under;
-- showing the range of a light in the night preview;
-- editing meanings in the window itself;
-- a configurable Legend folder;
-- builds for Windows and Linux;
-- translations into more languages, for example through OpenCPN's Crowdin
-  project.
-
 ## License
 
 Legend4OpenCPN is free software under the
