@@ -25,11 +25,13 @@ double SeaMiles(double lat1, double lon1, double lat2, double lon2);
 // True bearing from the first position to the second, 0 up to 360 degrees.
 double BearingDegrees(double lat1, double lon1, double lat2, double lon2);
 
-// "150 m" below a tenth of a sea mile, "0,3 NM" below ten, "12 NM" beyond.
-wxString FormatDistance(double seaMiles);
+// "150 m" below a tenth of a sea mile, "0,3 NM" below ten, "12 NM" beyond;
+// in English with a decimal point, "0.3 NM".
+wxString FormatDistance(double seaMiles, bool dutch = true);
 
-// A length the user chose, to half a sea mile: "2 NM", "0,5 NM", "12,5 NM".
-wxString FormatMiles(double seaMiles);
+// A length the user chose, to half a sea mile: "2 NM", "0,5 NM", "12,5 NM"
+// (English "0.5 NM").
+wxString FormatMiles(double seaMiles, bool dutch = true);
 
 // The time to sail somewhere, roughly: "7 min" below ten minutes, then to
 // five minutes ("25 min", "1 u 05" / "1 h 05"), whole hours as "2 u" / "2 h".

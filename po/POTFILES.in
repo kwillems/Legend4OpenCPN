@@ -1,0 +1,7 @@
+src/legend_chart.cpp
+src/legend_collect.cpp
+src/legend_navigation.cpp
+src/legend_notes.cpp
+src/legend_pi.cpp
+src/legend_render.cpp
+src/legend_window.cpp

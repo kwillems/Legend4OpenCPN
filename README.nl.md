@@ -13,6 +13,12 @@ routebeschrijvingen.
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
 
+> **Taal.** De plugin volgt de taal van OpenCPN. De bediening is er in het
+> Engels en het Nederlands; in andere talen is hij Engels tot er een
+> vertaling is (zie *Vertalingen* hieronder). Betekenissen van symbolen en
+> lichtkarakters zijn Nederlands als OpenCPN in het Nederlands staat, anders
+> Engels.
+
 > **Gebruik op eigen risico.** Legend4OpenCPN is een hulpmiddel, geen
 > navigatiemiddel. De uitleg, lichtkarakters, kanalen en andere informatie
 > kunnen onvolledig, verouderd of fout zijn. Vertrouw er nooit alleen op:
@@ -170,7 +176,6 @@ In het menu Instellingen:
 | Lichten | Lichtrijen tonen of verbergen |
 | Ook op deze schaal verborgen tonen | Ook symbolen die de kaart op deze schaal niet tekent (zie hieronder) |
 | Afstand en peiling vanaf de boot | Boven de betekenis van elke rij de afstand en peiling naar het dichtstbijzijnde exemplaar (zie hieronder); standaard uit |
-| Engelse namen | Betekenissen in het Engels in plaats van het Nederlands |
 | Alle lichten laten branden | Alle lichten in beeld branden op de kaart |
 | Nachtvoorbeeld | De kaart zoals je hem 's nachts ziet |
 | Licht herkennen | Een licht herkennen aan zijn ritme |
@@ -482,7 +487,7 @@ prullenbak verschijnen alleen bij een notitie:
 |---|---|
 | Potlood | De notitie bewerken |
 | Tekstvak met cursor | Een andere titel geven: het bestand en de `# Titel` bovenaan veranderen mee |
-| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map `Verwijderd` in de Legend-map; zet het terug om het weer te gebruiken |
+| Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map voor verwijderde notities in de Legend-map: `Verwijderd` in het Nederlands, `Deleted` in het Engels. Zet het terug om het weer te gebruiken. Na een wissel van taal krijgt de map zijn nieuwe naam zodra je weer een notitie verwijdert |
 | Plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
 
 Tijdens het bewerken zie je de notitie zoals hij eruitziet, zonder
@@ -622,8 +627,8 @@ Instellingen en caches staan in de privémap van OpenCPN:
 ~/Library/Preferences/opencpn/Legend/
 ```
 
-Daar staan `legend.ini` (laatste item, venster, ingeklapte kopjes en de
-keuzes uit Instellingen) en `ocharts-cells.txt` en `s57-cells.txt` met de
+Daar staan `legend.ini` (laatste item, venster, ingeklapte kopjes, de
+keuzes uit Instellingen en de naam van de map voor verwijderde notities) en `ocharts-cells.txt` en `s57-cells.txt` met de
 dekking van de kaartcellen, zodat latere starts snel zijn.
 
 ## Beperkingen
@@ -708,6 +713,39 @@ ctest --output-on-failure
 `./legend-tests` toont elke mislukte controle met het verwachte en het
 werkelijke resultaat. In CircleCI draaien de tests mee na het bouwen.
 
+### Vertalingen
+
+De bediening wordt vertaald met gettext, zoals in OpenCPN en zijn andere
+plugins. De teksten in de code zijn Engels en gemarkeerd met `_()`, zoals
+`_("Night preview")`. De map `po/` bevat:
+
+- `legend_pi.pot`: het sjabloon met alle teksten om te vertalen;
+- één bestand per taal, zoals `nl_NL.po` voor het Nederlands;
+- `POTFILES.in`: de bronbestanden waar de teksten uit komen.
+
+Bij het bouwen wordt elk `.po`-bestand een `.mo`-bestand in het pakket,
+geïnstalleerd als `opencpn-legend_pi.mo` in de map van zijn taal. De plugin
+meldt deze vertalingen bij het starten aan, en OpenCPN kiest die van zijn
+taal. Een tekst zonder vertaling verschijnt in het Engels.
+
+Na het wijzigen van teksten in de code, in de map `build/`:
+
+```bash
+make legend-pot-update
+make legend-po-update
+```
+
+De eerste verzamelt de teksten in `po/legend_pi.pot`, de tweede voegt ze
+samen met elk `.po`-bestand; nieuwe teksten hebben daar dan nog een
+vertaling nodig. Een nieuwe taal is een nieuw `.po`-bestand in `po/`,
+genoemd zoals de mappen van OpenCPN (`de_DE.po`, `fr_FR.po`), gemaakt uit
+het sjabloon, bijvoorbeeld met `msginit` of Poedit. Draai daarna opnieuw
+`cmake ..` zodat de build het oppikt.
+
+Betekenissen van symbolen (`symbolen.txt`, `data/s57-nl.txt`) en de woorden
+van lichtkarakters vallen buiten gettext: die bestaan in het Nederlands en
+het Engels.
+
 ### Projectstructuur
 
 ```text
@@ -741,22 +779,13 @@ Legend4OpenCPN/
 │   ├── vhf_areas.*             # marifoongebieden uit de lagen
 │   ├── vhf_highlight.*         # een marifoongebied laten oplichten
 │   └── chart_notice.*          # het venstertje bovenaan de kaart
+├── po/                      # vertalingen van de bediening (gettext)
 ├── test/                    # unit tests (make legend-tests, ctest)
 ├── third_party/md4c/        # Markdown-verwerking (submodule)
 ├── opencpn-libs/            # OpenCPN-plugin-API (submodule)
 ├── Plugin.cmake
 └── CMakeLists.txt
 ```
-
-## Plannen
-
-Ideeën voor volgende versies:
-
-- bruggen markeren waar de boot niet onder past;
-- het bereik van een licht laten zien in het nachtvoorbeeld;
-- betekenissen bewerken in het venster zelf;
-- een instelbare Legend-map;
-- builds voor Windows en Linux, en een Engelse vertaling van de bediening.
 
 ## Licentie
 

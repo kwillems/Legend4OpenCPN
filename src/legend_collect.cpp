@@ -84,39 +84,42 @@ wxString FirstDescriptionLine(const wxString &description)
     return line;
 }
 
-// Written once into the legend folder, so the format explains itself.
-const char *kMeaningsTemplate =
-    "# Betekenis en indeling van symbolen in de dynamische legenda van\n"
-    "# Legend4OpenCPN.\n"
-    "#\n"
-    "# Per regel: icoonnaam = betekenis\n"
-    "# De icoonnaam is de bestandsnaam van het icoon zonder .png of .svg,\n"
-    "# zoals de legenda hem in grijs toont zolang er geen betekenis bekend\n"
-    "# is.\n"
-    "#\n"
-    "# Een '*' in de icoonnaam staat voor een willekeurig stuk tekst. Een '*'\n"
-    "# in de betekenis wordt vervangen door dat stuk. Exacte namen gaan voor,\n"
-    "# daarna telt het eerste passende patroon.\n"
-    "#\n"
-    "# Een regel [Kopje] begint een groep in de legenda. Kopjes en regels\n"
-    "# verschijnen in de volgorde van dit bestand; wat nergens onder valt,\n"
-    "# komt onder 'Overig'. Een lege betekenis ('vhf_* =') deelt een icoon\n"
-    "# alleen in; de tekst komt dan uit de beschrijving van de waypoints.\n"
-    "#\n"
-    "# Twee talen: 'betekenis | meaning' en '[Kopje | Heading]'. De legenda\n"
-    "# toont het deel van de gekozen taal; ontbreekt dat, dan het andere.\n"
-    "#\n"
-    "# Regels die met # beginnen worden overgeslagen. Wijzigingen zijn\n"
-    "# zichtbaar na Ververs of zodra de kaart verschuift.\n"
-    "#\n"
-    "# Voorbeeld:\n"
-    "# [Marifoon]\n"
-    "# vhf_b11b_*    = Meldplicht marifoon, kanaal *\n"
-    "# vhf_*         =\n"
-    "#\n"
-    "# [Betonning | Buoyage]\n"
-    "# 011           = Groene spitse ton | Green conical buoy\n"
-    "\n";
+// Written once into the legend folder, so the format explains itself; in
+// OpenCPN's language.
+wxString MeaningsTemplate()
+{
+    return _("# Meanings and grouping of the symbols in the dynamic legend of\n"
+             "# Legend4OpenCPN.\n"
+             "#\n"
+             "# One per line: icon name = meaning\n"
+             "# The icon name is the file name of the icon without .png or .svg,\n"
+             "# as the legend shows it in grey while no meaning is known.\n"
+             "#\n"
+             "# A '*' in the icon name stands for any piece of text. A '*' in the\n"
+             "# meaning is replaced by that piece. Exact names come first, then\n"
+             "# the first matching pattern counts.\n"
+             "#\n"
+             "# A line [Heading] starts a group in the legend. Headings and lines\n"
+             "# appear in the order of this file; what falls under none goes\n"
+             "# under 'Other'. An empty meaning ('vhf_* =') only groups an icon;\n"
+             "# the text then comes from the description of the waypoints.\n"
+             "#\n"
+             "# Two languages: 'betekenis | meaning' and '[Kopje | Heading]'. The\n"
+             "# legend shows the Dutch part when OpenCPN is in Dutch, otherwise\n"
+             "# the English part; when that is missing, the other.\n"
+             "#\n"
+             "# Lines starting with # are skipped. Changes show after Refresh or\n"
+             "# as soon as the chart moves.\n"
+             "#\n"
+             "# Example:\n"
+             "# [Marifoon | VHF]\n"
+             "# vhf_b11b_*    = Meldplicht marifoon, kanaal * | Report on VHF, channel *\n"
+             "# vhf_*         =\n"
+             "#\n"
+             "# [Betonning | Buoyage]\n"
+             "# 011           = Groene spitse ton | Green conical buoy\n"
+             "\n");
+}
 
 }
 
@@ -226,7 +229,7 @@ void legend_pi::LoadMeanings()
     if (!wxFileName::FileExists(path)) {
         wxFile file;
         if (file.Create(path, false))
-            file.Write(wxString::FromUTF8(kMeaningsTemplate), wxConvUTF8);
+            file.Write(MeaningsTemplate(), wxConvUTF8);
     }
 
     // Read again only when the file changed.
@@ -630,7 +633,7 @@ void legend_pi::FinishWaypointLoading()
 void legend_pi::RenderLoadingPage()
 {
     const size_t total = m_loading ? m_loading_guids.GetCount() : 0;
-    RenderProgressPage("Waypoints worden geladen", m_loading_next, total);
+    RenderProgressPage(_("Loading waypoints"), m_loading_next, total);
 }
 
 // Opening a chart cell takes a fifth of a second. With more than one to
@@ -660,7 +663,7 @@ bool legend_pi::OpenChartCellsFirst(std::function<void()> then)
     m_cells_opened = 0;
     m_after_cells = then;
     if (IsDynamicLegendVisible())
-        RenderProgressPage("Kaarten worden gelezen", 0, m_cells_to_open.size());
+        RenderProgressPage(_("Reading charts"), 0, m_cells_to_open.size());
     m_cell_timer.StartOnce(10);
     return true;
 }
@@ -676,7 +679,7 @@ void legend_pi::OpenNextChartCell()
     }
     if (m_cells_opened < m_cells_to_open.size()) {
         if (IsDynamicLegendVisible())
-            RenderProgressPage("Kaarten worden gelezen", m_cells_opened,
+            RenderProgressPage(_("Reading charts"), m_cells_opened,
                                m_cells_to_open.size());
         m_cell_timer.StartOnce(10);
         return;
@@ -699,16 +702,17 @@ void legend_pi::RenderProgressPage(const wxString &what, size_t done, size_t tot
 
     wxString html;
     html << "<html>" << LegendBodyTag(true)
-         << "<p><font size=\"+1\"><b>Kaartlegenda</b></font></p>"
+         << "<p><font size=\"+1\"><b>" << _("Chart legend") << "</b></font></p>"
          << "<p>" << what << "&hellip;</p>";
 
     if (total > 0) {
         const int percent =
             std::max(1, std::min(100, static_cast<int>(done * 100 / total)));
-        auto number = [](size_t value) {
+        const wxString separator = m_dutch_names ? "." : ",";
+        auto number = [&separator](size_t value) {
             wxString text = wxString::Format("%zu", value);
             for (int at = static_cast<int>(text.length()) - 3; at > 0; at -= 3)
-                text.insert(at, ".");
+                text.insert(at, separator);
             return text;
         };
         html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tr>"
@@ -719,7 +723,7 @@ void legend_pi::RenderProgressPage(const wxString &what, size_t done, size_t tot
                  << "\"><font size=\"1\">&nbsp;</font></td>";
         html << "</tr></table>"
              << "<p><font color=\"" << HtmlColour(palette.muted) << "\">" << number(done)
-             << " van " << number(total) << "</font></p>";
+             << _(" of ") << number(total) << "</font></p>";
     }
 
     html << "</body></html>";

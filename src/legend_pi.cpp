@@ -164,6 +164,10 @@ legend_pi::legend_pi(void *ppimgr)
       m_window_width(560),
       m_window_height(460)
 {
+    // The translations of the interface: po/<language>.po, installed as
+    // opencpn-legend_pi.mo.
+    AddLocaleCatalog("opencpn-legend_pi");
+
     m_viewport = PlugIn_ViewPort();
     m_collected_viewport = PlugIn_ViewPort();
     m_pending_viewport = PlugIn_ViewPort();
@@ -238,32 +242,60 @@ int legend_pi::Init()
 
     m_toolbar_bitmap = wxBitmap(icon_path, wxBITMAP_TYPE_PNG);
 
+    EnsureDirectories();
+    LoadConfig();
+
     m_toolbar_item_id = InsertPlugInTool(
         "",
         &m_toolbar_bitmap,
         &m_toolbar_bitmap,
         wxITEM_NORMAL,
-        "Legenda",
-        "Toon of verberg de legenda",
+        _("Legend"),
+        _("Show or hide the legend"),
         nullptr,
         -1,
         0,
         this);
 
-    EnsureDirectories();
-    LoadConfig();
-
     RefreshNotePlaces();
     m_note_notice_timer.Bind(wxEVT_TIMER, [this](wxTimerEvent &) { ShowPendingNoteNotice(); });
 
-    // In the chart's right-click menu: "Toon in legenda" and "Welk
-    // marifoonkanaal hier?", and "Notitie" with a submenu that
-    // PrepareContextMenu() fills each time for the spot and the state.
+    AddContextMenuItems();
+
+    m_ocharts.SetCacheFile(
+        GetConfigDirectory() + wxFileName::GetPathSeparator() +
+        "ocharts-cells.txt");
+    m_s57.SetCacheFile(
+        GetConfigDirectory() + wxFileName::GetPathSeparator() +
+        "s57-cells.txt");
+    m_s57.SetCatalogue(&m_chart_symbols);
+
+    // OpenCPN's own configuration file, read for its vector display settings.
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (privateDir && !privateDir->IsEmpty()) {
+        m_display_settings.SetFile(
+            *privateDir + wxFileName::GetPathSeparator() + "opencpn.ini");
+    }
+
+    return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
+           WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
+           WANTS_OPENGL_OVERLAY_CALLBACK |
+           WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK | WANTS_MOUSE_EVENTS |
+           WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
+}
+
+// In the chart's right-click menu: "Toon in legenda" and "Welk
+// marifoonkanaal hier?", and "Notitie" with a submenu that
+// PrepareContextMenu() fills each time for the spot and the state.
+void legend_pi::AddContextMenuItems()
+{
     m_menu_reveal = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Toon in legenda")), this);
+        new wxMenuItem(nullptr, wxID_ANY, _("Show in legend")), this);
     m_menu_actions.push_back(m_menu_reveal);
     m_menu_vhf = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8("Welk marifoonkanaal hier?")), this);
+        new wxMenuItem(nullptr, wxID_ANY,
+                       _("Which VHF channel here?")),
+        this);
     m_menu_actions.push_back(m_menu_vhf);
 
     // OpenCPN tells a plugin of this API version which submenu was used,
@@ -288,31 +320,24 @@ int legend_pi::Init()
     m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
     m_context_submenu = new wxMenu();
     m_menu_parent = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, "Notitie", wxEmptyString, wxITEM_NORMAL,
+        new wxMenuItem(nullptr, wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
                        m_context_submenu),
         this);
     PrepareContextMenu(0);
+}
 
-    m_ocharts.SetCacheFile(
-        GetConfigDirectory() + wxFileName::GetPathSeparator() +
-        "ocharts-cells.txt");
-    m_s57.SetCacheFile(
-        GetConfigDirectory() + wxFileName::GetPathSeparator() +
-        "s57-cells.txt");
-    m_s57.SetCatalogue(&m_chart_symbols);
-
-    // OpenCPN's own configuration file, read for its vector display settings.
-    wxString *privateDir = GetpPrivateApplicationDataLocation();
-    if (privateDir && !privateDir->IsEmpty()) {
-        m_display_settings.SetFile(
-            *privateDir + wxFileName::GetPathSeparator() + "opencpn.ini");
+// OpenCPN owns the menu items it was given, and the submenu with its
+// item; only their places in the menu are given up.
+void legend_pi::RemoveContextMenuItems()
+{
+    if (m_menu_parent >= 0) {
+        RemoveCanvasContextMenuItem(m_menu_parent);
+        m_menu_parent = -1;
     }
-
-    return WANTS_TOOLBAR_CALLBACK | INSTALLS_TOOLBAR_TOOL |
-           WANTS_ONPAINT_VIEWPORT | WANTS_OVERLAY_CALLBACK |
-           WANTS_OPENGL_OVERLAY_CALLBACK |
-           WANTS_DYNAMIC_OPENGL_OVERLAY_CALLBACK | WANTS_MOUSE_EVENTS |
-           WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
+    for (int id : m_menu_actions)
+        RemoveCanvasContextMenuItem(id);
+    m_menu_actions.clear();
+    m_context_submenu = nullptr;
 }
 
 bool legend_pi::DeInit()
@@ -396,16 +421,7 @@ bool legend_pi::DeInit()
     }
 
     m_notice.Close();
-    // OpenCPN owns the menu items it was given, and the submenu with its
-    // item; only their places in the menu are given up.
-    if (m_menu_parent >= 0) {
-        RemoveCanvasContextMenuItem(m_menu_parent);
-        m_menu_parent = -1;
-    }
-    for (int id : m_menu_actions)
-        RemoveCanvasContextMenuItem(id);
-    m_menu_actions.clear();
-    m_context_submenu = nullptr;
+    RemoveContextMenuItems();
 
     return true;
 }
@@ -437,12 +453,31 @@ wxString legend_pi::GetCommonName()
 
 wxString legend_pi::GetShortDescription()
 {
-    return "Configurable legend for OpenCPN";
+    return _("Explains what is on the chart, keeps a lookout and shows notes");
 }
 
 wxString legend_pi::GetLongDescription()
 {
-    return "Displays PNG legends and Markdown notes in OpenCPN, plus a dynamic legend of the waypoint symbols visible on screen.";
+    return _("A legend of exactly the buoys, beacons, signs and other symbols on "
+             "screen, with what the lights do and what lies ahead on your course, "
+             "plus your own legends and notes in Markdown.");
+}
+
+// The icon on the Plugins tab of OpenCPN's options, also asked for while
+// the plugin is not enabled (before Init): the toolbar icon with its
+// symbols as coloured buoys. The toolbar keeps its own grey icon.
+wxBitmap *legend_pi::GetPlugInBitmap()
+{
+    if (!m_plugin_bitmap.IsOk()) {
+        const wxString path = GetPluginDataDir("legend_pi") + wxFileName::GetPathSeparator() +
+                              "data" + wxFileName::GetPathSeparator() + "legend_plugin.svg";
+        // Drawn here rather than with GetBitmapFromSVGFile: OpenCPN keeps
+        // those in a cache by file name and size, so a changed icon would
+        // not show. At 64 pixels, as OpenCPN scales it down to the list.
+        const wxSize size(64, 64);
+        m_plugin_bitmap = wxBitmapBundle::FromSVGFile(path, size).GetBitmap(size);
+    }
+    return &m_plugin_bitmap;
 }
 
 wxString legend_pi::GetLegendDirectory() const
@@ -489,7 +524,7 @@ void legend_pi::EnsureDirectories() const
 wxString legend_pi::MakeDisplayTitle(const wxString &path) const
 {
     if (path == kDynamicGpxId)
-        return wxString::FromUTF8("Kaartlegenda (in beeld)");
+        return _("Chart legend (in view)");
 
     wxFileName filename(path);
     wxString ext = filename.GetExt().Lower();
@@ -588,9 +623,8 @@ void legend_pi::LoadConfig()
     m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
-    wxString language;
-    config.Read("Language", &language, "nl");
-    m_dutch_names = language != "en";
+    config.Read("DeletedFolder", &m_deleted_folder, "Verwijderd");
+    m_dutch_names = DutchInterface();
 
     // Keys missing from the saved order (a new block) go at the end;
     // unknown ones are dropped.
@@ -659,7 +693,7 @@ void legend_pi::SaveConfig() const
     config.Write("VhfKeepLit", m_vhf_keep_lit);
     config.Write("VhfNotice", m_vhf_notice_on);
     config.Write("NoteNotice", m_note_notice_on);
-    config.Write("Language", m_dutch_names ? "nl" : "en");
+    config.Write("DeletedFolder", m_deleted_folder);
 
     config.Flush();
 }
@@ -894,18 +928,18 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
     wxFile file(path);
 
     if (!file.IsOpened())
-        return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet worden geopend.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not open the Markdown file.") + "</p></body></html>";
 
     wxFileOffset len = file.Length();
 
     if (len <= 0)
-        return "<html>" + LegendBodyTag() + "<p>Leeg Markdown-bestand.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Empty Markdown file.") + "</p></body></html>";
 
     std::string markdown;
     markdown.resize(static_cast<size_t>(len));
 
     if (file.Read(&markdown[0], static_cast<size_t>(len)) != len)
-        return "<html>" + LegendBodyTag() + "<p>Markdown-bestand kon niet volledig worden gelezen.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not read the whole Markdown file.") + "</p></body></html>";
 
     // The block with the note's place is not shown as text; a line on top
     // says where the note belongs, as a link that takes the chart there.
@@ -922,7 +956,8 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
             radius.RemoveLast();
         if (radius.EndsWith("."))
             radius.RemoveLast();
-        radius.Replace(".", ",");
+        if (m_dutch_names)
+            radius.Replace(".", ",");
         // A tinted bar with a pin, the colours of the bar in the editor: it
         // is about the note, not part of its text.
         const bool dim = IsDimScheme();
@@ -945,9 +980,9 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         line << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" bgcolor=\""
              << HtmlColour(fill) << "\"><tr><td width=\"20\" valign=\"middle\"><img src=\"memory:"
              << pin << "\"></td><td valign=\"middle\"><font size=\"-1\" color=\"" << HtmlColour(ink)
-             << "\">Deze notitie is vastgepind op de kaart: <a href=\"geo:"
+             << "\">" << _("This note is pinned to the chart:") << " <a href=\"geo:"
              << wxString::FromCDouble(front.lat, 5) << "," << wxString::FromCDouble(front.lon, 5)
-             << "\">" << FormatPosition(front.lat, front.lon) << "</a> &middot; straal " << radius
+             << "\">" << FormatPosition(front.lat, front.lon) << "</a> &middot; " << _("radius") << " " << radius
              << " NM</font></td></tr></table><br>";
         const int bodyTag = html.Find("<body");
         const int bodyEnd = bodyTag == wxNOT_FOUND ? wxNOT_FOUND : html.find('>', bodyTag);
@@ -977,7 +1012,7 @@ wxString legend_pi::RenderMarkdownText(const std::string &markdown) const
         0);
 
     if (result != 0)
-        return "<html>" + LegendBodyTag() + "<p>Markdown kon niet worden verwerkt.</p></body></html>";
+        return "<html>" + LegendBodyTag() + "<p>" + _("Could not process the Markdown.") + "</p></body></html>";
 
     html = ShowTaskLists(html);
 
@@ -1049,8 +1084,8 @@ void legend_pi::ShowEmptyState()
         wxString html;
         html << "<html>" << LegendBodyTag()
              << "<font size=\"+1\">"
-             << "<p><b>Geen legenda's of notities gevonden.</b></p>"
-             << "<p>Plaats een PNG- of Markdown-bestand in:</p>"
+             << "<p><b>" << _("No legends or notes found.") << "</b></p>"
+             << "<p>" << _("Put a PNG or Markdown file in:") << "</p>"
              << "<p><code>" << legend_dir << "</code></p>"
              << "</font>"
              << "</body></html>";
@@ -1152,7 +1187,7 @@ void legend_pi::ShowLegend(size_t index)
         if (m_legend_position) {
             m_legend_position->SetLabel(
                 wxString::Format(
-                    "%zu van %zu",
+                    _("%zu of %zu"),
                     m_legend_index + 1,
                     m_legend_files.GetCount()));
         }

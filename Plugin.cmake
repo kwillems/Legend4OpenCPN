@@ -169,4 +169,22 @@ macro(add_plugin_libraries)
         endif ()
         add_test(NAME legend COMMAND legend-tests)
     endif ()
+
+    # wxWidgets looks for a Belgian Dutch (nl_BE) translation under nl_BE
+    # and then nl, never under nl_NL: the Dutch one goes under nl as well.
+    if (GETTEXT_MSGFMT_EXECUTABLE AND EXISTS ${CMAKE_SOURCE_DIR}/po/nl_NL.po)
+        if (APPLE)
+            install(
+                FILES ${CMAKE_CURRENT_BINARY_DIR}/nl_NL.mo
+                DESTINATION OpenCPN.app/Contents/Resources/nl.lproj
+                RENAME opencpn-${PACKAGE_NAME}.mo
+            )
+        else ()
+            install(
+                FILES ${CMAKE_CURRENT_BINARY_DIR}/nl_NL.mo
+                DESTINATION share/locale/nl/LC_MESSAGES
+                RENAME opencpn-${PACKAGE_NAME}.mo
+            )
+        endif ()
+    endif ()
 endmacro()

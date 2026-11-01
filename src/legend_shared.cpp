@@ -233,14 +233,15 @@ void MarkerColours(wxColour &outline, wxColour &highlight)
     }
 }
 
-wxString FormatScaleShort(int scale)
+wxString FormatScaleShort(int scale, bool dutch)
 {
     if (scale >= 1000000) {
         const double millions = scale / 1000000.0;
         wxString text = millions == std::floor(millions)
                             ? wxString::Format("%.0f", millions)
                             : wxString::Format("%.1f", millions);
-        text.Replace(".", ",");
+        if (dutch)
+            text.Replace(".", ",");
         return "1:" + text + "M";
     }
     if (scale >= 1000)

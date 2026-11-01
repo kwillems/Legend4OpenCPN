@@ -80,7 +80,8 @@ void legend_pi::StartEditing()
     wxString text;
     wxFile file(m_current_legend_path);
     if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
-        wxMessageBox("Deze notitie kon niet worden geopend.", "Notitie bewerken",
+        wxMessageBox(_("Could not open this note."),
+                     _("Edit note"),
                      wxOK | wxICON_WARNING, m_legend_window);
         return;
     }
@@ -100,7 +101,7 @@ void legend_pi::StartEditing()
     UpdatePlaceBar();
     m_editor->LoadMarkdown(front.body, wxFileName(m_editing_path).GetPath());
     if (m_save_status)
-        m_save_status->SetLabel("Wijzigingen worden vanzelf bewaard");
+        m_save_status->SetLabel(_("Changes are saved automatically"));
     m_content_book->SetSelection(2);
     UpdateNoteButtons();
     m_editor->SetFocus();
@@ -139,12 +140,12 @@ void legend_pi::SaveNote()
         m_note_block = SplitFrontMatter(text).block;
         RefreshNotePlaces();
         if (m_save_status)
-            m_save_status->SetLabel("Bewaard om " + wxDateTime::Now().Format("%H:%M"));
+            m_save_status->SetLabel(_("Saved at ") + wxDateTime::Now().Format("%H:%M"));
     }
     else {
         wxLogMessage("Legend: could not save %s", m_editing_path);
         if (m_save_status)
-            m_save_status->SetLabel("Kon niet bewaren");
+            m_save_status->SetLabel(_("Could not save"));
     }
 }
 
@@ -155,7 +156,8 @@ bool legend_pi::NewNote()
     if (m_editing)
         StopEditing();
 
-    wxTextEntryDialog dialog(m_legend_window, "Titel van de nieuwe notitie:", "Nieuwe notitie");
+    wxTextEntryDialog dialog(m_legend_window, _("Title of the new note:"),
+                             _("New note"));
     if (dialog.ShowModal() != wxID_OK)
         return false;
 
@@ -173,8 +175,9 @@ bool legend_pi::NewNote()
 
     wxFile out;
     if (!out.Create(file.GetFullPath()) || !out.Write("# " + title + "\n\n", wxConvUTF8)) {
-        wxMessageBox("De notitie kon niet worden aangemaakt in\n" + GetLegendDirectory(),
-                     "Nieuwe notitie", wxOK | wxICON_WARNING, m_legend_window);
+        wxMessageBox(_("Could not create the note in\n") +
+                         GetLegendDirectory(),
+                     _("New note"), wxOK | wxICON_WARNING, m_legend_window);
         return false;
     }
     out.Close();
@@ -211,7 +214,8 @@ void legend_pi::InsertLink()
     if (!m_editor)
         return;
 
-    wxTextEntryDialog dialog(m_legend_window, "Adres van de link:", "Link", "https://");
+    wxTextEntryDialog dialog(m_legend_window, _("Address of the link:"), "Link",
+                             "https://");
     if (dialog.ShowModal() != wxID_OK)
         return;
     wxString address = dialog.GetValue();
@@ -229,8 +233,9 @@ void legend_pi::InsertImage()
         return;
 
     const wxString legendDir = GetLegendDirectory();
-    wxFileDialog dialog(m_legend_window, "Afbeelding kiezen", legendDir, wxEmptyString,
-                        "Afbeeldingen (*.png;*.jpg;*.jpeg;*.gif)|*.png;*.jpg;*.jpeg;*.gif",
+    wxFileDialog dialog(m_legend_window, _("Choose an image"), legendDir,
+                        wxEmptyString,
+                        _("Images") + " (*.png;*.jpg;*.jpeg;*.gif)|*.png;*.jpg;*.jpeg;*.gif",
                         wxFD_OPEN | wxFD_FILE_MUST_EXIST);
     if (dialog.ShowModal() != wxID_OK)
         return;
@@ -244,8 +249,8 @@ void legend_pi::InsertImage()
         for (int n = 2; copy.FileExists(); ++n)
             copy.SetName(wxString::Format("%s %d", image.GetName(), n));
         if (!wxCopyFile(image.GetFullPath(), copy.GetFullPath())) {
-            wxMessageBox("De afbeelding kon niet naar de Legend-map worden gekopieerd.",
-                         "Afbeelding", wxOK | wxICON_WARNING, m_legend_window);
+            wxMessageBox(_("Could not copy the image to the Legend folder."),
+                         _("Image"), wxOK | wxICON_WARNING, m_legend_window);
             return;
         }
         relative = copy;
@@ -256,7 +261,8 @@ void legend_pi::InsertImage()
     if (path.Contains(" "))
         path = "<" + path + ">";
     if (!m_editor->InsertNoteImage(path, image.GetName()))
-        wxMessageBox("Deze afbeelding kon niet worden geopend.", "Afbeelding",
+        wxMessageBox(_("Could not open this image."),
+                     _("Image"),
                      wxOK | wxICON_WARNING, m_legend_window);
 }
 
@@ -270,7 +276,7 @@ wxString legend_pi::NoteFileName(const wxString &title) const
     name.Trim(true).Trim(false);
     while (name.StartsWith("."))
         name.Remove(0, 1);
-    return name.IsEmpty() ? wxString("Notitie") : name;
+    return name.IsEmpty() ? _("Note") : name;
 }
 
 // Shows the note with this file name, after the folder changed.
@@ -295,7 +301,8 @@ void legend_pi::RenameNote()
 
     const wxString path = m_current_legend_path;
     const wxString oldTitle = MakeDisplayTitle(path);
-    wxTextEntryDialog dialog(m_legend_window, "Nieuwe titel van de notitie:", "Notitie hernoemen",
+    wxTextEntryDialog dialog(m_legend_window, _("New title of the note:"),
+                             _("Rename note"),
                              oldTitle);
     if (dialog.ShowModal() != wxID_OK)
         return;
@@ -307,8 +314,9 @@ void legend_pi::RenameNote()
     wxFileName target(path);
     target.SetName(NoteFileName(title));
     if (target.GetFullPath() != path && target.FileExists()) {
-        wxMessageBox("Er is al een notitie met de naam \"" + target.GetName() + "\".",
-                     "Notitie hernoemen", wxOK | wxICON_INFORMATION, m_legend_window);
+        wxMessageBox(_("There is already a note named \"") +
+                         target.GetName() + "\".",
+                     _("Rename note"), wxOK | wxICON_INFORMATION, m_legend_window);
         return;
     }
 
@@ -333,14 +341,16 @@ void legend_pi::RenameNote()
         text = front.block + body.Left(start) + "# " + title + body.Mid(end);
         wxTempFile out(path);
         if (!out.IsOpened() || !out.Write(text, wxConvUTF8) || !out.Commit()) {
-            wxMessageBox("De notitie kon niet worden aangepast.", "Notitie hernoemen",
+            wxMessageBox(_("Could not change the note."),
+                         _("Rename note"),
                          wxOK | wxICON_WARNING, m_legend_window);
             return;
         }
     }
 
     if (target.GetFullPath() != path && !wxRenameFile(path, target.GetFullPath(), false)) {
-        wxMessageBox("Het bestand kon niet worden hernoemd.", "Notitie hernoemen",
+        wxMessageBox(_("Could not rename the file."),
+                     _("Rename note"),
                      wxOK | wxICON_WARNING, m_legend_window);
         return;
     }
@@ -358,8 +368,8 @@ void legend_pi::RenameNote()
     ShowNoteNamed(target.GetFullName());
 }
 
-// Moves the note into the folder "Verwijderd" in the Legend folder, where
-// it can be fetched back; images it uses stay where they are.
+// Moves the note into the folder for deleted notes in the Legend folder,
+// where it can be fetched back; images it uses stay where they are.
 void legend_pi::DeleteNote()
 {
     if (m_editing || !IsMarkdownItem(m_current_legend_path))
@@ -367,24 +377,41 @@ void legend_pi::DeleteNote()
     DeleteNoteFile(m_current_legend_path);
 }
 
-// Moves a note into the folder "Verwijderd" in the Legend folder, after
-// asking; from the legend window or from the chart's menu.
+// The folder for deleted notes in the Legend folder, named in OpenCPN's
+// language: "Deleted", "Verwijderd". After a change of language the folder
+// of the remembered name is renamed first, so that there is one.
+wxString legend_pi::DeletedFolder()
+{
+    const wxString name = _("Deleted");
+    const wxString legendDir = GetLegendDirectory() + wxFileName::GetPathSeparator();
+    if (name != m_deleted_folder) {
+        if (wxDirExists(legendDir + m_deleted_folder) && !wxDirExists(legendDir + name))
+            wxRenameFile(legendDir + m_deleted_folder, legendDir + name, false);
+        m_deleted_folder = name;
+        SaveConfig();
+    }
+    return legendDir + name;
+}
+
+// Moves a note into the folder for deleted notes, after asking; from the
+// legend window or from the chart's menu.
 void legend_pi::DeleteNoteFile(const wxString &path)
 {
     const wxString title = MakeDisplayTitle(path);
     wxWindow *parent = m_legend_window && m_legend_window->IsShown()
                            ? static_cast<wxWindow *>(m_legend_window)
                            : GetOCPNCanvasWindow();
-    wxMessageDialog confirm(parent,
-                            "Notitie \"" + title + "\" verwijderen?\n\nHet bestand gaat naar de map "
-                            "\"Verwijderd\" in de Legend-map; daar kun je het terughalen.",
-                            "Notitie verwijderen", wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
-    confirm.SetYesNoLabels("Verwijderen", "Annuleren");
+    const wxString question =
+        wxString::Format(_("Delete note \"%s\"?\n\nThe file goes to the folder "
+                           "\"%s\" in the Legend folder; you can get it back from there."),
+                         title, _("Deleted"));
+    wxMessageDialog confirm(parent, question, _("Delete note"),
+                            wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION);
+    confirm.SetYesNoLabels(_("Delete"), _("Cancel"));
     if (confirm.ShowModal() != wxID_YES)
         return;
 
-    wxFileName target(GetLegendDirectory() + wxFileName::GetPathSeparator() + "Verwijderd",
-                      wxFileName(path).GetFullName());
+    wxFileName target(DeletedFolder(), wxFileName(path).GetFullName());
     wxFileName::Mkdir(target.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
     for (int n = 2; target.FileExists(); ++n)
         target.SetName(wxString::Format("%s %d", wxFileName(path).GetName(), n));
@@ -393,7 +420,8 @@ void legend_pi::DeleteNoteFile(const wxString &path)
         StopEditing();
 
     if (!wxRenameFile(path, target.GetFullPath(), false)) {
-        wxMessageBox("De notitie kon niet worden verplaatst.", "Notitie verwijderen",
+        wxMessageBox(_("Could not move the note."),
+                     _("Delete note"),
                      wxOK | wxICON_WARNING, parent);
         return;
     }
@@ -535,8 +563,9 @@ void legend_pi::NewNoteAtBoat()
 
 void legend_pi::ShowNoGpsNotice()
 {
-    ShowNotice("Geen positie van de boot",
-               "Er is de laatste minuut geen GPS-positie binnengekomen.", false,
+    ShowNotice(_("No position of the boat"),
+               _("No GPS position has come in during the last minute."),
+               false,
                wxColour(186, 117, 23));
 }
 
@@ -831,10 +860,11 @@ void legend_pi::CheckNotePlaces()
     const NotePlace &place = *entered.front();
     wxString distance = wxString::Format(
         "%.1f", SeaMiles(m_ship_lat, m_ship_lon, place.lat, place.lon));
-    distance.Replace(".", ",");
-    m_pending_note_title = "Notitie in de buurt";
-    m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance +
-                          " NM\nKlik om de notitie te openen";
+    if (m_dutch_names)
+        distance.Replace(".", ",");
+    m_pending_note_title = _("Note nearby");
+    m_pending_note_text = place.title + wxString::FromUTF8(" \u00b7 ") + distance + " NM\n" +
+                          _("Click to open the note");
     m_pending_note_path = place.path;
     if (m_notice.IsShown())
         m_note_notice_timer.StartOnce(12500);
@@ -893,7 +923,8 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
         BlockWithPlace(front.block, true, lat, lon, front.radius) + front.body;
     wxTempFile out(path);
     if (!out.IsOpened() || !out.Write(moved, wxConvUTF8) || !out.Commit())
-        wxMessageBox("De nieuwe plek kon niet in de notitie worden bewaard.", "Notitie verplaatsen",
+        wxMessageBox(_("Could not save the new place in the note."),
+                     _("Move note"),
                      wxOK | wxICON_WARNING, GetOCPNCanvasWindow());
     RefreshNotePlaces();
 
@@ -919,11 +950,12 @@ void legend_pi::AskNoteRadius()
         value.RemoveLast();
     if (value.EndsWith("."))
         value.RemoveLast();
-    value.Replace(".", ",");
+    if (m_dutch_names)
+        value.Replace(".", ",");
     wxTextEntryDialog dialog(m_legend_window,
-                             "Straal in zeemijl: binnen deze afstand krijg je onderweg een "
-                             "melding van deze notitie.",
-                             "Straal", value);
+                             _("Radius in nautical miles: within this distance you get a "
+                                "notice of this note under way."),
+                             _("Radius"), value);
     if (dialog.ShowModal() != wxID_OK)
         return;
     wxString text = dialog.GetValue();
@@ -932,7 +964,8 @@ void legend_pi::AskNoteRadius()
     text = text.BeforeFirst(' ');
     double radius = 0.0;
     if (!text.ToCDouble(&radius) || radius <= 0.0 || radius >= 100.0) {
-        wxMessageBox("Vul een straal in zeemijl in, bijvoorbeeld 0,5.", "Straal",
+        wxMessageBox(_("Enter a radius in nautical miles, for example 0.5."),
+                     _("Radius"),
                      wxOK | wxICON_INFORMATION, m_legend_window);
         return;
     }
@@ -952,7 +985,7 @@ void legend_pi::NotePlaceChanged()
     UpdatePlaceBar();
     m_note_dirty = true;
     if (m_save_status)
-        m_save_status->SetLabel(wxString::FromUTF8("Nog niet bewaard\u2026"));
+        m_save_status->SetLabel(_("Not saved yet\u2026"));
     m_save_timer.StartOnce(500);
     UpdateNoteButtons();
 }
@@ -967,11 +1000,12 @@ void legend_pi::UpdatePlaceBar()
             radius.RemoveLast();
         if (radius.EndsWith("."))
             radius.RemoveLast();
-        radius.Replace(".", ",");
-        m_place_text->SetLabel(wxString::FromUTF8("Vastgepind op ") +
+        if (m_dutch_names)
+            radius.Replace(".", ",");
+        m_place_text->SetLabel(_("Pinned at ") +
                                FormatPosition(m_note_lat, m_note_lon) +
-                               wxString::FromUTF8(" \u00b7 straal ") + radius + " NM");
-        m_place_text->SetToolTip("Klik om de plek op de kaart te zien");
+                               _(" \u00b7 radius ") + radius + " NM");
+        m_place_text->SetToolTip(_("Click to see the place on the chart"));
     }
     const LegendPalette palette = GetLegendPalette();
     const bool dim = IsDimScheme();

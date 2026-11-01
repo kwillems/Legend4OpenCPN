@@ -122,6 +122,7 @@ public:
     wxString GetCommonName() override;
     wxString GetShortDescription() override;
     wxString GetLongDescription() override;
+    wxBitmap *GetPlugInBitmap() override;
 
     void OnToolbarToolCallback(int id) override;
     void SetColorScheme(PI_ColorScheme cs) override;
@@ -161,6 +162,9 @@ private:
     void CreateNoteEditor();
     wxWindow *CreateNavigation(wxPanel *panel);
     wxWindow *CreateEditFooter(wxPanel *panel);
+    // The window's labels and tooltips, set once the window is made.
+    void SetWindowTexts();
+    wxString ButtonTip(const wxString &icon) const;
     void BindWindowEvents();
     void OnLegendKey(wxKeyEvent &event);
     void OnLegendLink(wxHtmlLinkEvent &event);
@@ -407,9 +411,14 @@ private:
     int m_menu_pin_boat = -1;
     wxString m_menu_note_path;           // note whose sign was under the mouse
     void PrepareContextMenu(int canvasIndex) override;
+    // The items in the chart's right-click menu.
+    void AddContextMenuItems();
+    void RemoveContextMenuItems();
     void DeleteNoteFile(const wxString &path);
     wxPanel *m_place_bar = nullptr;      // "Hoort bij ..." while editing
     wxStaticText *m_place_text = nullptr;
+    wxButton *m_radius_button = nullptr; // Straal
+    wxButton *m_loose_button = nullptr;  // Losmaken
     wxString m_note_block;               // settings block of the note being edited
     mutable std::set<wxString> m_pin_images; // pins in the memory file system
     bool m_note_has_place = false;
@@ -440,6 +449,7 @@ private:
 
     int m_toolbar_item_id;
     wxBitmap m_toolbar_bitmap;
+    wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
 
     wxSimplebook *m_header_book;
@@ -459,7 +469,7 @@ private:
     wxButton *m_edit_button = nullptr;    // pencil: edit this note
     wxButton *m_new_button = nullptr;     // plus: a new note
     wxButton *m_rename_button = nullptr;  // another name for this note
-    wxButton *m_delete_button = nullptr;  // into the folder "Verwijderd"
+    wxButton *m_delete_button = nullptr;  // into the folder for deleted notes
     wxButton *m_save_button = nullptr;    // while editing: save and stop
     wxPanel *m_format_bar = nullptr;      // buttons that format the note
     std::vector<std::pair<wxBitmapButton *, wxString>> m_format_icons; // and their icons
@@ -542,7 +552,14 @@ private:
 
     ChartSymbols m_chart_symbols; // S-52 symbols and S-57 catalogue
     ChartNames m_chart_names;     // names of chart objects (s57-nl.txt)
-    bool m_dutch_names = true;    // setting: names in Dutch or English
+    // Meanings, chart names, light characters and numbers in Dutch or
+    // English, as OpenCPN; the interface itself is translated by gettext.
+    bool m_dutch_names = true;
+    // Dutch only when the Dutch translation of the interface is loaded, so
+    // meanings and interface never differ: without the translation (a
+    // build without gettext) both are English. After a change of language
+    // OpenCPN starts the plugin again, so this is decided once.
+    static bool DutchInterface();
     bool m_chart_symbols_tried = false;
     OChartsSource m_ocharts;
     S57Source m_s57;
@@ -646,6 +663,10 @@ private:
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
     bool m_note_notice_on = true;        // setting
+    // The folder for deleted notes, by the name it had the last time; a
+    // Legend folder from before it was remembered has "Verwijderd".
+    wxString m_deleted_folder = "Verwijderd";
+    wxString DeletedFolder();
     wxTimer m_note_notice_timer;         // waits for a VHF notice to go
     wxString m_pending_note_title;
     wxString m_pending_note_text;

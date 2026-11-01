@@ -215,7 +215,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 canvas = GetOCPNCanvasWindow();
             if (canvas) {
                 if (hover >= 0)
-                    canvas->SetToolTip("Notitie: " + m_note_places[hover].title);
+                    canvas->SetToolTip(_("Note: ") + m_note_places[hover].title);
                 else
                     canvas->UnsetToolTip();
             }
@@ -289,11 +289,11 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                 MoveNotePlace(place.path, place.lat, place.lon);
                 // Moved by mistake, while panning the chart: one click puts
                 // it back.
-                ShowNotice("Notitie verplaatst",
+                ShowNotice(_("Note moved"),
                            wxString::FromUTF8("\u201C") + place.title +
-                               wxString::FromUTF8("\u201D staat op een nieuwe plek."),
+                               _("\u201D is in a new place."),
                            false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
-                           "Terugzetten");
+                           _("Put back"));
                 return true;
             }
             // A click: the note opens and its radius shows.
@@ -393,32 +393,33 @@ void legend_pi::PrepareContextMenu(int canvasIndex)
     // With a recent GPS fix also the boat's position, wherever the click was.
     const bool boat = BoatPositionKnown();
     if (m_editing) {
-        m_context_submenu->Append(m_menu_link_place, "Link naar deze plek in de tekst");
-        m_context_submenu->Append(m_menu_pin_note, "Hier vastpinnen op de kaart");
+        m_context_submenu->Append(m_menu_link_place, _("Link to this place in the text"));
+        m_context_submenu->Append(m_menu_pin_note, _("Pin here on the chart"));
         if (boat) {
             m_context_submenu->AppendSeparator();
-            m_context_submenu->Append(m_menu_link_boat, "Positie van de boot in de tekst");
-            m_context_submenu->Append(m_menu_pin_boat, "Vastpinnen op de positie van de boot");
+            m_context_submenu->Append(m_menu_link_boat, _("Boat's position in the text"));
+            m_context_submenu->Append(m_menu_pin_boat, _("Pin to the boat's position"));
         }
     }
     else {
-        m_context_submenu->Append(m_menu_new_note, "Nieuwe notitie hier");
+        m_context_submenu->Append(m_menu_new_note, _("New note here"));
         if (boat)
-            m_context_submenu->Append(m_menu_new_note_boat, "Nieuwe notitie bij de boot");
+            m_context_submenu->Append(m_menu_new_note_boat, _("New note at the boat"));
     }
     if (!m_menu_note_path.IsEmpty()) {
         m_context_submenu->AppendSeparator();
         const wxString quoted =
             wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
-        m_context_submenu->Append(m_menu_open_note, quoted + " openen");
+        m_context_submenu->Append(m_menu_open_note, wxString::Format(_("Open %s"), quoted));
         m_context_submenu->Append(m_menu_delete_note,
-                                  quoted + wxString::FromUTF8(" verwijderen\u2026"));
+                                  wxString::Format(_("Delete %s\u2026"), quoted));
     }
     if (m_undo_move_valid) {
         m_context_submenu->AppendSeparator();
+        const wxString quoted =
+            wxString::FromUTF8("\u201C") + m_undo_move_title + wxString::FromUTF8("\u201D");
         m_context_submenu->Append(m_menu_undo_move,
-                                  wxString::FromUTF8("\u201C") + m_undo_move_title +
-                                      wxString::FromUTF8("\u201D terugzetten op de oude plek"));
+                                  wxString::Format(_("Put %s back in its old place"), quoted));
     }
 }
 
@@ -1221,7 +1222,7 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     if (length < 80.0 * scale)
         return;
 
-    label->text = FormatMiles(range);
+    label->text = FormatMiles(range, m_dutch_names);
     const wxString time = AheadTimeText(range);
     if (!time.IsEmpty())
         label->text << ", " << time;

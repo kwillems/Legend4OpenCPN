@@ -136,8 +136,8 @@ wxImage FlattenDimmed(
 // not spoil night vision, but still distinct from the chart.
 void MarkerColours(wxColour &outline, wxColour &highlight);
 
-// A chart scale in a few characters: "1:22k", "1:1,5M".
-wxString FormatScaleShort(int scale);
+// A chart scale in a few characters: "1:22k", "1:1,5M" (English "1:1.5M").
+wxString FormatScaleShort(int scale, bool dutch = true);
 
 LegendPalette GetLegendPalette();
 
