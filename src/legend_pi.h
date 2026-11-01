@@ -470,6 +470,8 @@ private:
     wxPoint m_drag_start;   // where the finger went down, on the screen
     wxRect m_drag_rect;     // the window at that moment
     wxWindow *m_drag_handle = nullptr; // what the finger is dragging
+    wxRect m_drag_target;   // where the window goes at the next tick
+    wxTimer m_drag_timer;
 #endif
 
     wxSimplebook *m_header_book;

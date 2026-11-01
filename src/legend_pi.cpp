@@ -378,6 +378,9 @@ bool legend_pi::DeInit()
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
     m_filter_timer.Stop();
+#ifdef __ANDROID__
+    m_drag_timer.Stop();
+#endif
     m_chosen_light.Clear();
     m_all_lights.Clear();
     m_vhf_highlight.Clear();

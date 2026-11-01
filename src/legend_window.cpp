@@ -348,14 +348,28 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
         &legend_pi::OnLegendSelected,
         this);
 
+#ifdef __ANDROID__
+    // The buttons are big enough for a finger, so they get a row of their
+    // own under the choice of item; beside it they pushed it out.
+    auto *header = new wxBoxSizer(wxVERTICAL);
+    header->Add(m_header_book, 0, wxEXPAND);
+    auto *headerRow = new wxBoxSizer(wxHORIZONTAL);
+    header->Add(headerRow, 0, wxALIGN_RIGHT | wxTOP, 4);
+#else
     auto *headerRow = new wxBoxSizer(wxHORIZONTAL);
     headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
+#endif
 
     auto noteButton = [&](const wxString &icon) {
         auto *button = new wxBitmapButton(panel, wxID_ANY,
                                           NoteToolIcon(icon, GetLegendPalette().text),
                                           wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
         m_format_icons.push_back(std::make_pair(button, icon));
+#ifdef __ANDROID__
+        // Big enough for a finger.
+        const int side = 2 * button->GetCharHeight() + 8;
+        button->SetMinSize(wxSize(side, side));
+#endif
         headerRow->Add(button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
         return button;
     };
@@ -390,7 +404,11 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
             NewNoteAtBoat();
     });
 
+#ifdef __ANDROID__
+    return header;
+#else
     return headerRow;
+#endif
 }
 
 // Buttons that put Markdown into the note, for those who do not know it by
@@ -1101,9 +1119,19 @@ void legend_pi::CreateResizeGrip(wxPanel *panel)
 }
 
 // Moving or resizing the window by dragging a handle. The window stays
-// on the screen with enough of it to drag it back.
+// on the screen with enough of it to drag it back. It follows the finger
+// at most ten times a second: each change lays out the list again and
+// redraws the chart, and following every move piled up work for minutes.
 void legend_pi::BindWindowDrag(wxWindow *handle, bool resize)
 {
+    if (!m_drag_timer.GetOwner()) {
+        m_drag_timer.SetOwner(m_legend_window);
+        m_legend_window->Bind(wxEVT_TIMER, [this](wxTimerEvent &) {
+            if (m_legend_window->GetRect() != m_drag_target)
+                m_legend_window->SetSize(m_drag_target);
+        }, m_drag_timer.GetId());
+    }
+
     handle->Bind(wxEVT_LEFT_DOWN, [this, handle](wxMouseEvent &event) {
         m_drag_start = handle->ClientToScreen(event.GetPosition());
         m_drag_rect = m_legend_window->GetRect();
@@ -1131,13 +1159,19 @@ void legend_pi::BindWindowDrag(wxWindow *handle, bool resize)
                               std::min(rect.x + delta.x, area.GetRight() - 2 * margin));
             rect.y = std::max(area.y, std::min(rect.y + delta.y, area.GetBottom() - margin));
         }
-        m_legend_window->SetSize(rect);
+        m_drag_target = rect;
+        if (!m_drag_timer.IsRunning())
+            m_drag_timer.StartOnce(100);
     });
 
     handle->Bind(wxEVT_LEFT_UP, [this, handle](wxMouseEvent &) {
         if (m_drag_handle != handle)
             return;
         m_drag_handle = nullptr;
+        if (m_drag_timer.IsRunning()) {
+            m_drag_timer.Stop();
+            m_legend_window->SetSize(m_drag_target);
+        }
         SaveWindowState();
     });
 }
