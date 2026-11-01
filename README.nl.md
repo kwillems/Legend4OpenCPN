@@ -787,18 +787,6 @@ Legend4OpenCPN/
 └── CMakeLists.txt
 ```
 
-## Plannen
-
-Ideeën voor volgende versies:
-
-- bruggen markeren waar de boot niet onder past;
-- het bereik van een licht laten zien in het nachtvoorbeeld;
-- betekenissen bewerken in het venster zelf;
-- een instelbare Legend-map;
-- builds voor Windows en Linux;
-- vertalingen in meer talen, bijvoorbeeld via het Crowdin-project van
-  OpenCPN.
-
 ## Licentie
 
 Legend4OpenCPN is vrije software onder de
