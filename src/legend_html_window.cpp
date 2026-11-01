@@ -150,6 +150,22 @@ LegendHtmlWindow::LegendHtmlWindow(
             Scroll(x, y);
         });
     });
+
+#ifdef __ANDROID__
+    // wxHtmlWindow erases with Clear(), which on wxQt leaves the old page
+    // where the list has scrolled: rows were drawn over each other. The
+    // visible part is filled here instead, in scrolled coordinates.
+    Bind(wxEVT_ERASE_BACKGROUND, [this](wxEraseEvent &event) {
+        wxDC *dc = event.GetDC();
+        if (!dc)
+            return;
+        const wxPoint origin = CalcUnscrolledPosition(wxPoint(0, 0));
+        const wxSize size = GetClientSize();
+        dc->SetPen(*wxTRANSPARENT_PEN);
+        dc->SetBrush(wxBrush(GetBackgroundColour()));
+        dc->DrawRectangle(origin.x, origin.y, size.x, size.y);
+    });
+#endif
 }
 
 void LegendHtmlWindow::SetMarkdownPage(
