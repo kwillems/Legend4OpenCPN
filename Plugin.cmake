@@ -117,6 +117,12 @@ set(PKG_API_LIB api-18)
 # included api.
 ## set(MIN_API_VERSION 1.21)
 
+# OpenCPN on Android uses the shared C++ library. With a copy of its own
+# in the plugin, a wxTextCtrl made by the plugin (the note editor) freed
+# memory of the other copy when the plugin was switched off, and OpenCPN
+# crashed. The setting only counts on Android.
+set(CMAKE_ANDROID_STL_TYPE c++_shared)
+
 macro(late_init)
     include_directories(
         ${CMAKE_SOURCE_DIR}/third_party/md4c/src
