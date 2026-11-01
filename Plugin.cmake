@@ -131,6 +131,7 @@ macro(add_plugin_libraries)
         target_sources(${PACKAGE_NAME} PRIVATE
             ${CMAKE_SOURCE_DIR}/third_party/wxwidgets/fs_mem.cpp
             ${CMAKE_SOURCE_DIR}/src/note_editor_plain.cpp
+            ${CMAKE_SOURCE_DIR}/src/gles_overlay.cpp
         )
 
         # On Android _() reads its text as UTF-8; see the header.

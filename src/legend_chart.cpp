@@ -1128,8 +1128,17 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
 
     return true;
 #else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
+    // Android has OpenGL ES only, without these drawing calls: the drawings
+    // of the wxDC are laid over the chart as a picture.
+    if (!vp || (priority != OVERLAY_LEGACY && priority != -1))
+        return false;
+    if (!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
+        !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
+        !AheadFanVisible())
+        return false;
+    return m_gles_overlay.Draw(pcontext, vp->pix_width, vp->pix_height, [&](wxDC &dc) {
+        return RenderOverlayMultiCanvas(dc, vp, canvasIndex, priority);
+    });
 #endif
 }
 

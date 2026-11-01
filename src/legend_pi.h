@@ -25,6 +25,9 @@
 #include "layer_waypoints.h"
 #include "vhf_areas.h"
 #include "vhf_highlight.h"
+#ifdef __ANDROID__
+#include "gles_overlay.h"
+#endif
 #include "chart_notice.h"
 
 #include <map>
@@ -459,6 +462,7 @@ private:
     wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
 #ifdef __ANDROID__
+    GlesOverlay m_gles_overlay; // the drawings on the chart, see there
     wxPanel *m_title_bar = nullptr;
     wxStaticText *m_title_text = nullptr;
     wxButton *m_close_button = nullptr;
