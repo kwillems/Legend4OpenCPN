@@ -162,6 +162,13 @@ private:
     void CreateNoteEditor();
     wxWindow *CreateNavigation(wxPanel *panel);
     wxWindow *CreateEditFooter(wxPanel *panel);
+#ifdef __ANDROID__
+    // Android draws no frame around the window: a bar of its own to move
+    // and close it, and a grip in the corner to resize it.
+    wxWindow *CreateTitleBar(wxPanel *panel);
+    void CreateResizeGrip(wxPanel *panel);
+    void BindWindowDrag(wxWindow *handle, bool resize);
+#endif
     // The window's labels and tooltips, set once the window is made.
     void SetWindowTexts();
     wxString ButtonTip(const wxString &icon) const;
@@ -451,6 +458,15 @@ private:
     wxBitmap m_toolbar_bitmap;
     wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
+#ifdef __ANDROID__
+    wxPanel *m_title_bar = nullptr;
+    wxStaticText *m_title_text = nullptr;
+    wxButton *m_close_button = nullptr;
+    wxWindow *m_resize_grip = nullptr;
+    wxPoint m_drag_start;   // where the finger went down, on the screen
+    wxRect m_drag_rect;     // the window at that moment
+    wxWindow *m_drag_handle = nullptr; // what the finger is dragging
+#endif
 
     wxSimplebook *m_header_book;
     wxStaticText *m_single_title;

@@ -132,6 +132,11 @@ macro(add_plugin_libraries)
             ${CMAKE_SOURCE_DIR}/third_party/wxwidgets/fs_mem.cpp
             ${CMAKE_SOURCE_DIR}/src/note_editor_plain.cpp
         )
+
+        # On Android _() reads its text as UTF-8; see the header.
+        target_compile_options(${PACKAGE_NAME} PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${CMAKE_SOURCE_DIR}/src/android_translation.h>"
+        )
     endif ()
 
     # The note editor uses wxRichTextCtrl, which is not among the

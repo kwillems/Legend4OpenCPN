@@ -17,6 +17,8 @@
 #include "legend_shared.h"
 
 #include <wx/button.h>
+#include <wx/dcclient.h>
+#include <wx/gdicmn.h>
 #include <wx/html/winpars.h>
 #include <wx/file.h>
 #include <wx/log.h>
@@ -132,6 +134,18 @@ void SetWindowDarkAppearance(wxTopLevelWindow *window, bool dark)
 #endif
 }
 
+// The window's colour by day. On Android a window without a colour of its
+// own is not painted at all: the chart shows through, and buttons that were
+// hidden stay visible.
+wxColour DayBackground()
+{
+#ifdef __ANDROID__
+    return wxColour(240, 240, 240);
+#else
+    return wxNullColour;
+#endif
+}
+
 }
 
 // The legend window: the header with the choice of item and the note
@@ -152,6 +166,10 @@ void legend_pi::CreateLegendWindow()
 
     auto *panel = new wxPanel(m_legend_window);
     auto *mainSizer = new wxBoxSizer(wxVERTICAL);
+
+#ifdef __ANDROID__
+    mainSizer->Add(CreateTitleBar(panel), 0, wxEXPAND);
+#endif
 
     mainSizer->Add(
         CreateHeaderRow(panel),
@@ -239,6 +257,9 @@ void legend_pi::CreateLegendWindow()
     m_next_button->Disable();
 
     panel->SetSizer(mainSizer);
+#ifdef __ANDROID__
+    CreateResizeGrip(panel);
+#endif
     SetWindowTexts();
 
     RestoreWindowState();
@@ -1019,6 +1040,109 @@ wxWindow *legend_pi::CreateNavigation(wxPanel *panel)
     return m_nav_panel;
 }
 
+#ifdef __ANDROID__
+// The bar at the top: the name of the window and a close button. Dragging
+// the bar moves the window.
+wxWindow *legend_pi::CreateTitleBar(wxPanel *panel)
+{
+    m_title_bar = new wxPanel(panel);
+    auto *barSizer = new wxBoxSizer(wxHORIZONTAL);
+
+    m_title_text = new wxStaticText(m_title_bar, wxID_ANY, wxEmptyString);
+    wxFont titleFont = m_title_text->GetFont();
+    titleFont.SetWeight(wxFONTWEIGHT_BOLD);
+    m_title_text->SetFont(titleFont);
+
+    const int barHeight = 2 * m_title_bar->GetCharHeight() + 8;
+    m_close_button = new wxButton(m_title_bar, wxID_ANY, wxString::FromUTF8("\u00d7"),
+                                  wxDefaultPosition, wxSize(barHeight, barHeight),
+                                  wxBU_EXACTFIT);
+    m_close_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { m_legend_window->Close(); });
+
+    barSizer->Add(m_title_text, 1, wxALIGN_CENTER_VERTICAL | wxLEFT, 12);
+    barSizer->Add(m_close_button, 0, wxALIGN_CENTER_VERTICAL | wxALL, 2);
+    m_title_bar->SetSizer(barSizer);
+    m_title_bar->SetMinSize(wxSize(-1, barHeight + 4));
+
+    BindWindowDrag(m_title_bar, false);
+    BindWindowDrag(m_title_text, false);
+    return m_title_bar;
+}
+
+// Three short diagonal lines in the bottom right corner; dragging them
+// resizes the window. The grip lies over the panel, outside the sizers.
+void legend_pi::CreateResizeGrip(wxPanel *panel)
+{
+    const int side = 2 * panel->GetCharHeight();
+    m_resize_grip = new wxPanel(panel, wxID_ANY, wxDefaultPosition, wxSize(side, side));
+    m_resize_grip->Bind(wxEVT_PAINT, [this](wxPaintEvent &) {
+        wxPaintDC dc(m_resize_grip);
+        const wxSize size = m_resize_grip->GetClientSize();
+        dc.SetPen(wxPen(GetLegendPalette().muted, 2));
+        for (int i = 1; i <= 3; ++i) {
+            const int offset = i * size.x / 4;
+            dc.DrawLine(size.x - 3, size.y - 3 - offset, size.x - 3 - offset, size.y - 3);
+        }
+    });
+
+    auto place = [this, panel]() {
+        const wxSize panelSize = panel->GetClientSize();
+        const wxSize gripSize = m_resize_grip->GetSize();
+        m_resize_grip->Move(panelSize.x - gripSize.x, panelSize.y - gripSize.y);
+        m_resize_grip->Raise();
+    };
+    panel->Bind(wxEVT_SIZE, [place](wxSizeEvent &event) {
+        event.Skip();
+        place();
+    });
+    place();
+
+    BindWindowDrag(m_resize_grip, true);
+}
+
+// Moving or resizing the window by dragging a handle. The window stays
+// on the screen with enough of it to drag it back.
+void legend_pi::BindWindowDrag(wxWindow *handle, bool resize)
+{
+    handle->Bind(wxEVT_LEFT_DOWN, [this, handle](wxMouseEvent &event) {
+        m_drag_start = handle->ClientToScreen(event.GetPosition());
+        m_drag_rect = m_legend_window->GetRect();
+        m_drag_handle = handle;
+    });
+
+    handle->Bind(wxEVT_MOTION, [this, handle, resize](wxMouseEvent &event) {
+        // The finger keeps sending its moves to the handle it went down on;
+        // CaptureMouse does nothing on Android.
+        if (m_drag_handle != handle || !event.LeftIsDown())
+            return;
+        const wxPoint delta = handle->ClientToScreen(event.GetPosition()) - m_drag_start;
+        const wxRect area = wxGetClientDisplayRect();
+        const int margin = m_title_bar ? m_title_bar->GetSize().y : 40;
+        wxRect rect = m_drag_rect;
+
+        if (resize) {
+            const wxSize minimum = m_legend_window->GetMinSize();
+            rect.width = std::max(minimum.x, std::min(rect.width + delta.x,
+                                                      area.GetRight() + 1 - rect.x));
+            rect.height = std::max(minimum.y, std::min(rect.height + delta.y,
+                                                       area.GetBottom() + 1 - rect.y));
+        } else {
+            rect.x = std::max(area.x - rect.width + 2 * margin,
+                              std::min(rect.x + delta.x, area.GetRight() - 2 * margin));
+            rect.y = std::max(area.y, std::min(rect.y + delta.y, area.GetBottom() - margin));
+        }
+        m_legend_window->SetSize(rect);
+    });
+
+    handle->Bind(wxEVT_LEFT_UP, [this, handle](wxMouseEvent &) {
+        if (m_drag_handle != handle)
+            return;
+        m_drag_handle = nullptr;
+        SaveWindowState();
+    });
+}
+#endif
+
 // While a note is edited: whether it has been saved.
 wxWindow *legend_pi::CreateEditFooter(wxPanel *panel)
 {
@@ -1069,6 +1193,10 @@ void legend_pi::SetWindowTexts()
     if (!m_legend_window)
         return;
     m_legend_window->SetTitle(_("Legend"));
+#ifdef __ANDROID__
+    m_title_text->SetLabel(_("Legend"));
+    m_close_button->SetToolTip(_("Close"));
+#endif
     for (const auto &button : m_format_icons)
         button.first->SetToolTip(ButtonTip(button.second));
     m_save_button->SetLabel(_("Save"));
@@ -1258,7 +1386,7 @@ void legend_pi::ApplyViewColours()
                                wxDynamicCast(window, wxStaticText);
             if (plain) {
                 window->SetBackgroundColour(
-                    dim ? palette.background : wxNullColour);
+                    dim ? palette.background : DayBackground());
                 window->SetForegroundColour(dim ? palette.text : wxNullColour);
             }
 
@@ -1267,6 +1395,9 @@ void legend_pi::ApplyViewColours()
         };
 
         paint(m_legend_window);
+#ifdef __ANDROID__
+        m_title_bar->SetBackgroundColour(dim ? palette.stripe : wxColour(222, 222, 222));
+#endif
         m_legend_window->Refresh();
     }
     m_markdown_view->SetBackgroundColour(palette.background);
@@ -1285,7 +1416,7 @@ void legend_pi::ApplyViewColours()
     // keeps the normal window colour.
     if (m_image_page) {
         m_image_page->SetBackgroundColour(
-            IsDimScheme() ? palette.background : wxNullColour);
+            IsDimScheme() ? palette.background : DayBackground());
         m_image_page->Refresh();
     }
 }
