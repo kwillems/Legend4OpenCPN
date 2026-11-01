@@ -374,6 +374,12 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
         return button;
     };
     headerRow->AddSpacer(4);
+#ifdef __ANDROID__
+    // Dragging a sign on the chart does not work on Android: this button,
+    // then a tap on the chart, moves a pinned note.
+    m_move_button = noteButton("place");
+    m_move_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartNoteMove(); });
+#endif
     m_edit_button = noteButton("edit");
     m_rename_button = noteButton("rename");
     m_delete_button = noteButton("trash");
@@ -1233,6 +1239,9 @@ void legend_pi::SetWindowTexts()
 #endif
     for (const auto &button : m_format_icons)
         button.first->SetToolTip(ButtonTip(button.second));
+#ifdef __ANDROID__
+    m_move_button->SetToolTip(_("Move this note: tap the chart where it should go"));
+#endif
     m_save_button->SetLabel(_("Save"));
     m_save_button->SetToolTip(_("Save and finish editing (Esc)"));
     m_radius_button->SetLabel(_("Radius"));

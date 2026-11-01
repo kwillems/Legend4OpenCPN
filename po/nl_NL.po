@@ -478,6 +478,9 @@ msgstr "Middel (30°)"
 msgid "Move note"
 msgstr "Notitie verplaatsen"
 
+msgid "Move this note: tap the chart where it should go"
+msgstr "Verplaats deze notitie: tik op de kaart waar hij moet komen"
+
 msgid "Narrow (15°)"
 msgstr "Smal (15°)"
 
@@ -710,6 +713,9 @@ msgstr ""
 "Er wordt gezocht in de namen in de lijst, de kopjes en de icoonnamen, alleen "
 "van wat nu in beeld is. Verschuif de kaart, zoom uit, of maak het zoekveld "
 "leeg."
+
+msgid "Tap the chart where “%s” should go."
+msgstr "Tik op de kaart waar “%s” moet komen."
 
 msgid "There is already a note named \""
 msgstr "Er is al een notitie met de naam \""

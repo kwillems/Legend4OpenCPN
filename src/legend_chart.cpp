@@ -202,6 +202,32 @@ double legend_pi::ViewportPixelsPerWindowPixel() const
 // Looks at clicks on the chart; OpenCPN handles every event as usual.
 bool legend_pi::MouseEventHook(wxMouseEvent &event)
 {
+    // A new press ends a drag whose release never came.
+    if (event.LeftDown())
+        m_note_drag = -1;
+
+#ifdef __ANDROID__
+    // Dragging a sign does not reach the plugin on Android: OpenCPN pans
+    // the chart instead. After "move" in the note, a tap on the chart puts
+    // the note there; panning meanwhile is no tap.
+    if (!m_note_move_path.IsEmpty() && m_viewport_valid) {
+        if (event.LeftDown()) {
+            m_note_move_down = event.GetPosition();
+            return true;
+        }
+        if (event.LeftUp()) {
+            const wxPoint up = event.GetPosition();
+            if (std::abs(up.x - m_note_move_down.x) > 8 || std::abs(up.y - m_note_move_down.y) > 8)
+                return false;
+            PlaceMovingNote(up);
+            return true;
+        }
+        return false;
+    }
+#endif
+
+        const double r = ViewportPixelsPerWindowPixel();
+        const wxPoint at(static_cast<int>(std::lround(event.GetX() * r)), static_cast<int>(std::lround(event.GetY() * r)));
     // Above the sign of a note: its title as a tooltip.
     if (event.Moving() && m_viewport_valid && !m_note_places.empty()) {
         const double ratio = ViewportPixelsPerWindowPixel();
@@ -256,6 +282,11 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
         }
 
         if (event.Dragging() && event.LeftIsDown()) {
+#ifdef __ANDROID__
+            // OpenCPN pans the chart, and the release does not come.
+            m_note_drag = -1;
+            return false;
+#endif
             const wxPoint now = event.GetPosition();
             if (std::abs(now.x - m_note_drag_start.x) > 4 ||
                 std::abs(now.y - m_note_drag_start.y) > 4)
@@ -281,19 +312,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
             const NotePlace place = m_note_places[m_note_drag];
             m_note_drag = -1;
             if (m_note_drag_moved) {
-                m_undo_move_valid = true;
-                m_undo_move_path = place.path;
-                m_undo_move_title = place.title;
-                m_undo_move_lat = m_note_drag_from_lat;
-                m_undo_move_lon = m_note_drag_from_lon;
-                MoveNotePlace(place.path, place.lat, place.lon);
-                // Moved by mistake, while panning the chart: one click puts
-                // it back.
-                ShowNotice(_("Note moved"),
-                           wxString::FromUTF8("\u201C") + place.title +
-                               _("\u201D is in a new place."),
-                           false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); },
-                           _("Put back"));
+                FinishNoteMove(place, m_note_drag_from_lat, m_note_drag_from_lon);
                 return true;
             }
             // A click: the note opens and its radius shows.

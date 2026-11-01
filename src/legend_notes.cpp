@@ -59,6 +59,12 @@ void legend_pi::UpdateNoteButtons()
         m_rename_button->Show(note);
     if (m_delete_button)
         m_delete_button->Show(note);
+#ifdef __ANDROID__
+    bool pinned = false;
+    for (const NotePlace &place : m_note_places)
+        pinned = pinned || place.path == m_current_legend_path;
+    m_move_button->Show(note && pinned);
+#endif
     m_new_button->Show(!m_editing);
     if (m_save_button)
         m_save_button->Show(m_editing);
@@ -934,6 +940,85 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
 }
 
 // The last dragged sign back where it was.
+// A sign put in a new place: saved, with a notice that puts it back, for
+// a move made by mistake while panning the chart. The place is a copy:
+// saving reads the places again.
+void legend_pi::FinishNoteMove(NotePlace place, double fromLat, double fromLon)
+{
+    m_undo_move_valid = true;
+    m_undo_move_path = place.path;
+    m_undo_move_title = place.title;
+    m_undo_move_lat = fromLat;
+    m_undo_move_lon = fromLon;
+    MoveNotePlace(place.path, place.lat, place.lon);
+    ShowNotice(_("Note moved"),
+               wxString::FromUTF8("\u201C") + place.title + _("\u201D is in a new place."),
+               false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); }, _("Put back"));
+}
+
+#ifdef __ANDROID__
+// The move button of a pinned note: the next tap on the chart puts the
+// note there. A second press on the button gives up.
+void legend_pi::StartNoteMove()
+{
+    if (!m_note_move_path.IsEmpty()) {
+        SetNoteMovePath(wxEmptyString);
+        m_notice.Hide();
+        return;
+    }
+    for (const NotePlace &place : m_note_places) {
+        if (place.path != m_current_legend_path)
+            continue;
+        // The notice stays while the tap is awaited.
+        ShowNotice(_("Move note"),
+                   wxString::Format(_("Tap the chart where \u201C%s\u201D should go."),
+                                    place.title),
+                   false, wxColour(186, 117, 23));
+        m_notice.KeepShown();
+        SetNoteMovePath(place.path);
+        return;
+    }
+}
+
+// The note waiting for a tap on the chart, or none; meanwhile the move
+// button is orange.
+void legend_pi::SetNoteMovePath(const wxString &path)
+{
+    m_note_move_path = path;
+    m_move_button->SetBitmap(NoteToolIcon(
+        "place", path.IsEmpty() ? GetLegendPalette().text : wxColour(186, 117, 23)));
+}
+
+// The tap after the move button: the note goes to that point of the chart.
+void legend_pi::PlaceMovingNote(const wxPoint &at)
+{
+    const wxString path = m_note_move_path;
+    SetNoteMovePath(wxEmptyString);
+    m_notice.Hide();
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        NotePlace &place = m_note_places[i];
+        if (place.path != path)
+            continue;
+        const double ratio = ViewportPixelsPerWindowPixel();
+        PlugIn_ViewPort vp = m_viewport;
+        double lat = 0.0;
+        double lon = 0.0;
+        GetCanvasLLPix(&vp,
+                       wxPoint(static_cast<int>(std::lround(at.x * ratio)),
+                               static_cast<int>(std::lround(at.y * ratio))),
+                       &lat, &lon);
+        const double fromLat = place.lat;
+        const double fromLon = place.lon;
+        place.lat = lat;
+        place.lon = lon;
+        m_note_selected = static_cast<int>(i);
+        RefreshAllCanvases();
+        FinishNoteMove(place, fromLat, fromLon);  // a copy, see there
+        return;
+    }
+}
+#endif
+
 void legend_pi::UndoNoteMove()
 {
     if (!m_undo_move_valid)

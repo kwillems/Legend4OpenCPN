@@ -440,6 +440,12 @@ private:
     void NotePlaceChanged();
     void MoveNotePlace(const wxString &path, double lat, double lon);
     void UndoNoteMove();
+    void FinishNoteMove(NotePlace place, double fromLat, double fromLon);
+#ifdef __ANDROID__
+    void StartNoteMove();
+    void SetNoteMovePath(const wxString &path);
+    void PlaceMovingNote(const wxPoint &at);
+#endif
     void UpdatePlaceBar();
     wxString FormatPosition(double lat, double lon) const;
     bool ParseGeoUri(const wxString &uri, double *lat, double *lon) const;
@@ -687,6 +693,11 @@ private:
     wxString m_undo_move_title;
     double m_undo_move_lat = 0.0;
     double m_undo_move_lon = 0.0;
+#ifdef __ANDROID__
+    wxString m_note_move_path;           // note waiting for a tap on the chart
+    wxBitmapButton *m_move_button = nullptr;
+    wxPoint m_note_move_down;
+#endif
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
     bool m_note_notice_on = true;        // setting
