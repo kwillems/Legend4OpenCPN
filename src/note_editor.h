@@ -12,8 +12,12 @@
 
 #include <functional>
 
-#include <wx/richtext/richtextctrl.h>
 #include <wx/version.h>
+#ifdef __ANDROID__
+#include <wx/textctrl.h>
+#else
+#include <wx/richtext/richtextctrl.h>
+#endif
 
 // Bitmap bundles came with wxWidgets 3.1.6; the Android build of OpenCPN
 // has an older 3.1, where a tool icon is a plain bitmap.
@@ -25,6 +29,46 @@ typedef wxBitmapBundle NoteToolBitmap;
 typedef wxBitmap NoteToolBitmap;
 #endif
 
+#ifdef __ANDROID__
+// OpenCPN on Android has no wxRichTextCtrl. There a note is edited as its
+// Markdown text in a plain text field; the buttons above it put in or take
+// away the Markdown marks. The public part is the same as below.
+class NoteEditor : public wxTextCtrl
+{
+public:
+    NoteEditor(wxWindow *parent, wxWindowID id);
+
+    void LoadMarkdown(const wxString &markdown, const wxString &baseDirectory);
+    wxString ToMarkdown() const { return GetValue(); }
+
+    void SetChangedHandler(std::function<void()> handler) { m_changed = handler; }
+    void SetPlaceHandler(std::function<void(const wxString &)> handler) { m_place = handler; }
+    void SetColours(const wxColour &background, const wxColour &text, const wxColour &link);
+
+    int HeadingLevel() const;
+    void SetHeading(int level);
+    void ToggleBold();
+    void ToggleItalic();
+    void ToggleList();
+    void ToggleNumbered();
+    void ToggleTasks();
+    void AddLink(const wxString &address);
+    void AddLinkWithText(const wxString &address, const wxString &text);
+    bool InsertNoteImage(const wxString &source, const wxString &alt);
+
+    void Newline() { WriteText("\n"); }
+    void AfterNewParagraph();
+
+private:
+    void LinesOfSelection(long *from, long *to) const;
+    void ReplaceLines(long from, long to, const wxString &text);
+    void ToggleMarks(const wxString &mark);
+    void ToggleLinePrefix(const wxString &kind);
+
+    std::function<void()> m_changed;
+    std::function<void(const wxString &)> m_place;
+};
+#else
 // A note edited as it looks: headings, bold, lists and links shown as they
 // are, without Markdown marks. The note is read from Markdown and written
 // back as Markdown, so the file stays plain text.
@@ -89,6 +133,7 @@ private:
     std::function<void()> m_changed;
     std::function<void(const wxString &)> m_place;
 };
+#endif
 
 // Icons for the buttons above the editor, drawn in the given colour on a
 // transparent background, sharp at twice the size: "heading", "bold",

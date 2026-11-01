@@ -23,6 +23,8 @@
 
 #include "md4c.h"
 
+// The rich editor; Android has a plain one in note_editor_plain.cpp.
+#ifndef __ANDROID__
 namespace {
 
 // Paragraph kinds, stored as the paragraph style name.
@@ -1160,6 +1162,7 @@ void NoteEditor::OnLeftDown(wxMouseEvent &event)
     ApplyKind(para->GetRange().GetStart(), para->GetRange().GetEnd(), kTask, level, !checked);
     event.Skip(false);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // Icons of the buttons.

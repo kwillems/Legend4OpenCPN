@@ -126,6 +126,7 @@ void DrawSectorsGC(
     }
 }
 
+#ifndef __ANDROID__
 void DrawSectorsGL(
     PlugIn_ViewPort *vp,
     double lat,
@@ -167,6 +168,7 @@ void DrawSectorsGL(
         glEnd();
     }
 }
+#endif
 
 // Night blue, dark enough that only lights stand out, light enough that
 // coast and fairways stay faintly visible.

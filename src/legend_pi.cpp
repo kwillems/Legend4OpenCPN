@@ -475,7 +475,12 @@ wxBitmap *legend_pi::GetPlugInBitmap()
         // those in a cache by file name and size, so a changed icon would
         // not show. At 64 pixels, as OpenCPN scales it down to the list.
         const wxSize size(64, 64);
+#if wxCHECK_VERSION(3, 1, 6)
         m_plugin_bitmap = wxBitmapBundle::FromSVGFile(path, size).GetBitmap(size);
+#else
+        // Older wxWidgets (Android) has no SVG support of its own.
+        m_plugin_bitmap = GetBitmapFromSVGFile(path, size.x, size.y);
+#endif
     }
     return &m_plugin_bitmap;
 }

@@ -477,14 +477,20 @@ wxWindow *legend_pi::CreatePlaceBar(wxPanel *panel)
 // once.
 wxWindow *legend_pi::CreateSearchField(wxPanel *panel)
 {
+#ifdef __ANDROID__
+    m_search = new wxTextCtrl(
+#else
     m_search = new wxSearchCtrl(
+#endif
         panel,
         wxID_ANY,
         wxEmptyString,
         wxDefaultPosition,
         wxDefaultSize,
         wxTE_PROCESS_ENTER);
+#ifndef __ANDROID__
     m_search->ShowCancelButton(true);
+#endif
     m_search->Hide();
 
     m_search->Bind(
@@ -498,6 +504,7 @@ wxWindow *legend_pi::CreateSearchField(wxPanel *panel)
         wxEVT_TEXT_ENTER,
         [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
 
+#ifndef __ANDROID__
     m_search->Bind(
         wxEVT_SEARCHCTRL_SEARCH_BTN,
         [this](wxCommandEvent &) { SetFilter(m_search->GetValue()); });
@@ -505,6 +512,7 @@ wxWindow *legend_pi::CreateSearchField(wxPanel *panel)
     m_search->Bind(
         wxEVT_SEARCHCTRL_CANCEL_BTN,
         [this](wxCommandEvent &) { SetFilter(wxEmptyString); });
+#endif
 
     return m_search;
 }
@@ -1069,7 +1077,11 @@ void legend_pi::SetWindowTexts()
     m_radius_button->SetToolTip(_("Within what distance you get a notice under way"));
     m_loose_button->SetLabel(_("Unpin"));
     m_loose_button->SetToolTip(_("No longer pin the note to the chart"));
+#ifdef __ANDROID__
+    m_search->SetHint(_("Search the legend"));
+#else
     m_search->SetDescriptiveText(_("Search the legend"));
+#endif
     m_search->SetToolTip(_("Shows only the symbols whose name, heading or icon name "
                             "contains all typed words (Cmd+F)"));
     m_previous_button->SetLabel(_("\u2039  Previous"));

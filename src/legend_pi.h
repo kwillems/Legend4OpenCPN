@@ -482,7 +482,12 @@ private:
     wxString m_editing_path;
     wxTimer m_save_timer;
 
+#ifdef __ANDROID__
+    // OpenCPN on Android has no wxSearchCtrl; a plain text field instead.
+    wxTextCtrl *m_search = nullptr;
+#else
     wxSearchCtrl *m_search = nullptr;
+#endif
     wxString m_filter;                    // search text, trimmed
     std::vector<wxString> m_filter_words; // its words, folded for matching
     wxTimer m_filter_timer;               // waits for a pause in typing

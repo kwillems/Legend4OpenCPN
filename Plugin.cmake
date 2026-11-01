@@ -99,6 +99,7 @@ set(SRC
     src/geo.h
     src/geo.cpp
     src/wx_compat.h
+    src/qt_graphics.h
     src/msvc_wx_vector.cpp
 
     third_party/md4c/src/md4c.c
@@ -123,6 +124,16 @@ macro(late_init)
 endmacro()
 
 macro(add_plugin_libraries)
+    # OpenCPN on Android lacks some wxWidgets classes the plugin uses:
+    # wxMemoryFSHandler comes from its wxWidgets source, and the note editor
+    # is a plain text field instead of a wxRichTextCtrl.
+    if (QT_ANDROID)
+        target_sources(${PACKAGE_NAME} PRIVATE
+            ${CMAKE_SOURCE_DIR}/third_party/wxwidgets/fs_mem.cpp
+            ${CMAKE_SOURCE_DIR}/src/note_editor_plain.cpp
+        )
+    endif ()
+
     # The note editor uses wxRichTextCtrl, which is not among the
     # template's wxWidgets components (cmake/PluginLibs.cmake).
     if (NOT QT_ANDROID)
