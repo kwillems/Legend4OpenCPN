@@ -284,16 +284,32 @@ int legend_pi::Init()
            WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
 }
 
+// The menu a new context menu item belongs to until OpenCPN puts it in
+// the chart's menu: none, except on Android, where wxQt makes the item's
+// QAction with that menu as its parent and crashes without one. It stays
+// for the items, which OpenCPN keeps.
+namespace {
+wxMenu *MenuItemOwner()
+{
+#ifdef __ANDROID__
+    static wxMenu *owner = new wxMenu();
+    return owner;
+#else
+    return nullptr;
+#endif
+}
+} // namespace
+
 // In the chart's right-click menu: "Toon in legenda" and "Welk
 // marifoonkanaal hier?", and "Notitie" with a submenu that
 // PrepareContextMenu() fills each time for the spot and the state.
 void legend_pi::AddContextMenuItems()
 {
     m_menu_reveal = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, _("Show in legend")), this);
+        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Show in legend")), this);
     m_menu_actions.push_back(m_menu_reveal);
     m_menu_vhf = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY,
+        new wxMenuItem(MenuItemOwner(), wxID_ANY,
                        _("Which VHF channel here?")),
         this);
     m_menu_actions.push_back(m_menu_vhf);
@@ -304,7 +320,7 @@ void legend_pi::AddContextMenuItems()
     // with that id too (it looks through all items, hidden ones as well).
     auto action = [this](const char *label) {
         const int id = AddCanvasContextMenuItem(
-            new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8(label)), this);
+            new wxMenuItem(MenuItemOwner(), wxID_ANY, wxString::FromUTF8(label)), this);
         SetCanvasContextMenuItemViz(id, false);
         m_menu_actions.push_back(id);
         return id;
@@ -320,7 +336,7 @@ void legend_pi::AddContextMenuItems()
     m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
     m_context_submenu = new wxMenu();
     m_menu_parent = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
+        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
                        m_context_submenu),
         this);
     PrepareContextMenu(0);
