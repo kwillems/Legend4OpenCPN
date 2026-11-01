@@ -14,11 +14,15 @@
 #include <wx/pen.h>
 #include <wx/version.h>
 
-// The Android build of OpenCPN has wxWidgets 3.1.0, before
-// wxGraphicsPenInfo (3.1.1). This stand-in builds a wxPen instead, which
-// wxGraphicsContext::CreatePen takes as well; the width is then rounded to
-// whole pixels.
-#if !wxCHECK_VERSION(3, 1, 1)
+// The Android build of OpenCPN has wxWidgets 3.1.0 on Qt, built without
+// wxGraphicsContext; qt_graphics.h stands in for it.
+#if !wxUSE_GRAPHICS_CONTEXT && defined(__WXQT__)
+#include "qt_graphics.h"
+
+// wxWidgets before 3.1.1 has no wxGraphicsPenInfo. This stand-in builds a
+// wxPen instead, which wxGraphicsContext::CreatePen takes as well; the width
+// is then rounded to whole pixels.
+#elif !wxCHECK_VERSION(3, 1, 1)
 #include <algorithm>
 #include <cmath>
 
