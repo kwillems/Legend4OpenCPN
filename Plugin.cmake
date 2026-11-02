@@ -130,6 +130,11 @@ macro(late_init)
 endmacro()
 
 macro(add_plugin_libraries)
+    # Drawing on the chart: piDC from opencpn-libs draws with OpenGL,
+    # OpenGL ES (Android) or a wxDC, whichever the chart canvas uses.
+    add_subdirectory("${CMAKE_SOURCE_DIR}/opencpn-libs/plugin_dc")
+    target_link_libraries(${PACKAGE_NAME} ocpn::plugin-dc)
+
     # OpenCPN on Android lacks some wxWidgets classes the plugin uses:
     # wxMemoryFSHandler comes from its wxWidgets source, and the note editor
     # is a plain text field instead of a wxRichTextCtrl.

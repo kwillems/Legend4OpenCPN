@@ -20,6 +20,7 @@
 #include <wx/glcanvas.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
+#include "pidc.h"
 #include <wx/time.h>
 
 #include <algorithm>
@@ -869,24 +870,9 @@ void DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp)
     gc->DrawRectangle(0, 0, vp->pix_width, vp->pix_height);
 }
 
-void DrawNightShadeGL(PlugIn_ViewPort *vp)
+void DrawNightShade(piDC &dc, PlugIn_ViewPort *vp)
 {
-#ifndef __ANDROID__
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4ub(kNightShade.Red(), kNightShade.Green(), kNightShade.Blue(),
-               kNightShade.Alpha());
-    glBegin(GL_QUADS);
-    glVertex2d(0, 0);
-    glVertex2d(vp->pix_width, 0);
-    glVertex2d(vp->pix_width, vp->pix_height);
-    glVertex2d(0, vp->pix_height);
-    glEnd();
-    glColor4ub(255, 255, 255, 255);
-    glPopAttrib();
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-#endif
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(kNightShade));
+    dc.DrawRectangle(0, 0, vp->pix_width, vp->pix_height);
 }

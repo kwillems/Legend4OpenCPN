@@ -25,6 +25,7 @@
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
+#include "pidc.h"
 #include <wx/log.h>
 #include <wx/menu.h>
 
@@ -984,17 +985,119 @@ bool legend_pi::RenderOverlayMultiCanvas(
                          m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSigns(dc, vp);
     const LightStyle style = CurrentLightStyle();
-    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes || drewFan;
-    const bool drewLight =
-        (m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors)) ||
-        drewAll;
-    if (!m_marker_active)
-        return drewLight;
+    const bool drewAll = m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors);
+    const bool drewChosen =
+        m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors);
+    const bool drewMarker = DrawMarker(dc, vp);
+    return m_night_preview || drewFan || drewVhf || drewNotes || drewAll || drewChosen ||
+           drewMarker;
+}
 
+// The drawings not yet drawn with piDC: the fan ahead, VHF areas and
+// lights. With a wxDC, and with OpenGL in its own calls.
+bool legend_pi::DrawFanVhfLights(wxDC &dc, PlugIn_ViewPort *vp)
+{
+    const bool drewFan = DrawAheadFan(dc, vp);
+    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
+                         m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
+    const LightStyle style = CurrentLightStyle();
+    const bool drewAll = m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors);
+    const bool drewChosen =
+        m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors);
+    return drewFan || drewVhf || drewAll || drewChosen;
+}
+
+bool legend_pi::DrawFanVhfLightsGL(PlugIn_ViewPort *vp)
+{
+    const bool drewFan = DrawAheadFanGL(vp);
+    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
+                         m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
+    const LightStyle style = CurrentLightStyle();
+    const bool drewAll = m_all_lights.IsOn() && m_all_lights.DrawGL(vp, style, m_light_sectors);
+    const bool drewChosen =
+        m_chosen_light.IsActive() && m_chosen_light.DrawGL(vp, style, m_light_sectors);
+    return drewFan || drewVhf || drewAll || drewChosen;
+}
+
+namespace {
+
+// piDC leaves its colour, line width and blending set. OpenCPN would draw
+// on with them: chart symbols are tinted by the last colour (black symbols
+// in the night scheme). This keeps them for the time piDC draws.
+class PiDCState
+{
+public:
+    PiDCState()
+    {
+#ifndef __ANDROID__
+        glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+                     GL_HINT_BIT | GL_POLYGON_BIT);
+        glDisable(GL_TEXTURE_2D);
+#endif
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    ~PiDCState()
+    {
+#ifndef __ANDROID__
+        glPopAttrib();
+#endif
+    }
+};
+
+} // namespace
+
+bool legend_pi::RenderGLOverlayMultiCanvas(
+    wxGLContext *pcontext,
+    PlugIn_ViewPort *vp,
+    int canvasIndex,
+    int priority)
+{
+    (void)canvasIndex;
+
+    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
+         !AheadFanVisible()) ||
+        !vp)
+        return false;
+
+    // Draw once per frame.
+    if (priority != OVERLAY_LEGACY && priority != -1)
+        return false;
+
+    piDC dc(pcontext);
+    dc.SetVP(vp);
+
+    if (m_night_preview) {
+        PiDCState state;
+        DrawNightShade(dc, vp);
+    }
+
+#ifndef __ANDROID__
+    const bool drewLayers = DrawFanVhfLightsGL(vp);
+#else
+    // Android has OpenGL ES only: the drawings that piDC does not draw yet
+    // are made with a wxDC and laid over the chart as a picture.
+    const bool drewLayers = m_gles_overlay.Draw(
+        pcontext, vp->pix_width, vp->pix_height,
+        [&](wxDC &overlay) { return DrawFanVhfLights(overlay, vp); });
+#endif
+
+    PiDCState state;
+    const bool drewNotes = DrawNoteSigns(dc, vp);
+    const bool drewMarker = DrawMarker(dc, vp);
+    return m_night_preview || drewLayers || drewNotes || drewMarker;
+}
+
+// The legend marker: rings with ticks around the symbols shown in the
+// legend, and a pulsing ring that draws the eye.
+bool legend_pi::DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const
+{
+    if (!m_marker_active)
+        return false;
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return drewLight;
+        return false;
 
     const int radius = 16;
     const int pulse = m_marker_phase % 10;
@@ -1033,132 +1136,47 @@ bool legend_pi::RenderOverlayMultiCanvas(
         dc.SetPen(wxPen(highlight, 2));
         dc.DrawCircle(centre, radius + 8 + pulse * 3);
     }
-
     return true;
 }
 
-bool legend_pi::RenderGLOverlayMultiCanvas(
-    wxGLContext *pcontext,
-    PlugIn_ViewPort *vp,
-    int canvasIndex,
-    int priority)
+bool legend_pi::DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const
 {
-#ifndef __ANDROID__
-    (void)pcontext;
-    (void)canvasIndex;
-
-    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
-         !AheadFanVisible()) ||
-        !vp)
-        return false;
-
-    // Draw once per frame.
-    if (priority != OVERLAY_LEGACY && priority != -1)
-        return false;
-
-    if (m_night_preview)
-        DrawNightShadeGL(vp);
-    const bool drewFan = DrawAheadFanGL(vp);
-    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
-                         m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
-    const bool drewNotes = DrawNoteSignsGL(vp);
-    const LightStyle style = CurrentLightStyle();
-    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.DrawGL(vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes || drewFan;
-    const bool drewLight =
-        (m_chosen_light.IsActive() && m_chosen_light.DrawGL(vp, style, m_light_sectors)) ||
-        drewAll;
     if (!m_marker_active)
-        return drewLight;
-
+        return false;
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return drewLight;
+        return false;
 
-    const double radius = 16.0;
+    const int radius = 16;
     const int pulse = m_marker_phase % 10;
-
-    // GL_CURRENT_BIT included: the drawing colour set here would otherwise
-    // stay in effect for whatever OpenCPN draws next, and chart symbols
-    // are modulated by it (black symbols in the night scheme).
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT);
-
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    auto circle = [](double x, double y, double r) {
-        const int segments = 48;
-        const double kPi = 3.14159265358979323846;
-
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    auto ticks = [](double x, double y, double r, double length) {
-        glBegin(GL_LINES);
-        glVertex2d(x - r - length, y);
-        glVertex2d(x - r + 2, y);
-        glVertex2d(x + r - 2, y);
-        glVertex2d(x + r + length, y);
-        glVertex2d(x, y - r - length);
-        glVertex2d(x, y - r + 2);
-        glVertex2d(x, y + r - 2);
-        glVertex2d(x, y + r + length);
-        glEnd();
-    };
 
     wxColour outline;
     wxColour highlight;
     MarkerColours(outline, highlight);
 
+    auto ticks = [&dc](const wxPoint &c, int r, int length) {
+        dc.DrawLine(c.x - r - length, c.y, c.x - r + 2, c.y);
+        dc.DrawLine(c.x + r - 2, c.y, c.x + r + length, c.y);
+        dc.DrawLine(c.x, c.y - r - length, c.x, c.y - r + 2);
+        dc.DrawLine(c.x, c.y + r - 2, c.x, c.y + r + length);
+    };
+
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
     for (const wxPoint &centre : centres) {
-        const double cx = centre.x;
-        const double cy = centre.y;
-
         // Outline first, so the marker stands out on any chart colour.
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(7.0f);
-        circle(cx, cy, radius);
-        ticks(cx, cy, radius, 12.0);
+        dc.SetPen(wxPen(outline, 7));
+        dc.DrawCircle(centre.x, centre.y, radius);
+        ticks(centre, radius, 12);
 
-        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
-        glLineWidth(3.0f);
-        circle(cx, cy, radius);
-        ticks(cx, cy, radius, 10.0);
+        dc.SetPen(wxPen(highlight, 3));
+        dc.DrawCircle(centre.x, centre.y, radius);
+        ticks(centre, radius, 10);
 
         // A pulsing ring that draws the eye.
-        glLineWidth(2.0f);
-        circle(cx, cy, radius + 8.0 + pulse * 3.0);
+        dc.SetPen(wxPen(highlight, 2));
+        dc.DrawCircle(centre.x, centre.y, radius + 8 + pulse * 3);
     }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-
     return true;
-#else
-    // Android has OpenGL ES only, without these drawing calls: the drawings
-    // of the wxDC are laid over the chart as a picture.
-    if (!vp || (priority != OVERLAY_LEGACY && priority != -1))
-        return false;
-    if (!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-        !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
-        !AheadFanVisible())
-        return false;
-    return m_gles_overlay.Draw(pcontext, vp->pix_width, vp->pix_height, [&](wxDC &dc) {
-        return RenderOverlayMultiCanvas(dc, vp, canvasIndex, priority);
-    });
-#endif
 }
 
 // Nachtvoorbeeld: the chart as it looks from the water at night. A dark

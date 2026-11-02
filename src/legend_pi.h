@@ -103,6 +103,8 @@ struct CachedWaypoint
     wxString light;     // light character found in its name or description
 };
 
+class piDC;
+
 // The plugin. Its functions are spread over files by topic: legend_pi.cpp
 // (start, settings, legend files and the toolbar), legend_window.cpp,
 // legend_collect.cpp, legend_render.cpp, legend_chart.cpp,
@@ -719,7 +721,7 @@ private:
     double m_scale_cache_ppm = -1.0;
     double m_scale_cache_lat = 0.0;
     bool DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawNoteSignsGL(PlugIn_ViewPort *vp);
+    bool DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp);
     void CheckNotePlaces();
     void ShowPendingNoteNotice();
     bool HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx);
@@ -829,6 +831,10 @@ private:
                        AheadFanLabel *label) const;
     wxFont AheadFanFont() const;
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawFanVhfLights(wxDC &dc, PlugIn_ViewPort *vp);
+    bool DrawFanVhfLightsGL(PlugIn_ViewPort *vp);
     bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
     static constexpr double kAheadMinMiles = 0.5;
