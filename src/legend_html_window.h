@@ -23,12 +23,6 @@
 // again. The tag <legendclock id="..."> places it.
 extern wxString g_tap_clock_text;
 
-// The Ververs icon in the title of the dynamic legend, a cell of its own
-// for the same reason: it spins while the legend is read again. The tag
-// <legendrefresh id="..." size="..."> places it; size in pixels. An empty
-// <legendspacer height="..."> keeps the page as tall as it was meanwhile.
-extern wxBitmap g_refresh_icon;
-
 // Only the legend view gets the tag: the module is registered while that
 // view is made and removed again right after, so no other HTML window of
 // OpenCPN holds a handler of this plugin.

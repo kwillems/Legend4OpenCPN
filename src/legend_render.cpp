@@ -156,12 +156,10 @@ wxString legend_pi::BuildDynamicPage()
     LoadRowIcons(page);
 
     page.html << "<html>" << LegendBodyTag(true);
-    RenderTitleBar(page);
+    RenderStatusLine(page);
 
-    // While Ververs spins, only the title: the list comes back when done.
+    // While Ververs spins, only that line: the list comes back when done.
     if (m_refresh_state == RefreshIconState::Spinning) {
-        if (m_refresh_page_height > 0)
-            page.html << "<legendspacer height=\"" << m_refresh_page_height << "\">";
         page.html << "</body></html>";
         return page.html;
     }
@@ -508,7 +506,6 @@ wxString legend_pi::LightRowLabel(const DynamicPage &page, const DynamicGroup &g
 }
 
 namespace {
-const int kRefreshIconSize = 30;     // pixels, as the settings icon
 const int kRefreshSpinSteps = 16;    // per turn
 const long kRefreshMinSpinMs = 900;  // so a quick Ververs is still seen
 const long kRefreshCheckMs = 1500;
@@ -527,13 +524,8 @@ void legend_pi::StartRefreshSpin()
     for (const DynamicGroup &group : m_dynamic_groups)
         m_refresh_rows_before[group.key] = {group.label, group.section};
     m_refresh_icon_timer.Start(50);
+    UpdateRefreshIcon();
     if (IsDynamicLegendVisible() && !m_showing_loading_page) {
-        // With a scroll bar, the empty page keeps the height of the list:
-        // a scroll bar that went away would make the title bar wider.
-        // Without one, it gets none either.
-        const int height = m_markdown_view->GetVirtualSize().y;
-        m_refresh_page_height =
-            height > m_markdown_view->GetClientSize().y ? height : 0;
         RenderDynamicLegend(false);
         m_markdown_view->Update();
     }
@@ -553,7 +545,6 @@ void legend_pi::OnRefreshIconTimer()
             m_refresh_turn % kRefreshSpinSteps == 0) {
             m_refresh_state = RefreshIconState::Done;
             m_refresh_state_since = wxGetLocalTimeMillis();
-            m_refresh_page_height = 0;
             m_refresh_message = RefreshChangeMessage();
             if (IsDynamicLegendVisible() && !m_showing_loading_page) {
                 RenderDynamicLegend(false);
@@ -578,8 +569,6 @@ void legend_pi::OnRefreshIconTimer()
     }
 
     UpdateRefreshIcon();
-    if (m_markdown_view && IsDynamicLegendVisible())
-        static_cast<LegendHtmlWindow *>(m_markdown_view)->RefreshCell(kRefreshIconId);
 }
 
 // Rows that came, went or changed their text or heading with Ververs (an
@@ -613,98 +602,51 @@ wxString legend_pi::RefreshChangeMessage() const
     return message;
 }
 
-// The picture of the Ververs cell for the present state, sharp on a Retina
+// The picture of the Ververs button for the present state: the arrow,
+// turned while it spins, or a check mark when done; sharp on a Retina
 // screen.
 void legend_pi::UpdateRefreshIcon()
 {
-    const LegendPalette palette = GetLegendPalette();
-    const double scale = m_markdown_view ? m_markdown_view->GetContentScaleFactor() : 1.0;
-    const int pixels = static_cast<int>(kRefreshIconSize * scale + 0.5);
-
-    wxImage image;
-    if (m_refresh_state == RefreshIconState::Done) {
-        image = CheckIcon(palette.text, palette.header, pixels);
-    }
-    else {
-        const double turn = 2.0 * 3.14159265358979323846 * (m_refresh_turn % kRefreshSpinSteps) /
-                            kRefreshSpinSteps;
-        image = HeaderIcon(false, palette.text, palette.header, pixels, turn);
-    }
-#ifdef __ANDROID__
-    // wxWidgets 3.1.0 on Qt has no bitmaps with a scale factor.
-    g_refresh_icon = wxBitmap(image);
+    if (!m_refresh_button)
+        return;
+    const wxColour ink = GetLegendPalette().text;
+    auto image = [&](int size) {
+        if (m_refresh_state == RefreshIconState::Done)
+            return CheckIcon(ink, size);
+        const double turn = 2.0 * 3.14159265358979323846 *
+                            (m_refresh_turn % kRefreshSpinSteps) / kRefreshSpinSteps;
+        return HeaderIcon(false, ink, size, turn);
+    };
+#if wxCHECK_VERSION(3, 1, 6)
+    m_refresh_button->SetBitmap(
+        wxBitmapBundle::FromBitmaps(wxBitmap(image(18)), wxBitmap(image(36))));
 #else
-    g_refresh_icon = wxBitmap(image, -1, scale);
+    m_refresh_button->SetBitmap(wxBitmap(image(18)));
 #endif
 }
 
-// The title, with the icons of the settings menu and Ververs on the right
-// (their words in tooltips); one line high. The counts are at the foot of
-// the list. A line under the title only to say the chart position is
-// unknown, or how many rows match a search.
-void legend_pi::RenderTitleBar(DynamicPage &page)
+// A grey line at the top of the list, only when there is something to
+// say: the chart position is unknown, how many rows match a search, what
+// Ververs is doing or changed. The title and the buttons are in the
+// window's header, which does not scroll.
+void legend_pi::RenderStatusLine(DynamicPage &page)
 {
-    const LegendPalette &palette = page.palette;
-    const wxColour &muted = palette.muted;
-    wxString &html = page.html;
-
-    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"6\" "
-         << "bgcolor=\"" << HtmlColour(palette.header) << "\"><tr><td valign=\"middle\">"
-         << "<font size=\"+1\"><b>" << _("Chart legend") << "</b></font>";
-
-    if (!m_viewport_valid) {
-        html << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-             << _("The chart position is not known yet. Move the chart "
-                   "a little and then click Refresh.")
-             << "</font>";
-    }
-    else if (page.filtering) {
-        html << "<br><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
-             << static_cast<int>(page.matches) << _(" of the ")
-             << static_cast<int>(page.mainRows)
-             << _(" symbols in view match &lsquo;")
-             << EscapeHtml(m_filter)
-             << "&rsquo;</font>";
-    }
-
-    html << "</td><td align=\"right\" valign=\"middle\" nowrap>";
-    if (page.showHeadings && m_reorder_mode) {
-        html << "<a href=\"legend-reorder-done:\"><b>" << _("Done") << "</b></a>";
-    }
-    else {
-        auto icon = [&](bool gear) {
-            const wxString base = wxString::Format(
-                "legend_dyn_%d_%s", m_dynamic_generation, gear ? "settings" : "refresh");
-            wxMemoryFSHandler::AddFile(
-                base + ".png", HeaderIcon(gear, palette.text, palette.header, 30),
-                wxBITMAP_TYPE_PNG);
-            m_dynamic_image_names.push_back(base + ".png");
-            // wxHTML on macOS takes "name@2x.png" on a Retina screen: drawn
-            // at twice the size, the icon stays sharp there.
-            wxMemoryFSHandler::AddFile(
-                base + "@2x.png", HeaderIcon(gear, palette.text, palette.header, 60),
-                wxBITMAP_TYPE_PNG);
-            m_dynamic_image_names.push_back(base + "@2x.png");
-            return "<img src=\"memory:" + base + ".png\" align=\"absmiddle\">";
-        };
-        // Cells with an id carry the tooltip; the link does the work.
-        html << "<table cellspacing=\"0\" cellpadding=\"2\"><tr>";
-        // What Ververs changed, beside the check mark while it shows.
-        if (m_refresh_state == RefreshIconState::Done && !m_refresh_message.IsEmpty()) {
-            html << "<td valign=\"middle\"><font size=\"-1\" color=\"" << HtmlColour(muted)
-                 << "\">" << EscapeHtml(m_refresh_message) << "</font></td>"
-                 << "<td width=\"10\"></td>";
-        }
-        if (m_viewport_valid) {
-            html << "<td id=\"" << kLegendTipIdPrefix << "0\"><a href=\"legend-settings:\">"
-                 << icon(true) << "</a></td><td width=\"10\"></td>";
-        }
-        UpdateRefreshIcon();
-        html << "<td id=\"" << kLegendTipIdPrefix << "1\"><a href=\"legend-refresh:\">"
-             << "<legendrefresh id=\"" << kRefreshIconId << "\" size=\"" << kRefreshIconSize << "\">"
-             << "</a></td></tr></table>";
-    }
-    html << "</td></tr></table>";
+    wxString line;
+    if (m_refresh_state == RefreshIconState::Spinning)
+        line = _("Reading charts and layers again\u2026");
+    else if (!m_viewport_valid)
+        line = _("The chart position is not known yet. Move the chart "
+                 "a little and then click Refresh.");
+    else if (page.filtering)
+        line << static_cast<int>(page.matches) << _(" of the ")
+             << static_cast<int>(page.mainRows) << _(" symbols in view match &lsquo;")
+             << EscapeHtml(m_filter) << "&rsquo;";
+    if (m_refresh_state == RefreshIconState::Done && !m_refresh_message.IsEmpty())
+        line << (line.IsEmpty() ? "" : " &middot; ") << _("Refreshed: ")
+             << EscapeHtml(m_refresh_message);
+    if (!line.IsEmpty())
+        page.html << "<p><font size=\"-1\" color=\"" << HtmlColour(page.palette.muted)
+                  << "\">" << line << "</font></p>";
 
     // What the settings menu offers depends on the list.
     m_menu_has_headings = page.showHeadings && !m_dynamic_groups.empty() && !page.filtering;
@@ -716,12 +658,6 @@ void legend_pi::RenderTitleBar(DynamicPage &page)
         }
     }
     m_menu_has_lights = page.lightRows > 0;
-
-    html << "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">"
-         << "<tr><td bgcolor=\"" << HtmlColour(palette.headerRule)
-         << "\" height=\"2\"></td></tr>"
-         << "<tr><td height=\"6\"></td></tr>"
-         << "</table>";
 }
 
 // A heading of a block at the top of the list (Marifoon, Uitkijk, ...),

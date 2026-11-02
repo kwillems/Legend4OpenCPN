@@ -14,6 +14,7 @@
 
 #include "geo.h"
 #include "legend_html_window.h"
+#include "legend_icons.h"
 #include "legend_shared.h"
 
 #include <wx/button.h>
@@ -358,6 +359,7 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
     headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
 #endif
 
+    AddLegendButtons(panel, headerRow);
     AddNoteButtons(panel, headerRow);
 
 #ifdef __ANDROID__
@@ -365,6 +367,70 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
 #else
     return headerRow;
 #endif
+}
+
+// The buttons of the chart legend in the header row, which does not
+// scroll: the settings menu and Ververs; while changing the order, Klaar.
+void legend_pi::AddLegendButtons(wxPanel *panel, wxSizer *headerRow)
+{
+    const wxColour ink = GetLegendPalette().text;
+    auto iconButton = [&]() {
+        auto *button = new wxBitmapButton(panel, wxID_ANY, wxBitmap(HeaderIcon(true, ink, 18)),
+                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+#ifdef __ANDROID__
+        // Big enough for a finger.
+        const int side = 2 * button->GetCharHeight() + 8;
+        button->SetMinSize(wxSize(side, side));
+#endif
+        headerRow->Add(button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+        return button;
+    };
+    headerRow->AddSpacer(4);
+    m_settings_button = iconButton();
+    m_refresh_button = iconButton();
+    m_reorder_done_button = new wxButton(panel, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                         wxDefaultSize, wxBU_EXACTFIT);
+    m_reorder_done_button->Hide();
+    headerRow->Add(m_reorder_done_button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+    SetLegendButtonIcons();
+
+    m_settings_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { ShowSettingsMenu(); });
+    m_refresh_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RunRefresh(); });
+    m_reorder_done_button->Bind(wxEVT_BUTTON,
+                                [this](wxCommandEvent &) { SetReorderMode(false); });
+}
+
+// The gear and the Ververs arrow in the colours of the scheme.
+void legend_pi::SetLegendButtonIcons()
+{
+    if (!m_settings_button)
+        return;
+    const wxColour ink = GetLegendPalette().text;
+#if wxCHECK_VERSION(3, 1, 6)
+    m_settings_button->SetBitmap(wxBitmapBundle::FromBitmaps(
+        wxBitmap(HeaderIcon(true, ink, 18)), wxBitmap(HeaderIcon(true, ink, 36))));
+#else
+    m_settings_button->SetBitmap(wxBitmap(HeaderIcon(true, ink, 18)));
+#endif
+    UpdateRefreshIcon();
+}
+
+// Ververs: the list empties and the arrow starts to turn at once; then
+// everything is read again.
+void legend_pi::RunRefresh()
+{
+    if (m_refresh_state == RefreshIconState::Spinning)
+        return;
+    StartRefreshSpin();
+    m_markdown_view->CallAfter([this]() {
+        m_ocharts.Rescan();
+        m_s57.Rescan();
+        m_ahead_area_valid = false;
+        m_ahead_cells_tried.clear();
+        m_vhf_loaded = false;
+        LoadChartNames();
+        ShowDynamicLegend(true);
+    });
 }
 
 // Search field of the dynamic legend; hidden for other legend items. The
@@ -511,19 +577,9 @@ void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
 {
     wxString href = event.GetLinkInfo().GetHref();
 
-    if (href.StartsWith("legend-reorder-done:")) {
-        m_markdown_view->CallAfter([this]() { SetReorderMode(false); });
-        return;
-    }
-
     if (href.StartsWith("legend-identify-")) {
         const wxString what = href.Mid(16).BeforeFirst(':');
         m_markdown_view->CallAfter([this, what]() { RunIdentifyCommand(what); });
-        return;
-    }
-
-    if (href.StartsWith("legend-settings:")) {
-        m_markdown_view->CallAfter([this]() { ShowSettingsMenu(); });
         return;
     }
 
@@ -535,24 +591,6 @@ void legend_pi::OnLegendLink(wxHtmlLinkEvent &event)
             m_markdown_view->CallAfter([this, name]() { RunLegendCommand(name); });
             return;
         }
-    }
-
-    if (href.StartsWith("legend-refresh:")) {
-        // The page is not replaced inside its own link click; the empty list
-        // shows before the work starts.
-        m_markdown_view->CallAfter([this]() {
-            StartRefreshSpin();
-            m_markdown_view->CallAfter([this]() {
-                m_ocharts.Rescan();
-                m_s57.Rescan();
-                m_ahead_area_valid = false;
-                m_ahead_cells_tried.clear();
-                m_vhf_loaded = false;
-                LoadChartNames();
-                ShowDynamicLegend(true);
-            });
-        });
-        return;
     }
 
     // A place in a note: the chart goes there and marks it.
@@ -594,7 +632,6 @@ legend_pi::Hit legend_pi::HitAt(const wxPoint &pos) const
         {HitKind::Tap, legendView->IdNumberAt(pos, kLegendTapIdPrefix)},
         {HitKind::Match, legendView->IdNumberAt(pos, kLegendMatchIdPrefix)},
         {HitKind::Button, legendView->IdNumberAt(pos, kLegendButtonIdPrefix)},
-        {HitKind::Tip, legendView->IdNumberAt(pos, kLegendTipIdPrefix)},
         {HitKind::AheadVhf, legendView->IdNumberAt(pos, kLegendAheadVhfIdPrefix)},
         {HitKind::AheadNote, legendView->IdNumberAt(pos, kLegendAheadNoteIdPrefix)},
         {HitKind::Note, legendView->IdNumberAt(pos, kLegendNoteIdPrefix)},
@@ -751,7 +788,6 @@ void legend_pi::OnLegendClick(const Hit &hit)
         break;
     }
     case HitKind::Tap:
-    case HitKind::Tip: // the link inside does the work
     case HitKind::None:
         break;
     }
@@ -830,10 +866,6 @@ wxString legend_pi::LegendTip(const Hit &hit) const
         tip = hit.index == 0   ? _("Discard the tapped rhythm and start again")
               : hit.index == 1 ? _("Close Identify a light; the menu opens it again")
                                : _("Compare only lights of this colour");
-        break;
-    case HitKind::Tip:
-        tip = hit.index == 0 ? _("Settings: what the legend shows")
-                             : _("Refresh: read charts and layers again");
         break;
     case HitKind::None:
         break;
@@ -1027,6 +1059,9 @@ void legend_pi::SetWindowTexts()
 #endif
     m_save_button->SetLabel(_("Save"));
     m_save_button->SetToolTip(_("Save and finish editing (Esc)"));
+    m_settings_button->SetToolTip(_("Settings: what the legend shows"));
+    m_refresh_button->SetToolTip(_("Refresh: read charts and layers again"));
+    m_reorder_done_button->SetLabel(_("Done"));
     m_radius_button->SetLabel(_("Radius"));
     m_radius_button->SetToolTip(_("Within what distance you get a notice under way"));
     m_loose_button->SetLabel(_("Unpin"));
@@ -1232,6 +1267,7 @@ void legend_pi::ApplyViewColours()
 
     for (const auto &icon : m_format_icons)
         icon.first->SetBitmap(NoteToolIcon(icon.second, palette.text));
+    SetLegendButtonIcons();
 
     if (m_editor) {
         m_editor->SetColours(palette.background, palette.text,
@@ -1570,7 +1606,14 @@ void legend_pi::ShowSettingsMenu()
         menu.Append(kReorder, _("Change order\u2026"));
     }
 
-    const int selection = m_markdown_view->GetPopupMenuSelectionFromUser(menu);
+    // Under the gear, where it was clicked.
+    wxWindow *owner = m_settings_button && m_settings_button->IsShown()
+                          ? static_cast<wxWindow *>(m_settings_button)
+                          : m_markdown_view;
+    const int selection =
+        owner == m_settings_button
+            ? owner->GetPopupMenuSelectionFromUser(menu, 0, m_settings_button->GetSize().y)
+            : owner->GetPopupMenuSelectionFromUser(menu);
     if (selection >= kAheadColour0 && selection <= kAheadColourLast) {
         SetAheadColour(selection - kAheadColour0);
         return;
@@ -1684,22 +1727,30 @@ void legend_pi::SetReorderMode(bool on)
     if (on)
         AddBuiltInHeadings();
     m_reorder_mode = on;
-    UpdateSearchVisibility();
+    UpdateLegendControls();
     RenderDynamicLegend(!on);
 }
 
-void legend_pi::UpdateSearchVisibility()
+void legend_pi::UpdateLegendControls()
 {
     if (!m_search)
         return;
 
-    // Only the dynamic legend can be searched; the order edit mode shows
-    // every heading and has no use for it.
-    const bool show = m_current_legend_path == kDynamicGpxId && !m_reorder_mode;
-    if (m_search->IsShown() == show)
-        return;
-
+    // Only the dynamic legend can be searched and has the settings menu and
+    // Ververs; the order edit mode shows every heading and only needs Klaar.
+    const bool dynamic = m_current_legend_path == kDynamicGpxId;
+    const bool show = dynamic && !m_reorder_mode;
+    bool changed = m_search->IsShown() != show;
     m_search->Show(show);
+    if (m_settings_button) {
+        changed = changed || m_settings_button->IsShown() != show ||
+                  m_reorder_done_button->IsShown() != (dynamic && m_reorder_mode);
+        m_settings_button->Show(show);
+        m_refresh_button->Show(show);
+        m_reorder_done_button->Show(dynamic && m_reorder_mode);
+    }
+    if (!changed)
+        return;
     m_search->GetParent()->Layout();
 }
 

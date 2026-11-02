@@ -1085,3 +1085,11 @@ msgstr ""
 #: src/legend_render.cpp
 msgid " light characteristic"
 msgstr ""
+
+#: src/legend_render.cpp
+msgid "Reading charts and layers again…"
+msgstr ""
+
+#: src/legend_render.cpp
+msgid "Refreshed: "
+msgstr ""
