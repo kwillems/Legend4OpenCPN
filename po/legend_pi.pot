@@ -1032,3 +1032,28 @@ msgstr ""
 #: src/legend_window.cpp:1625
 msgid "Change order…"
 msgstr ""
+
+#: src/legend_notes.cpp
+msgid "Notes are off"
+msgstr ""
+
+#: src/legend_notes.cpp
+msgid "1 note on the chart is hidden, not deleted."
+msgstr ""
+
+#: src/legend_notes.cpp
+#, c-format
+msgid "%zu notes on the chart are hidden, not deleted."
+msgstr ""
+
+#: src/legend_notes.cpp
+msgid "The notes are hidden, not deleted."
+msgstr ""
+
+#: src/legend_notes.cpp
+msgid "Back on through Settings ▸ Notes."
+msgstr ""
+
+#: src/legend_notes.cpp
+msgid "Back on"
+msgstr ""

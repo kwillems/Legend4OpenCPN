@@ -812,6 +812,20 @@ void legend_pi::SetNotesOn(bool on)
 {
     if (!on && m_editing)
         StopEditing();
+    // Turned off: once, a notice that the notes are hidden, not gone.
+    const size_t onChart = m_note_places.size();
+    size_t notes = 0;
+    if (!on) {
+        wxDir dir(GetLegendDirectory());
+        wxString name;
+        bool found = dir.IsOpened() && dir.GetFirst(&name, wxEmptyString, wxDIR_FILES);
+        while (found) {
+            const wxString ext = wxFileName(name).GetExt().Lower();
+            if (ext == "md" || ext == "markdown")
+                ++notes;
+            found = dir.GetNext(&name);
+        }
+    }
     m_notes_on = on;
     SaveConfig();
     SetCanvasContextMenuItemViz(m_menu_parent, on);
@@ -831,6 +845,22 @@ void legend_pi::SetNotesOn(bool on)
     if (m_legend_window)
         RefreshLegendFiles();
     UpdateNoteButtons();
+
+    if (on) {
+        if (m_notice.IsShown())
+            m_notice.Hide();
+        return;
+    }
+    if (notes == 0)
+        return;
+    wxString text = onChart == 1 ? _("1 note on the chart is hidden, not deleted.")
+                    : onChart > 1
+                        ? wxString::Format(_("%zu notes on the chart are hidden, not deleted."),
+                                           onChart)
+                        : wxString(_("The notes are hidden, not deleted."));
+    text << "\n" << _("Back on through Settings \u25b8 Notes.");
+    ShowNotice(_("Notes are off"), text, false, wxColour(186, 117, 23),
+               [this]() { SetNotesOn(true); }, _("Back on"));
 }
 
 // The scale of the status bar, as the chart uses it for scale limits; worked

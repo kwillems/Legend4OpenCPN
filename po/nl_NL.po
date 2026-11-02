@@ -867,3 +867,22 @@ msgstr "” staat op een nieuwe plek."
 
 msgid "‹  Previous"
 msgstr "‹  Vorige"
+
+msgid "Notes are off"
+msgstr "Notities staan uit"
+
+msgid "1 note on the chart is hidden, not deleted."
+msgstr "1 notitie op de kaart is verborgen, niet verwijderd."
+
+#, c-format
+msgid "%zu notes on the chart are hidden, not deleted."
+msgstr "%zu notities op de kaart zijn verborgen, niet verwijderd."
+
+msgid "The notes are hidden, not deleted."
+msgstr "De notities zijn verborgen, niet verwijderd."
+
+msgid "Back on through Settings ▸ Notes."
+msgstr "Weer aanzetten via Instellingen ▸ Notities."
+
+msgid "Back on"
+msgstr "Weer aan"
