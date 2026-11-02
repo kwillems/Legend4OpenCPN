@@ -23,6 +23,7 @@
 #include <wx/glcanvas.h>
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
+#include <wx/dcscreen.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
 #include "pidc.h"
@@ -1288,9 +1289,16 @@ bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp) const
 
     if (!label.text.IsEmpty()) {
         dc.SetFont(AheadFanFont());
+        // Measured as piDC draws it, on a wxScreenDC: its own
+        // GetTextExtent measures on a wxMemoryDC, smaller on a Retina
+        // screen, and the text ran out of its ground.
         wxCoord width = 0;
         wxCoord height = 0;
-        dc.GetTextExtent(label.text, &width, &height);
+        {
+            wxScreenDC screen;
+            screen.SetFont(AheadFanFont());
+            screen.GetTextExtent(label.text, &width, &height);
+        }
         const int margin = static_cast<int>(std::lround(3.0 * scale));
         const wxSize box(width + 2 * margin, height + 2 * margin);
         const wxPoint at =
