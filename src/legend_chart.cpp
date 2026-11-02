@@ -132,132 +132,9 @@ double legend_pi::ViewportPixelsPerWindowPixel() const
 // Looks at clicks on the chart; OpenCPN handles every event as usual.
 bool legend_pi::MouseEventHook(wxMouseEvent &event)
 {
-    // A new press ends a drag whose release never came.
-    if (event.LeftDown())
-        m_note_drag = -1;
-
-#ifdef __ANDROID__
-    // Dragging a sign does not reach the plugin on Android: OpenCPN pans
-    // the chart instead. After "move" in the note, a tap on the chart puts
-    // the note there; panning meanwhile is no tap.
-    if (!m_note_move_path.IsEmpty() && m_viewport_valid) {
-        if (event.LeftDown()) {
-            m_note_move_down = event.GetPosition();
-            return true;
-        }
-        if (event.LeftUp()) {
-            const wxPoint up = event.GetPosition();
-            if (std::abs(up.x - m_note_move_down.x) > 8 || std::abs(up.y - m_note_move_down.y) > 8)
-                return false;
-            PlaceMovingNote(up);
-            return true;
-        }
-        return false;
-    }
-#endif
-
-        const double r = ViewportPixelsPerWindowPixel();
-        const wxPoint at(static_cast<int>(std::lround(event.GetX() * r)), static_cast<int>(std::lround(event.GetY() * r)));
-    // Above the sign of a note: its title as a tooltip.
-    if (event.Moving() && m_viewport_valid && !m_note_places.empty()) {
-        const double ratio = ViewportPixelsPerWindowPixel();
-        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
-                         static_cast<int>(std::lround(event.GetY() * ratio)));
-        const int hover = NotePlaceAt(at, 12.0 * ratio);
-        if (hover != m_note_hover) {
-            m_note_hover = hover;
-            wxWindow *canvas = PluginGetFocusCanvas();
-            if (!canvas)
-                canvas = GetOCPNCanvasWindow();
-            if (canvas) {
-                if (hover >= 0)
-                    canvas->SetToolTip(_("Note: ") + m_note_places[hover].title);
-                else
-                    canvas->UnsetToolTip();
-            }
-        }
-        return false;
-    }
-
-    // A sign held down: a click opens its note, a drag moves it. The mouse
-    // stays here, so the chart neither pans nor centres meanwhile.
-    if (event.LeftDown() && m_viewport_valid) {
-        const double ratio = ViewportPixelsPerWindowPixel();
-        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
-                         static_cast<int>(std::lround(event.GetY() * ratio)));
-        const int note = NotePlaceAt(at, 12.0 * ratio);
-        if (note >= 0) {
-            m_note_drag = note;
-            m_note_drag_path = m_note_places[note].path;
-            m_note_drag_start = event.GetPosition();
-            m_note_drag_moved = false;
-            m_note_drag_from_lat = m_note_places[note].lat;
-            m_note_drag_from_lon = m_note_places[note].lon;
-            m_mouse_down_valid = false;
-            return true;
-        }
-    }
-
-    if (m_note_drag >= 0) {
-        // The places were read again meanwhile: find the sign by its note.
-        if (static_cast<size_t>(m_note_drag) >= m_note_places.size() ||
-            m_note_places[m_note_drag].path != m_note_drag_path) {
-            m_note_drag = -1;
-            for (size_t i = 0; i < m_note_places.size(); ++i) {
-                if (m_note_places[i].path == m_note_drag_path)
-                    m_note_drag = static_cast<int>(i);
-            }
-            if (m_note_drag < 0)
-                return false;
-        }
-
-        if (event.Dragging() && event.LeftIsDown()) {
-#ifdef __ANDROID__
-            // OpenCPN pans the chart, and the release does not come.
-            m_note_drag = -1;
-            return false;
-#endif
-            const wxPoint now = event.GetPosition();
-            if (std::abs(now.x - m_note_drag_start.x) > 4 ||
-                std::abs(now.y - m_note_drag_start.y) > 4)
-                m_note_drag_moved = true;
-            if (m_note_drag_moved) {
-                const double ratio = ViewportPixelsPerWindowPixel();
-                PlugIn_ViewPort vp = m_viewport;
-                double lat = 0.0;
-                double lon = 0.0;
-                GetCanvasLLPix(&vp,
-                               wxPoint(static_cast<int>(std::lround(now.x * ratio)),
-                                       static_cast<int>(std::lround(now.y * ratio))),
-                               &lat, &lon);
-                m_note_places[m_note_drag].lat = lat;
-                m_note_places[m_note_drag].lon = lon;
-                m_note_selected = m_note_drag;
-                RefreshAllCanvases();
-            }
-            return true;
-        }
-
-        if (event.LeftUp()) {
-            const NotePlace place = m_note_places[m_note_drag];
-            m_note_drag = -1;
-            if (m_note_drag_moved) {
-                FinishNoteMove(place, m_note_drag_from_lat, m_note_drag_from_lon);
-                return true;
-            }
-            // A click: the note opens and its radius shows.
-            for (size_t i = 0; i < m_note_places.size(); ++i) {
-                if (m_note_places[i].path == place.path)
-                    m_note_selected = static_cast<int>(i);
-            }
-            RefreshAllCanvases();
-            const wxString path = place.path;
-            if (wxWindow *canvas = GetOCPNCanvasWindow())
-                canvas->CallAfter([this, path]() { OpenNote(path); });
-            return true;
-        }
-        return true;
-    }
+    bool consume = false;
+    if (NoteMouseEvent(event, consume))
+        return consume;
 
     if (event.LeftDown()) {
         m_mouse_down = event.GetPosition();
@@ -282,10 +159,7 @@ bool legend_pi::MouseEventHook(wxMouseEvent &event)
                         static_cast<int>(std::lround(up.y * ratio)));
 
     // A click beside the signs: no radius shows any more.
-    if (m_note_selected >= 0) {
-        m_note_selected = -1;
-        RefreshAllCanvases();
-    }
+    ClearNoteSelection();
 
     HighlightVhfAreaAt(pixel, 14.0 * ratio);
 
@@ -312,110 +186,16 @@ void legend_pi::SetCursorLatLon(double lat, double lon)
     m_cursor_valid = true;
 }
 
-// Fills the submenu "Notitie" just before the chart's menu opens: what
-// fits the spot (a note's sign under the mouse) and the state (a note
-// being edited).
-void legend_pi::PrepareContextMenu(int canvasIndex)
-{
-    (void)canvasIndex;
-    if (!m_context_submenu)
-        return;
-
-    while (m_context_submenu->GetMenuItemCount() > 0)
-        m_context_submenu->Destroy(m_context_submenu->FindItemByPosition(0));
-
-    // The note whose sign is under the mouse, if any.
-    m_menu_note_path.Clear();
-    wxString noteTitle;
-    if (m_cursor_valid && m_viewport_valid) {
-        PlugIn_ViewPort vp = m_viewport;
-        wxPoint at;
-        GetCanvasPixLL(&vp, &at, m_cursor_lat, m_cursor_lon);
-        const int note = NotePlaceAt(at, 14.0 * ViewportPixelsPerWindowPixel());
-        if (note >= 0) {
-            m_menu_note_path = m_note_places[note].path;
-            noteTitle = m_note_places[note].title;
-        }
-    }
-
-    // In the submenu "Notitie" the word need not be repeated.
-    // With a recent GPS fix also the boat's position, wherever the click was.
-    const bool boat = BoatPositionKnown();
-    if (m_editing) {
-        m_context_submenu->Append(m_menu_link_place, _("Link to this place in the text"));
-        m_context_submenu->Append(m_menu_pin_note, _("Pin here on the chart"));
-        if (boat) {
-            m_context_submenu->AppendSeparator();
-            m_context_submenu->Append(m_menu_link_boat, _("Boat's position in the text"));
-            m_context_submenu->Append(m_menu_pin_boat, _("Pin to the boat's position"));
-        }
-    }
-    else {
-        m_context_submenu->Append(m_menu_new_note, _("New note here"));
-        if (boat)
-            m_context_submenu->Append(m_menu_new_note_boat, _("New note at the boat"));
-    }
-    if (!m_menu_note_path.IsEmpty()) {
-        m_context_submenu->AppendSeparator();
-        const wxString quoted =
-            wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
-        m_context_submenu->Append(m_menu_open_note, wxString::Format(_("Open %s"), quoted));
-        m_context_submenu->Append(m_menu_delete_note,
-                                  wxString::Format(_("Delete %s\u2026"), quoted));
-    }
-    if (m_undo_move_valid) {
-        m_context_submenu->AppendSeparator();
-        const wxString quoted =
-            wxString::FromUTF8("\u201C") + m_undo_move_title + wxString::FromUTF8("\u201D");
-        m_context_submenu->Append(m_menu_undo_move,
-                                  wxString::Format(_("Put %s back in its old place"), quoted));
-    }
-}
-
 void legend_pi::OnContextMenuItemCallback(int id)
 {
     // The submenu itself also reports a click: the hidden item does the work.
-    if (id == m_menu_parent)
-        return;
-    if (id == m_menu_new_note_boat) {
-        NewNoteAtBoat();
-        return;
-    }
-    if (id == m_menu_link_boat) {
-        InsertBoatPosition();
-        return;
-    }
-    if (id == m_menu_pin_boat) {
-        PinNoteAtBoat();
-        return;
-    }
-    if (id == m_menu_undo_move) {
-        UndoNoteMove();
-        return;
-    }
-    if (!m_cursor_valid)
+    if (id == m_menu_parent || OnNoteMenuItem(id) || !m_cursor_valid)
         return;
 
     if (id == m_menu_reveal)
         RevealObjectAt(m_cursor_lat, m_cursor_lon, 20.0 * ViewportPixelsPerWindowPixel(), true);
     else if (id == m_menu_vhf)
         ShowVhfHere(m_cursor_lat, m_cursor_lon);
-    else if (id == m_menu_new_note)
-        NewNoteAt(m_cursor_lat, m_cursor_lon);
-    else if (id == m_menu_link_place)
-        InsertPlace(m_cursor_lat, m_cursor_lon);
-    else if (id == m_menu_pin_note)
-        SetNotePlace(m_cursor_lat, m_cursor_lon);
-    else if (id == m_menu_open_note && !m_menu_note_path.IsEmpty())
-        OpenNote(m_menu_note_path);
-    else if (id == m_menu_delete_note && !m_menu_note_path.IsEmpty())
-        DeleteNoteFile(m_menu_note_path);
-    else if (id == m_menu_new_note_boat)
-        NewNoteAtBoat();
-    else if (id == m_menu_link_boat)
-        InsertBoatPosition();
-    else if (id == m_menu_pin_boat)
-        PinNoteAtBoat();
 }
 
 bool legend_pi::RevealObjectAt(

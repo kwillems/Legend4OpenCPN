@@ -30,6 +30,12 @@
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/log.h>
+#include <wx/button.h>
+#include <wx/menu.h>
+#include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/wrapsizer.h>
 #include <wx/filedlg.h>
 #include <wx/msgdlg.h>
 #include <wx/textdlg.h>
@@ -48,6 +54,194 @@ bool legend_pi::IsMarkdownItem(const wxString &path) const
     return ext == "md" || ext == "markdown";
 }
 
+// The buttons for notes in the header row: edit, rename, delete (into the
+// folder for deleted notes) and a new one; while editing, Opslaan.
+void legend_pi::AddNoteButtons(wxPanel *panel, wxSizer *headerRow)
+{
+    auto noteButton = [&](const wxString &icon) {
+        auto *button = new wxBitmapButton(panel, wxID_ANY,
+                                          NoteToolIcon(icon, GetLegendPalette().text),
+                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        m_format_icons.push_back(std::make_pair(button, icon));
+#ifdef __ANDROID__
+        // Big enough for a finger.
+        const int side = 2 * button->GetCharHeight() + 8;
+        button->SetMinSize(wxSize(side, side));
+#endif
+        headerRow->Add(button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+        return button;
+    };
+    headerRow->AddSpacer(4);
+#ifdef __ANDROID__
+    // Dragging a sign on the chart does not work on Android: this button,
+    // then a tap on the chart, moves a pinned note.
+    m_move_button = noteButton("place");
+    m_move_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartNoteMove(); });
+#endif
+    m_edit_button = noteButton("edit");
+    m_rename_button = noteButton("rename");
+    m_delete_button = noteButton("trash");
+    m_new_button = noteButton("new");
+    m_save_button = new wxButton(panel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
+                                 wxBU_EXACTFIT);
+    m_save_button->Hide();
+    headerRow->Add(m_save_button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
+
+    m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
+    m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
+    m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
+    m_save_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StopEditing(); });
+    // With a GPS fix the plus offers a note pinned where the boat is.
+    m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        if (!BoatPositionKnown()) {
+            NewNote();
+            return;
+        }
+        enum { kPlain = 1, kBoat };
+        wxMenu menu;
+        menu.Append(kPlain, _("New note"));
+        menu.Append(kBoat, _("New note at the boat"));
+        const int choice = m_new_button->GetPopupMenuSelectionFromUser(menu);
+        if (choice == kPlain)
+            NewNote();
+        else if (choice == kBoat)
+            NewNoteAtBoat();
+    });
+}
+
+// Buttons that put Markdown into the note, for those who do not know it by
+// heart and on a tablet, where # and * are hard to reach. They wrap to a
+// second line in a narrow window.
+wxWindow *legend_pi::CreateFormatBar(wxPanel *panel)
+{
+    m_format_bar = new wxPanel(panel);
+    auto *formatSizer = new wxWrapSizer(wxHORIZONTAL);
+    auto formatButton = [&](const wxString &icon, std::function<void()> action) {
+        auto *button = new wxBitmapButton(m_format_bar, wxID_ANY,
+                                          NoteToolIcon(icon, GetLegendPalette().text),
+                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+        if (action)
+            button->Bind(wxEVT_BUTTON, [action](wxCommandEvent &) { action(); });
+        formatSizer->Add(button, 0, wxRIGHT | wxBOTTOM, 2);
+        m_format_icons.push_back(std::make_pair(button, icon));
+        return button;
+    };
+    auto groupGap = [&]() { formatSizer->AddSpacer(8); };
+
+    // H opens a menu with the heading levels; the current one is ticked.
+    wxBitmapButton *headingButton = formatButton("heading", std::function<void()>());
+    headingButton->Bind(wxEVT_BUTTON, [this, headingButton](wxCommandEvent &) {
+        if (!m_editor)
+            return;
+        const int current = m_editor->HeadingLevel();
+        wxMenu menu;
+        menu.AppendRadioItem(100, _("Plain text"))->Check(current == 0);
+        for (int level = 1; level <= 6; ++level)
+            menu.AppendRadioItem(100 + level, wxString::Format(_("Heading %d"), level))
+                ->Check(current == level);
+        const int choice = headingButton->GetPopupMenuSelectionFromUser(menu);
+        if (choice >= 100 && choice <= 106)
+            m_editor->SetHeading(choice - 100);
+    });
+    formatButton("bold", [this]() { m_editor->ToggleBold(); });
+    formatButton("italic", [this]() { m_editor->ToggleItalic(); });
+    groupGap();
+    formatButton("bullets", [this]() { m_editor->ToggleList(); });
+    formatButton("numbers", [this]() { m_editor->ToggleNumbered(); });
+    formatButton("tasks", [this]() { m_editor->ToggleTasks(); });
+    groupGap();
+    formatButton("link", [this]() { InsertLink(); });
+    formatButton("image", [this]() { InsertImage(); });
+    wxBitmapButton *placeButton = formatButton("place", std::function<void()>());
+    placeButton->Bind(wxEVT_BUTTON, [this, placeButton](wxCommandEvent &) {
+        if (!m_viewport_valid)
+            return;
+        enum { kLink = 1, kBelongs, kBoatLink, kBoatPin };
+        wxMenu menu;
+        menu.Append(kLink, _("Link to the centre of the chart in the text"));
+        menu.Append(kBelongs, _("Pin note to the centre of the chart"));
+        menu.AppendSeparator();
+        menu.Append(kBoatLink, _("Boat's position in the text"));
+        menu.Append(kBoatPin, _("Pin note to the boat's position"));
+        const bool boat = BoatPositionKnown();
+        menu.Enable(kBoatLink, boat);
+        menu.Enable(kBoatPin, boat);
+        const int choice = placeButton->GetPopupMenuSelectionFromUser(menu);
+        if (choice == kLink)
+            InsertPlace(m_viewport.clat, m_viewport.clon);
+        else if (choice == kBelongs)
+            SetNotePlace(m_viewport.clat, m_viewport.clon);
+        else if (choice == kBoatLink)
+            InsertBoatPosition();
+        else if (choice == kBoatPin)
+            PinNoteAtBoat();
+    });
+    m_format_bar->SetSizer(formatSizer);
+    m_format_bar->Hide();
+    return m_format_bar;
+}
+
+// "Vastgepind op ...": where the note being edited is pinned, with its
+// radius.
+wxWindow *legend_pi::CreatePlaceBar(wxPanel *panel)
+{
+    m_place_bar = new wxPanel(panel);
+    auto *placeSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_place_text = new wxStaticText(m_place_bar, wxID_ANY, wxEmptyString);
+    m_radius_button = new wxButton(m_place_bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                   wxDefaultSize, wxBU_EXACTFIT);
+    m_loose_button = new wxButton(m_place_bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
+                                  wxDefaultSize, wxBU_EXACTFIT);
+    placeSizer->Add(m_place_text, 1, wxALIGN_CENTER_VERTICAL | wxALL, 6);
+    placeSizer->Add(m_radius_button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
+    placeSizer->Add(m_loose_button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
+    m_place_bar->SetSizer(placeSizer);
+    m_place_bar->Hide();
+    m_place_text->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent &) {
+        if (m_note_has_place)
+            GoToPlace(m_note_lat, m_note_lon);
+    });
+    m_radius_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { AskNoteRadius(); });
+    m_loose_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
+        m_note_has_place = false;
+        NotePlaceChanged();
+    });
+    return m_place_bar;
+}
+
+// A note while it is edited, as it looks; saved as Markdown a moment after
+// typing stops.
+void legend_pi::CreateNoteEditor()
+{
+    m_editor = new NoteEditor(m_content_book, wxID_ANY);
+    m_editor->SetPlaceHandler([this](const wxString &uri) {
+        double lat = 0.0;
+        double lon = 0.0;
+        if (ParseGeoUri(uri, &lat, &lon))
+            GoToPlace(lat, lon);
+    });
+    m_editor->SetChangedHandler([this]() {
+        if (!m_editing)
+            return;
+        m_note_dirty = true;
+        if (m_save_status)
+            m_save_status->SetLabel(_("Not saved yet\u2026"));
+        m_save_timer.StartOnce(1500);
+    });
+}
+
+// While a note is edited: whether it has been saved.
+wxWindow *legend_pi::CreateEditFooter(wxPanel *panel)
+{
+    m_edit_footer = new wxPanel(panel);
+    auto *footerSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_save_status = new wxStaticText(m_edit_footer, wxID_ANY, wxEmptyString);
+    footerSizer->Add(m_save_status, 1, wxALIGN_CENTER_VERTICAL);
+    m_edit_footer->SetSizer(footerSizer);
+    m_edit_footer->Hide();
+    return m_edit_footer;
+}
+
 // Outside editing: the pencil for a note and the plus. While editing: the
 // buttons that format the text, and Opslaan.
 void legend_pi::UpdateNoteButtons()
@@ -55,8 +249,9 @@ void legend_pi::UpdateNoteButtons()
     if (!m_edit_button || !m_new_button || !m_format_bar || !m_nav_panel || !m_edit_footer)
         return;
 
-    m_edit_button->Show(!m_editing && IsMarkdownItem(m_current_legend_path));
-    const bool note = !m_editing && IsMarkdownItem(m_current_legend_path);
+    // With notes off a Markdown item is a legend to read, nothing more.
+    const bool note = m_notes_on && !m_editing && IsMarkdownItem(m_current_legend_path);
+    m_edit_button->Show(note);
     if (m_rename_button)
         m_rename_button->Show(note);
     if (m_delete_button)
@@ -67,7 +262,7 @@ void legend_pi::UpdateNoteButtons()
         pinned = pinned || place.path == m_current_legend_path;
     m_move_button->Show(note && pinned);
 #endif
-    m_new_button->Show(!m_editing);
+    m_new_button->Show(m_notes_on && !m_editing);
     if (m_save_button)
         m_save_button->Show(m_editing);
     m_format_bar->Show(m_editing);
@@ -82,7 +277,7 @@ void legend_pi::UpdateNoteButtons()
 
 void legend_pi::StartEditing()
 {
-    if (m_editing || !m_editor || !m_content_book || !IsMarkdownItem(m_current_legend_path))
+    if (!m_notes_on || m_editing || !m_editor || !m_content_book || !IsMarkdownItem(m_current_legend_path))
         return;
 
     wxString text;
@@ -581,9 +776,10 @@ void legend_pi::ShowNoGpsNotice()
 // the folder changes and after a note is saved.
 void legend_pi::RefreshNotePlaces()
 {
+    // With notes off there are none on the chart.
     std::vector<wxString> paths;
     wxDir dir(GetLegendDirectory());
-    if (dir.IsOpened()) {
+    if (m_notes_on && dir.IsOpened()) {
         wxString name;
         bool found = dir.GetFirst(&name, wxEmptyString, wxDIR_FILES);
         while (found) {
@@ -606,6 +802,34 @@ void legend_pi::RefreshNotePlaces()
     }
     m_note_hover = -1;
     RefreshAllCanvases();
+}
+
+// "Notities" in the settings: off, the plugin is a legend only; no signs,
+// no rows, no notices, no buttons or chart menu for notes. The Markdown
+// files stay in the list, to read.
+void legend_pi::SetNotesOn(bool on)
+{
+    if (!on && m_editing)
+        StopEditing();
+    m_notes_on = on;
+    SaveConfig();
+    SetCanvasContextMenuItemViz(m_menu_parent, on);
+    if (!on) {
+        m_ahead_notes.clear();
+        m_note_notice_timer.Stop();
+        m_pending_note_path.Clear();
+#ifdef __ANDROID__
+        if (!m_note_move_path.IsEmpty())
+            SetNoteMovePath(wxEmptyString);
+#endif
+    }
+    // Back on, the notes the boat is near already are no news.
+    m_note_places_known = false;
+    m_notes_near.clear();
+    RefreshNotePlaces();
+    if (m_legend_window)
+        RefreshLegendFiles();
+    UpdateNoteButtons();
 }
 
 // The scale of the status bar, as the chart uses it for scale limits; worked
@@ -645,6 +869,313 @@ void legend_pi::OpenNote(const wxString &path)
     }
     ShowNoteNamed(wxFileName(path).GetFullName());
     m_legend_window->Raise();
+}
+
+// A note row in the legend or the lookout clicked: the note opens, or,
+// when its sign is hidden at this scale, the chart zooms in to just past
+// its limit and shows the sign, as for a hidden buoy.
+void legend_pi::OpenNoteOrShowSign(const wxString &path)
+{
+    for (size_t i = 0; i < m_note_places.size(); ++i) {
+        const NotePlace &place = m_note_places[i];
+        if (place.path != path || !NoteHiddenAtScale(place))
+            continue;
+        const double zoom = ViewScaleForLimit(place.scamin);
+        if (zoom > 0.0)
+            JumpTo(place.lat, place.lon, zoom);
+        m_note_selected = static_cast<int>(i);
+        ShowMarker(place.lat, place.lon);
+        RefreshAllCanvases();
+        return;
+    }
+    OpenNote(path);
+}
+
+// The chart's mouse for the signs of notes: hovering shows a title, a
+// click opens the note, a drag moves it; on Android a tap after "move"
+// puts the note there. Returns whether the event was the notes'; consume
+// then says whether OpenCPN should leave it alone.
+bool legend_pi::NoteMouseEvent(wxMouseEvent &event, bool &consume)
+{
+    // A new press ends a drag whose release never came.
+    if (event.LeftDown())
+        m_note_drag = -1;
+
+#ifdef __ANDROID__
+    // Dragging a sign does not reach the plugin on Android: OpenCPN pans
+    // the chart instead. After "move" in the note, a tap on the chart puts
+    // the note there; panning meanwhile is no tap.
+    if (!m_note_move_path.IsEmpty() && m_viewport_valid) {
+        if (event.LeftDown()) {
+            m_note_move_down = event.GetPosition();
+            consume = true;
+            return true;
+        }
+        if (event.LeftUp()) {
+            const wxPoint up = event.GetPosition();
+            if (std::abs(up.x - m_note_move_down.x) > 8 || std::abs(up.y - m_note_move_down.y) > 8) {
+                consume = false;
+                return true;
+            }
+            PlaceMovingNote(up);
+            consume = true;
+            return true;
+        }
+        consume = false;
+        return true;
+    }
+#endif
+
+    // Above the sign of a note: its title as a tooltip.
+    if (event.Moving() && m_viewport_valid && !m_note_places.empty()) {
+        const double ratio = ViewportPixelsPerWindowPixel();
+        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
+                         static_cast<int>(std::lround(event.GetY() * ratio)));
+        const int hover = NotePlaceAt(at, 12.0 * ratio);
+        if (hover != m_note_hover) {
+            m_note_hover = hover;
+            wxWindow *canvas = PluginGetFocusCanvas();
+            if (!canvas)
+                canvas = GetOCPNCanvasWindow();
+            if (canvas) {
+                if (hover >= 0)
+                    canvas->SetToolTip(_("Note: ") + m_note_places[hover].title);
+                else
+                    canvas->UnsetToolTip();
+            }
+        }
+        consume = false;
+        return true;
+    }
+
+    // A sign held down: a click opens its note, a drag moves it. The mouse
+    // stays here, so the chart neither pans nor centres meanwhile.
+    if (event.LeftDown() && m_viewport_valid) {
+        const double ratio = ViewportPixelsPerWindowPixel();
+        const wxPoint at(static_cast<int>(std::lround(event.GetX() * ratio)),
+                         static_cast<int>(std::lround(event.GetY() * ratio)));
+        const int note = NotePlaceAt(at, 12.0 * ratio);
+        if (note >= 0) {
+            m_note_drag = note;
+            m_note_drag_path = m_note_places[note].path;
+            m_note_drag_start = event.GetPosition();
+            m_note_drag_moved = false;
+            m_note_drag_from_lat = m_note_places[note].lat;
+            m_note_drag_from_lon = m_note_places[note].lon;
+            m_mouse_down_valid = false;
+            consume = true;
+            return true;
+        }
+    }
+
+    if (m_note_drag >= 0) {
+        // The places were read again meanwhile: find the sign by its note.
+        if (static_cast<size_t>(m_note_drag) >= m_note_places.size() ||
+            m_note_places[m_note_drag].path != m_note_drag_path) {
+            m_note_drag = -1;
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                if (m_note_places[i].path == m_note_drag_path)
+                    m_note_drag = static_cast<int>(i);
+            }
+            if (m_note_drag < 0) {
+                consume = false;
+                return true;
+            }
+        }
+
+        if (event.Dragging() && event.LeftIsDown()) {
+#ifdef __ANDROID__
+            // OpenCPN pans the chart, and the release does not come.
+            m_note_drag = -1;
+            consume = false;
+            return true;
+#endif
+            const wxPoint now = event.GetPosition();
+            if (std::abs(now.x - m_note_drag_start.x) > 4 ||
+                std::abs(now.y - m_note_drag_start.y) > 4)
+                m_note_drag_moved = true;
+            if (m_note_drag_moved) {
+                const double ratio = ViewportPixelsPerWindowPixel();
+                PlugIn_ViewPort vp = m_viewport;
+                double lat = 0.0;
+                double lon = 0.0;
+                GetCanvasLLPix(&vp,
+                               wxPoint(static_cast<int>(std::lround(now.x * ratio)),
+                                       static_cast<int>(std::lround(now.y * ratio))),
+                               &lat, &lon);
+                m_note_places[m_note_drag].lat = lat;
+                m_note_places[m_note_drag].lon = lon;
+                m_note_selected = m_note_drag;
+                RefreshAllCanvases();
+            }
+            consume = true;
+            return true;
+        }
+
+        if (event.LeftUp()) {
+            const NotePlace place = m_note_places[m_note_drag];
+            m_note_drag = -1;
+            if (m_note_drag_moved) {
+                FinishNoteMove(place, m_note_drag_from_lat, m_note_drag_from_lon);
+                consume = true;
+                return true;
+            }
+            // A click: the note opens and its radius shows.
+            for (size_t i = 0; i < m_note_places.size(); ++i) {
+                if (m_note_places[i].path == place.path)
+                    m_note_selected = static_cast<int>(i);
+            }
+            RefreshAllCanvases();
+            const wxString path = place.path;
+            if (wxWindow *canvas = GetOCPNCanvasWindow())
+                canvas->CallAfter([this, path]() { OpenNote(path); });
+            consume = true;
+            return true;
+        }
+        consume = true;
+        return true;
+    }
+    return false;
+}
+
+// A click on the chart beside the signs: no radius shows any more.
+void legend_pi::ClearNoteSelection()
+{
+    if (m_note_selected < 0)
+        return;
+    m_note_selected = -1;
+    RefreshAllCanvases();
+}
+
+// "Notitie" in the chart's right-click menu, with a submenu that
+// PrepareContextMenu() fills each time for the spot and the state.
+void legend_pi::AddNoteMenuItems()
+{
+    // OpenCPN tells a plugin of this API version which submenu was used,
+    // not which item in it. So every note action is also an item of its
+    // own, hidden, whose id the submenu item carries: OpenCPN calls back
+    // with that id too (it looks through all items, hidden ones as well).
+    auto action = [this](const char *label) {
+        const int id = AddCanvasContextMenuItem(
+            new wxMenuItem(MenuItemOwner(), wxID_ANY, wxString::FromUTF8(label)), this);
+        SetCanvasContextMenuItemViz(id, false);
+        m_menu_actions.push_back(id);
+        return id;
+    };
+    m_menu_new_note = action("Nieuwe notitie hier");
+    m_menu_open_note = action("Notitie openen");
+    m_menu_delete_note = action("Notitie verwijderen");
+    m_menu_undo_move = action("Notitie terugzetten op de oude plek");
+    m_menu_link_place = action("Link naar deze plek in de tekst");
+    m_menu_pin_note = action("Notitie hier vastpinnen op de kaart");
+    m_menu_new_note_boat = action("Nieuwe notitie bij de boot");
+    m_menu_link_boat = action("Positie van de boot in de tekst");
+    m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
+    m_context_submenu = new wxMenu();
+    m_menu_parent = AddCanvasContextMenuItem(
+        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
+                       m_context_submenu),
+        this);
+    PrepareContextMenu(0);
+    SetCanvasContextMenuItemViz(m_menu_parent, m_notes_on);
+}
+
+// The note actions of the chart's menu; false for an item of another kind.
+bool legend_pi::OnNoteMenuItem(int id)
+{
+    // Wherever the click was.
+    if (id == m_menu_new_note_boat)
+        NewNoteAtBoat();
+    else if (id == m_menu_link_boat)
+        InsertBoatPosition();
+    else if (id == m_menu_pin_boat)
+        PinNoteAtBoat();
+    else if (id == m_menu_undo_move)
+        UndoNoteMove();
+    else if (id == m_menu_open_note) {
+        if (!m_menu_note_path.IsEmpty())
+            OpenNote(m_menu_note_path);
+    }
+    else if (id == m_menu_delete_note) {
+        if (!m_menu_note_path.IsEmpty())
+            DeleteNoteFile(m_menu_note_path);
+    }
+    // At the clicked spot.
+    else if (id == m_menu_new_note) {
+        if (m_cursor_valid)
+            NewNoteAt(m_cursor_lat, m_cursor_lon);
+    }
+    else if (id == m_menu_link_place) {
+        if (m_cursor_valid)
+            InsertPlace(m_cursor_lat, m_cursor_lon);
+    }
+    else if (id == m_menu_pin_note) {
+        if (m_cursor_valid)
+            SetNotePlace(m_cursor_lat, m_cursor_lon);
+    }
+    else
+        return false;
+    return true;
+}
+
+// Fills the submenu "Notitie" just before the chart's menu opens: what
+// fits the spot (a note's sign under the mouse) and the state (a note
+// being edited).
+void legend_pi::PrepareContextMenu(int canvasIndex)
+{
+    (void)canvasIndex;
+    if (!m_context_submenu)
+        return;
+
+    while (m_context_submenu->GetMenuItemCount() > 0)
+        m_context_submenu->Destroy(m_context_submenu->FindItemByPosition(0));
+
+    // The note whose sign is under the mouse, if any.
+    m_menu_note_path.Clear();
+    wxString noteTitle;
+    if (m_cursor_valid && m_viewport_valid) {
+        PlugIn_ViewPort vp = m_viewport;
+        wxPoint at;
+        GetCanvasPixLL(&vp, &at, m_cursor_lat, m_cursor_lon);
+        const int note = NotePlaceAt(at, 14.0 * ViewportPixelsPerWindowPixel());
+        if (note >= 0) {
+            m_menu_note_path = m_note_places[note].path;
+            noteTitle = m_note_places[note].title;
+        }
+    }
+
+    // In the submenu "Notitie" the word need not be repeated.
+    // With a recent GPS fix also the boat's position, wherever the click was.
+    const bool boat = BoatPositionKnown();
+    if (m_editing) {
+        m_context_submenu->Append(m_menu_link_place, _("Link to this place in the text"));
+        m_context_submenu->Append(m_menu_pin_note, _("Pin here on the chart"));
+        if (boat) {
+            m_context_submenu->AppendSeparator();
+            m_context_submenu->Append(m_menu_link_boat, _("Boat's position in the text"));
+            m_context_submenu->Append(m_menu_pin_boat, _("Pin to the boat's position"));
+        }
+    }
+    else {
+        m_context_submenu->Append(m_menu_new_note, _("New note here"));
+        if (boat)
+            m_context_submenu->Append(m_menu_new_note_boat, _("New note at the boat"));
+    }
+    if (!m_menu_note_path.IsEmpty()) {
+        m_context_submenu->AppendSeparator();
+        const wxString quoted =
+            wxString::FromUTF8("\u201C") + noteTitle + wxString::FromUTF8("\u201D");
+        m_context_submenu->Append(m_menu_open_note, wxString::Format(_("Open %s"), quoted));
+        m_context_submenu->Append(m_menu_delete_note,
+                                  wxString::Format(_("Delete %s\u2026"), quoted));
+    }
+    if (m_undo_move_valid) {
+        m_context_submenu->AppendSeparator();
+        const wxString quoted =
+            wxString::FromUTF8("\u201C") + m_undo_move_title + wxString::FromUTF8("\u201D");
+        m_context_submenu->Append(m_menu_undo_move,
+                                  wxString::Format(_("Put %s back in its old place"), quoted));
+    }
 }
 
 // The sign of a note on the chart under a click, or -1.
@@ -822,6 +1353,42 @@ bool legend_pi::DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp)
         drew = true;
     }
     return drew;
+}
+
+
+// The lookout: notes whose place lies in the fan, in order of arrival; each
+// adds to the key that tells whether the list changed.
+void legend_pi::CollectAheadNotes(double range, wxString &key)
+{
+    m_ahead_notes.clear();
+    for (const NotePlace &place : m_note_places) {
+        double along = 0.0;
+        double cross = 0.0;
+        AlongAndAcross(m_ship_lat, m_ship_lon, m_ship_cog, place.lat, place.lon, &along,
+                       &cross);
+        // Its circle reaching into the fan is enough.
+        if (!InFan(along, std::max(0.0, std::fabs(cross) - place.radius), range,
+                   m_ahead_angle, kAheadMinHalfWidth))
+            continue;
+        // As in the list: a sign the chart does not draw at this scale
+        // only with the setting for those, and then in grey.
+        const bool hidden = NoteHiddenAtScale(place);
+        if (hidden && !m_show_hidden_at_scale)
+            continue;
+        AheadNote note;
+        note.hidden = hidden;
+        note.scamin = place.scamin;
+        note.minutes = along / m_ship_sog * 60.0;
+        note.cross = cross;
+        note.title = place.title;
+        note.path = place.path;
+        m_ahead_notes.push_back(note);
+    }
+    std::sort(m_ahead_notes.begin(), m_ahead_notes.end(),
+              [](const AheadNote &a, const AheadNote &b) { return a.minutes < b.minutes; });
+    for (const AheadNote &note : m_ahead_notes)
+        key << "note:" << note.path << '/' << static_cast<int>(note.minutes)
+            << (note.hidden ? "h" : "") << ';';
 }
 
 // With every fix: a notice when the boat comes within the radius of a

@@ -406,11 +406,14 @@ private:
     wxString NoteFileName(const wxString &title) const;
     void ShowNoteNamed(const wxString &fullName);
     void UpdateNoteButtons();
+    void AddNoteButtons(wxPanel *panel, wxSizer *headerRow);
     void InsertLink();
     // The chart's right-click menu: "Toon in legenda", "Welk marifoonkanaal
     // hier?", and "Notitie" with a submenu whose actions hidden items carry
     // (see Init).
     int m_menu_parent = -1;
+    void AddNoteMenuItems();
+    bool OnNoteMenuItem(int id);
     wxMenu *m_context_submenu = nullptr;
     std::vector<int> m_menu_actions;
     int m_menu_reveal = -1;
@@ -704,6 +707,7 @@ private:
 #endif
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
+    bool m_notes_on = true;              // setting: notes can be off as a whole
     bool m_note_notice_on = true;        // setting
     // The folder for deleted notes, by the name it had the last time; a
     // Legend folder from before it was remembered has "Verwijderd".
@@ -715,7 +719,12 @@ private:
     wxString m_pending_note_path;
     std::vector<size_t> m_note_rows;     // rows of the heading "Notities"
     void RefreshNotePlaces();
+    void SetNotesOn(bool on);
     void OpenNote(const wxString &path);
+    void OpenNoteOrShowSign(const wxString &path);
+    bool NoteMouseEvent(wxMouseEvent &event, bool &consume);
+    void ClearNoteSelection();
+    void CollectAheadNotes(double range, wxString &key);
     int NotePlaceAt(const wxPoint &pixel, double tolerancePx);
     double CurrentDisplayedScale();
     bool NoteHiddenAtScale(const NotePlace &place);

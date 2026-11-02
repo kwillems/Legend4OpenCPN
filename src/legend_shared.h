@@ -150,4 +150,8 @@ wxString LegendBodyTag(bool plainLinks = false);
 // The abbreviation of a light character without its colours.
 wxString RhythmOf(const wxString &abbreviation);
 
+class wxMenu;
+// The menu a new item of the chart's right-click menu belongs to.
+wxMenu *MenuItemOwner();
+
 #endif

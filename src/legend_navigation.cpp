@@ -464,36 +464,7 @@ void legend_pi::ComputeAhead()
     if (m_ahead_uncovered)
         key << "uncovered;";
 
-    // Notes whose place lies in the same fan.
-    m_ahead_notes.clear();
-    for (const NotePlace &place : m_note_places) {
-        double along = 0.0;
-        double cross = 0.0;
-        AlongAndAcross(m_ship_lat, m_ship_lon, m_ship_cog, place.lat, place.lon, &along,
-                       &cross);
-        // Its circle reaching into the fan is enough.
-        if (!InFan(along, std::max(0.0, std::fabs(cross) - place.radius), range,
-                   m_ahead_angle, kAheadMinHalfWidth))
-            continue;
-        // As in the list: a sign the chart does not draw at this scale
-        // only with the setting for those, and then in grey.
-        const bool hidden = NoteHiddenAtScale(place);
-        if (hidden && !m_show_hidden_at_scale)
-            continue;
-        AheadNote note;
-        note.hidden = hidden;
-        note.scamin = place.scamin;
-        note.minutes = along / m_ship_sog * 60.0;
-        note.cross = cross;
-        note.title = place.title;
-        note.path = place.path;
-        m_ahead_notes.push_back(note);
-    }
-    std::sort(m_ahead_notes.begin(), m_ahead_notes.end(),
-              [](const AheadNote &a, const AheadNote &b) { return a.minutes < b.minutes; });
-    for (const AheadNote &note : m_ahead_notes)
-        key << "note:" << note.path << '/' << static_cast<int>(note.minutes)
-            << (note.hidden ? "h" : "") << ';';
+    CollectAheadNotes(range, key);
 
     // The VHF areas the course enters as far ahead, up to two:
     // points along the course line, a few hundred metres apart.
