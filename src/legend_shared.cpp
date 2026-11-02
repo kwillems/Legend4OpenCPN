@@ -12,6 +12,7 @@
 #include "light_character.h"
 
 #include <wx/fs_mem.h>
+#include <wx/menu.h>
 #include <wx/settings.h>
 
 #include <algorithm>
@@ -307,4 +308,18 @@ wxString RhythmOf(const wxString &abbreviation)
 {
     LightCharacter light;
     return light.Parse(abbreviation) ? light.RhythmAbbreviation() : wxString();
+}
+
+// The menu a new context menu item belongs to until OpenCPN puts it in
+// the chart's menu: none, except on Android, where wxQt makes the item's
+// QAction with that menu as its parent and crashes without one. It stays
+// for the items, which OpenCPN keeps.
+wxMenu *MenuItemOwner()
+{
+#ifdef __ANDROID__
+    static wxMenu *owner = new wxMenu();
+    return owner;
+#else
+    return nullptr;
+#endif
 }

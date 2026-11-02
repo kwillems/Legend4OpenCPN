@@ -562,6 +562,9 @@ msgstr "Notitie: "
 msgid "Notes"
 msgstr "Notities"
 
+msgid "Notes: write, read and show on the chart"
+msgstr "Notities: schrijven, lezen en op de kaart tonen"
+
 msgid "Notice on entering a VHF area"
 msgstr "Melding bij nieuw marifoongebied"
 
@@ -864,3 +867,43 @@ msgstr "” staat op een nieuwe plek."
 
 msgid "‹  Previous"
 msgstr "‹  Vorige"
+
+msgid "Notes are off"
+msgstr "Notities staan uit"
+
+msgid "1 note on the chart is hidden, not deleted."
+msgstr "1 notitie op de kaart is verborgen, niet verwijderd."
+
+#, c-format
+msgid "%zu notes on the chart are hidden, not deleted."
+msgstr "%zu notities op de kaart zijn verborgen, niet verwijderd."
+
+msgid "The notes are hidden, not deleted."
+msgstr "De notities zijn verborgen, niet verwijderd."
+
+msgid "Back on through Settings ▸ Notes."
+msgstr "Weer aanzetten via Instellingen ▸ Notities."
+
+msgid "Back on"
+msgstr "Weer aan"
+
+msgid " notes (turned off)"
+msgstr " notities (uitgezet)"
+
+msgid " notes"
+msgstr " notities"
+
+msgid " note"
+msgstr " notitie"
+
+msgid " note (turned off)"
+msgstr " notitie (uitgezet)"
+
+msgid " symbol"
+msgstr " symbool"
+
+msgid " chart object"
+msgstr " kaartobject"
+
+msgid " light characteristic"
+msgstr " lichtkarakter"

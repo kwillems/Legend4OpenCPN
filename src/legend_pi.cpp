@@ -284,25 +284,8 @@ int legend_pi::Init()
            WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
 }
 
-// The menu a new context menu item belongs to until OpenCPN puts it in
-// the chart's menu: none, except on Android, where wxQt makes the item's
-// QAction with that menu as its parent and crashes without one. It stays
-// for the items, which OpenCPN keeps.
-namespace {
-wxMenu *MenuItemOwner()
-{
-#ifdef __ANDROID__
-    static wxMenu *owner = new wxMenu();
-    return owner;
-#else
-    return nullptr;
-#endif
-}
-} // namespace
-
 // In the chart's right-click menu: "Toon in legenda" and "Welk
-// marifoonkanaal hier?", and "Notitie" with a submenu that
-// PrepareContextMenu() fills each time for the spot and the state.
+// marifoonkanaal hier?", and the submenu "Notitie".
 void legend_pi::AddContextMenuItems()
 {
     m_menu_reveal = AddCanvasContextMenuItem(
@@ -314,32 +297,7 @@ void legend_pi::AddContextMenuItems()
         this);
     m_menu_actions.push_back(m_menu_vhf);
 
-    // OpenCPN tells a plugin of this API version which submenu was used,
-    // not which item in it. So every note action is also an item of its
-    // own, hidden, whose id the submenu item carries: OpenCPN calls back
-    // with that id too (it looks through all items, hidden ones as well).
-    auto action = [this](const char *label) {
-        const int id = AddCanvasContextMenuItem(
-            new wxMenuItem(MenuItemOwner(), wxID_ANY, wxString::FromUTF8(label)), this);
-        SetCanvasContextMenuItemViz(id, false);
-        m_menu_actions.push_back(id);
-        return id;
-    };
-    m_menu_new_note = action("Nieuwe notitie hier");
-    m_menu_open_note = action("Notitie openen");
-    m_menu_delete_note = action("Notitie verwijderen");
-    m_menu_undo_move = action("Notitie terugzetten op de oude plek");
-    m_menu_link_place = action("Link naar deze plek in de tekst");
-    m_menu_pin_note = action("Notitie hier vastpinnen op de kaart");
-    m_menu_new_note_boat = action("Nieuwe notitie bij de boot");
-    m_menu_link_boat = action("Positie van de boot in de tekst");
-    m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
-    m_context_submenu = new wxMenu();
-    m_menu_parent = AddCanvasContextMenuItem(
-        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
-                       m_context_submenu),
-        this);
-    PrepareContextMenu(0);
+    AddNoteMenuItems();
 }
 
 // OpenCPN owns the menu items it was given, and the submenu with its
@@ -646,6 +604,7 @@ void legend_pi::LoadConfig()
     config.Read("VhfKeepLit", &m_vhf_keep_lit, false);
     m_vhf_highlight.SetKeepLit(m_vhf_keep_lit);
     config.Read("VhfNotice", &m_vhf_notice_on, true);
+    config.Read("Notes", &m_notes_on, true);
     config.Read("NoteNotice", &m_note_notice_on, true);
     config.Read("DeletedFolder", &m_deleted_folder, "Verwijderd");
     m_dutch_names = DutchInterface();
@@ -716,6 +675,7 @@ void legend_pi::SaveConfig() const
     config.Write("ShowLights", m_show_lights);
     config.Write("VhfKeepLit", m_vhf_keep_lit);
     config.Write("VhfNotice", m_vhf_notice_on);
+    config.Write("Notes", m_notes_on);
     config.Write("NoteNotice", m_note_notice_on);
     config.Write("DeletedFolder", m_deleted_folder);
 
@@ -823,13 +783,15 @@ void legend_pi::ConvertLooseImages()
 
 void legend_pi::ScanLegendFiles()
 {
-    ConvertLooseImages();
     m_legend_files.Clear();
 
+    // Every file of the Legend folder is a note: with notes off the
+    // window has the chart legend only, and loose images stay as they are.
     wxString legend_dir = GetLegendDirectory();
     wxDir dir(legend_dir);
 
-    if (dir.IsOpened()) {
+    if (m_notes_on && dir.IsOpened()) {
+        ConvertLooseImages();
         wxString filename;
         bool found = dir.GetFirst(&filename, wxEmptyString, wxDIR_FILES);
 
@@ -973,7 +935,7 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
 
     const wxScopedCharBuffer body = front.body.utf8_str();
     wxString html = RenderMarkdownText(std::string(body.data(), body.length()));
-    if (front.hasPlace) {
+    if (front.hasPlace && m_notes_on) {
         const LegendPalette palette = GetLegendPalette();
         wxString radius = wxString::Format("%.2f", front.radius);
         while (radius.EndsWith("0"))

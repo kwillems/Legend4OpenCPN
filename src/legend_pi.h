@@ -406,11 +406,14 @@ private:
     wxString NoteFileName(const wxString &title) const;
     void ShowNoteNamed(const wxString &fullName);
     void UpdateNoteButtons();
+    void AddNoteButtons(wxPanel *panel, wxSizer *headerRow);
     void InsertLink();
     // The chart's right-click menu: "Toon in legenda", "Welk marifoonkanaal
     // hier?", and "Notitie" with a submenu whose actions hidden items carry
     // (see Init).
     int m_menu_parent = -1;
+    void AddNoteMenuItems();
+    bool OnNoteMenuItem(int id);
     wxMenu *m_context_submenu = nullptr;
     std::vector<int> m_menu_actions;
     int m_menu_reveal = -1;
@@ -683,6 +686,9 @@ private:
     // Notes that belong to a place: a sign on the chart, a heading in the
     // legend, and a notice nearby.
     std::vector<NotePlace> m_note_places;
+    std::vector<NotePlace> m_notes_off_places; // with notes off: only counted
+    bool NotePlaceInView(const NotePlace &place) const;
+    size_t NotesInView();
     int m_note_selected = -1;            // clicked sign: its radius shows
     int m_note_hover = -1;               // sign under the mouse
     int m_note_drag = -1;                // sign held down by the mouse
@@ -704,6 +710,7 @@ private:
 #endif
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
+    bool m_notes_on = true;              // setting: notes can be off as a whole
     bool m_note_notice_on = true;        // setting
     // The folder for deleted notes, by the name it had the last time; a
     // Legend folder from before it was remembered has "Verwijderd".
@@ -715,7 +722,12 @@ private:
     wxString m_pending_note_path;
     std::vector<size_t> m_note_rows;     // rows of the heading "Notities"
     void RefreshNotePlaces();
+    void SetNotesOn(bool on);
     void OpenNote(const wxString &path);
+    void OpenNoteOrShowSign(const wxString &path);
+    bool NoteMouseEvent(wxMouseEvent &event, bool &consume);
+    void ClearNoteSelection();
+    void CollectAheadNotes(double range, wxString &key);
     int NotePlaceAt(const wxPoint &pixel, double tolerancePx);
     double CurrentDisplayedScale();
     bool NoteHiddenAtScale(const NotePlace &place);

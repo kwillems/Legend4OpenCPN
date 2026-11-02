@@ -266,9 +266,7 @@ void legend_pi::CreateLegendWindow()
     BindWindowEvents();
 }
 
-// The header row: the choice of item, with buttons for notes: edit,
-// rename, delete (into the folder for deleted notes) and a new one; while
-// editing, Opslaan.
+// The header row: the choice of item, with the buttons for notes.
 wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
 {
     m_header_book = new wxSimplebook(
@@ -360,161 +358,13 @@ wxSizer *legend_pi::CreateHeaderRow(wxPanel *panel)
     headerRow->Add(m_header_book, 1, wxALIGN_CENTER_VERTICAL);
 #endif
 
-    auto noteButton = [&](const wxString &icon) {
-        auto *button = new wxBitmapButton(panel, wxID_ANY,
-                                          NoteToolIcon(icon, GetLegendPalette().text),
-                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-        m_format_icons.push_back(std::make_pair(button, icon));
-#ifdef __ANDROID__
-        // Big enough for a finger.
-        const int side = 2 * button->GetCharHeight() + 8;
-        button->SetMinSize(wxSize(side, side));
-#endif
-        headerRow->Add(button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
-        return button;
-    };
-    headerRow->AddSpacer(4);
-#ifdef __ANDROID__
-    // Dragging a sign on the chart does not work on Android: this button,
-    // then a tap on the chart, moves a pinned note.
-    m_move_button = noteButton("place");
-    m_move_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartNoteMove(); });
-#endif
-    m_edit_button = noteButton("edit");
-    m_rename_button = noteButton("rename");
-    m_delete_button = noteButton("trash");
-    m_new_button = noteButton("new");
-    m_save_button = new wxButton(panel, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
-                                 wxBU_EXACTFIT);
-    m_save_button->Hide();
-    headerRow->Add(m_save_button, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 4);
-
-    m_edit_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StartEditing(); });
-    m_rename_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { RenameNote(); });
-    m_delete_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { DeleteNote(); });
-    m_save_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { StopEditing(); });
-    // With a GPS fix the plus offers a note pinned where the boat is.
-    m_new_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
-        if (!BoatPositionKnown()) {
-            NewNote();
-            return;
-        }
-        enum { kPlain = 1, kBoat };
-        wxMenu menu;
-        menu.Append(kPlain, _("New note"));
-        menu.Append(kBoat, _("New note at the boat"));
-        const int choice = m_new_button->GetPopupMenuSelectionFromUser(menu);
-        if (choice == kPlain)
-            NewNote();
-        else if (choice == kBoat)
-            NewNoteAtBoat();
-    });
+    AddNoteButtons(panel, headerRow);
 
 #ifdef __ANDROID__
     return header;
 #else
     return headerRow;
 #endif
-}
-
-// Buttons that put Markdown into the note, for those who do not know it by
-// heart and on a tablet, where # and * are hard to reach. They wrap to a
-// second line in a narrow window.
-wxWindow *legend_pi::CreateFormatBar(wxPanel *panel)
-{
-    m_format_bar = new wxPanel(panel);
-    auto *formatSizer = new wxWrapSizer(wxHORIZONTAL);
-    auto formatButton = [&](const wxString &icon, std::function<void()> action) {
-        auto *button = new wxBitmapButton(m_format_bar, wxID_ANY,
-                                          NoteToolIcon(icon, GetLegendPalette().text),
-                                          wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
-        if (action)
-            button->Bind(wxEVT_BUTTON, [action](wxCommandEvent &) { action(); });
-        formatSizer->Add(button, 0, wxRIGHT | wxBOTTOM, 2);
-        m_format_icons.push_back(std::make_pair(button, icon));
-        return button;
-    };
-    auto groupGap = [&]() { formatSizer->AddSpacer(8); };
-
-    // H opens a menu with the heading levels; the current one is ticked.
-    wxBitmapButton *headingButton = formatButton("heading", std::function<void()>());
-    headingButton->Bind(wxEVT_BUTTON, [this, headingButton](wxCommandEvent &) {
-        if (!m_editor)
-            return;
-        const int current = m_editor->HeadingLevel();
-        wxMenu menu;
-        menu.AppendRadioItem(100, _("Plain text"))->Check(current == 0);
-        for (int level = 1; level <= 6; ++level)
-            menu.AppendRadioItem(100 + level, wxString::Format(_("Heading %d"), level))
-                ->Check(current == level);
-        const int choice = headingButton->GetPopupMenuSelectionFromUser(menu);
-        if (choice >= 100 && choice <= 106)
-            m_editor->SetHeading(choice - 100);
-    });
-    formatButton("bold", [this]() { m_editor->ToggleBold(); });
-    formatButton("italic", [this]() { m_editor->ToggleItalic(); });
-    groupGap();
-    formatButton("bullets", [this]() { m_editor->ToggleList(); });
-    formatButton("numbers", [this]() { m_editor->ToggleNumbered(); });
-    formatButton("tasks", [this]() { m_editor->ToggleTasks(); });
-    groupGap();
-    formatButton("link", [this]() { InsertLink(); });
-    formatButton("image", [this]() { InsertImage(); });
-    wxBitmapButton *placeButton = formatButton("place", std::function<void()>());
-    placeButton->Bind(wxEVT_BUTTON, [this, placeButton](wxCommandEvent &) {
-        if (!m_viewport_valid)
-            return;
-        enum { kLink = 1, kBelongs, kBoatLink, kBoatPin };
-        wxMenu menu;
-        menu.Append(kLink, _("Link to the centre of the chart in the text"));
-        menu.Append(kBelongs, _("Pin note to the centre of the chart"));
-        menu.AppendSeparator();
-        menu.Append(kBoatLink, _("Boat's position in the text"));
-        menu.Append(kBoatPin, _("Pin note to the boat's position"));
-        const bool boat = BoatPositionKnown();
-        menu.Enable(kBoatLink, boat);
-        menu.Enable(kBoatPin, boat);
-        const int choice = placeButton->GetPopupMenuSelectionFromUser(menu);
-        if (choice == kLink)
-            InsertPlace(m_viewport.clat, m_viewport.clon);
-        else if (choice == kBelongs)
-            SetNotePlace(m_viewport.clat, m_viewport.clon);
-        else if (choice == kBoatLink)
-            InsertBoatPosition();
-        else if (choice == kBoatPin)
-            PinNoteAtBoat();
-    });
-    m_format_bar->SetSizer(formatSizer);
-    m_format_bar->Hide();
-    return m_format_bar;
-}
-
-// "Vastgepind op ...": where the note being edited is pinned, with its
-// radius.
-wxWindow *legend_pi::CreatePlaceBar(wxPanel *panel)
-{
-    m_place_bar = new wxPanel(panel);
-    auto *placeSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_place_text = new wxStaticText(m_place_bar, wxID_ANY, wxEmptyString);
-    m_radius_button = new wxButton(m_place_bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                   wxDefaultSize, wxBU_EXACTFIT);
-    m_loose_button = new wxButton(m_place_bar, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                                  wxDefaultSize, wxBU_EXACTFIT);
-    placeSizer->Add(m_place_text, 1, wxALIGN_CENTER_VERTICAL | wxALL, 6);
-    placeSizer->Add(m_radius_button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 4);
-    placeSizer->Add(m_loose_button, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 6);
-    m_place_bar->SetSizer(placeSizer);
-    m_place_bar->Hide();
-    m_place_text->Bind(wxEVT_LEFT_DOWN, [this](wxMouseEvent &) {
-        if (m_note_has_place)
-            GoToPlace(m_note_lat, m_note_lon);
-    });
-    m_radius_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) { AskNoteRadius(); });
-    m_loose_button->Bind(wxEVT_BUTTON, [this](wxCommandEvent &) {
-        m_note_has_place = false;
-        NotePlaceChanged();
-    });
-    return m_place_bar;
 }
 
 // Search field of the dynamic legend; hidden for other legend items. The
@@ -868,47 +718,13 @@ void legend_pi::OnLegendClick(const Hit &hit)
         ShowAheadItem(static_cast<size_t>(hit.index));
         break;
     case HitKind::AheadNote:
-        if (static_cast<size_t>(hit.index) < m_ahead_notes.size()) {
-            const AheadNote note = m_ahead_notes[hit.index];
-            if (!note.hidden) {
-                OpenNote(note.path);
-                break;
-            }
-            // Hidden at this scale: zoom in to just past its limit and
-            // show its sign, as in the block Notities.
-            for (size_t i = 0; i < m_note_places.size(); ++i) {
-                const NotePlace &place = m_note_places[i];
-                if (place.path != note.path)
-                    continue;
-                const double zoom = ViewScaleForLimit(place.scamin);
-                if (zoom > 0.0)
-                    JumpTo(place.lat, place.lon, zoom);
-                m_note_selected = static_cast<int>(i);
-                ShowMarker(place.lat, place.lon);
-                RefreshAllCanvases();
-                break;
-            }
-        }
+        if (static_cast<size_t>(hit.index) < m_ahead_notes.size())
+            OpenNoteOrShowSign(m_ahead_notes[hit.index].path);
         break;
     case HitKind::Note:
         if (static_cast<size_t>(hit.index) < m_note_rows.size() &&
-            m_note_rows[hit.index] < m_note_places.size()) {
-            const size_t index = m_note_rows[hit.index];
-            const NotePlace place = m_note_places[index];
-            // Hidden at this scale: zoom in to just past its limit
-            // and show its sign, as for a hidden buoy.
-            if (NoteHiddenAtScale(place)) {
-                const double zoom = ViewScaleForLimit(place.scamin);
-                if (zoom > 0.0)
-                    JumpTo(place.lat, place.lon, zoom);
-                m_note_selected = static_cast<int>(index);
-                ShowMarker(place.lat, place.lon);
-                RefreshAllCanvases();
-            }
-            else {
-                OpenNote(place.path);
-            }
-        }
+            m_note_rows[hit.index] < m_note_places.size())
+            OpenNoteOrShowSign(m_note_places[m_note_rows[hit.index]].path);
         break;
     case HitKind::AheadVhf:
         if (static_cast<size_t>(hit.index) < m_ahead_vhf.size()) {
@@ -1023,27 +839,6 @@ wxString legend_pi::LegendTip(const Hit &hit) const
         break;
     }
     return tip;
-}
-
-// A note while it is edited, as it looks; saved as Markdown a moment after
-// typing stops.
-void legend_pi::CreateNoteEditor()
-{
-    m_editor = new NoteEditor(m_content_book, wxID_ANY);
-    m_editor->SetPlaceHandler([this](const wxString &uri) {
-        double lat = 0.0;
-        double lon = 0.0;
-        if (ParseGeoUri(uri, &lat, &lon))
-            GoToPlace(lat, lon);
-    });
-    m_editor->SetChangedHandler([this]() {
-        if (!m_editing)
-            return;
-        m_note_dirty = true;
-        if (m_save_status)
-            m_save_status->SetLabel(_("Not saved yet\u2026"));
-        m_save_timer.StartOnce(1500);
-    });
 }
 
 // Vorige / Volgende at the foot of the window.
@@ -1182,18 +977,6 @@ void legend_pi::BindWindowDrag(wxWindow *handle, bool resize)
     });
 }
 #endif
-
-// While a note is edited: whether it has been saved.
-wxWindow *legend_pi::CreateEditFooter(wxPanel *panel)
-{
-    m_edit_footer = new wxPanel(panel);
-    auto *footerSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_save_status = new wxStaticText(m_edit_footer, wxID_ANY, wxEmptyString);
-    footerSizer->Add(m_save_status, 1, wxALIGN_CENTER_VERTICAL);
-    m_edit_footer->SetSizer(footerSizer);
-    m_edit_footer->Hide();
-    return m_edit_footer;
-}
 
 // The tooltip of a button in the header or the format bar, by its icon.
 wxString legend_pi::ButtonTip(const wxString &icon) const
@@ -1702,7 +1485,7 @@ void legend_pi::ShowSettingsMenu()
     enum
     {
         kLights = 1000, kHidden, kDistance, kAllLights, kNight, kIdentify, kVhfKeep,
-        kVhfNotice, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
+        kVhfNotice, kNotes, kNoteNotice, kAheadFan, kAhead15, kAhead30, kAhead45,
         kAheadNm1, kAheadNm2, kAheadNm5, kAheadNm10, kAheadNm20, kAheadOwn,
         kAheadColour0, kAheadColourLast = kAheadColour0 + kAheadColourCount - 1,
         kFold, kReorder
@@ -1732,6 +1515,8 @@ void legend_pi::ShowSettingsMenu()
         menu.AppendCheckItem(kVhfNotice, _("Notice on entering a VHF area"))
             ->Check(m_vhf_notice_on);
     }
+    menu.AppendSeparator();
+    menu.AppendCheckItem(kNotes, _("Notes: write, read and show on the chart"))->Check(m_notes_on);
     if (!m_note_places.empty())
         menu.AppendCheckItem(kNoteNotice, _("Notice when near a note"))
             ->Check(m_note_notice_on);
@@ -1817,6 +1602,9 @@ void legend_pi::ShowSettingsMenu()
     case kVhfNotice:
         m_vhf_notice_on = !m_vhf_notice_on;
         SaveConfig();
+        break;
+    case kNotes:
+        SetNotesOn(!m_notes_on);
         break;
     case kNoteNotice:
         m_note_notice_on = !m_note_notice_on;
