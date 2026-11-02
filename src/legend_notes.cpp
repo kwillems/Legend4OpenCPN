@@ -802,9 +802,14 @@ bool legend_pi::DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp)
         wxPoint sheet[5] = {point(x - w, y - h), point(x + w - fold, y - h),
                             point(x + w, y - h + fold), point(x + w, y + h),
                             point(x - w, y + h)};
-        dc.SetPen(wxPen(edge, width(1.3)));
+        // piDC's DrawPolygon draws nothing with desktop OpenGL; the
+        // tessellated one fills on all platforms, the edge is a line.
+        dc.SetPen(*wxTRANSPARENT_PEN);
         dc.SetBrush(wxBrush(wxColour(fill.Red(), fill.Green(), fill.Blue(), 245)));
-        dc.DrawPolygon(5, sheet);
+        dc.DrawPolygonTessellated(5, sheet);
+        wxPoint edgeLine[6] = {sheet[0], sheet[1], sheet[2], sheet[3], sheet[4], sheet[0]};
+        dc.SetPen(wxPen(edge, width(1.3)));
+        dc.DrawLines(6, edgeLine);
 
         dc.SetPen(wxPen(edge, width(1.0)));
         const wxPoint corner = point(x + w - fold, y - h + fold);
