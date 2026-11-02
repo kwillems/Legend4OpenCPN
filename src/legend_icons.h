@@ -66,14 +66,13 @@ wxImage NoteSignImage(const wxColour &background, int size);
 // like the icons of the VHFinfo layer.
 wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int size);
 
-// The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow),
-// drawn rather than taken from a font, so their size is certain.
+// The icons of "Instellingen" (a gear) and "Ververs" (a circling arrow) on
+// a transparent background, for the buttons in the window's header.
 // The arrow can be turned by `turn` radians, so it can spin while Ververs
 // works.
-wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size,
-                   double turn = 0.0);
+wxImage HeaderIcon(bool gear, const wxColour &colour, int size, double turn = 0.0);
 
 // A check mark in the place of the Ververs arrow, once it is done.
-wxImage CheckIcon(const wxColour &colour, const wxColour &background, int size);
+wxImage CheckIcon(const wxColour &colour, int size);
 
 #endif

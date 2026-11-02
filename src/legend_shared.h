@@ -52,8 +52,6 @@ const wxString kLegendMoveBlockDownIdPrefix = "legend-move-block-down-";
 
 // Id of the cells of the header icons, for their tooltips: 0 settings,
 // 1 Ververs.
-const wxString kLegendTipIdPrefix = "legend-tip-";
-const wxString kRefreshIconId = "legend-refreshicon";
 
 // Id of the pad of "Licht herkennen", and of its lines with matching
 // lights, followed by their number.

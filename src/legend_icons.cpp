@@ -405,100 +405,98 @@ wxImage VhfBadgeImage(const wxString &channel, const wxColour &background, int s
     return bitmap.ConvertToImage();
 }
 
-wxImage HeaderIcon(bool gear, const wxColour &colour, const wxColour &background, int size,
-                   double turn)
+namespace {
+
+// A square image of size pixels, fully transparent, to draw an icon on.
+wxImage ClearIconImage(int size)
 {
-    wxBitmap bitmap(size, size, 24);
-    {
-        wxMemoryDC dc(bitmap);
-        dc.SetBackground(wxBrush(background));
-        dc.Clear();
-        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
-        if (gc) {
-            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-            const double kPi = 3.14159265358979323846;
-            const double c = size / 2.0;
-            if (gear) {
-                // Eight teeth around a ring with a hole.
-                const double outer = size * 0.46;
-                const double inner = size * 0.33;
-                wxGraphicsPath path = gc->CreatePath();
-                const int teeth = 8;
-                for (int i = 0; i < teeth * 4; ++i) {
-                    const double angle = 2.0 * kPi * (i - 0.5) / (teeth * 4);
-                    const double r = (i % 4 == 1 || i % 4 == 2) ? outer : inner;
-                    const double x = c + r * std::cos(angle);
-                    const double y = c + r * std::sin(angle);
-                    if (i == 0)
-                        path.MoveToPoint(x, y);
-                    else
-                        path.AddLineToPoint(x, y);
-                }
-                path.CloseSubpath();
-                gc->SetPen(*wxTRANSPARENT_PEN);
-                gc->SetBrush(wxBrush(colour));
-                gc->FillPath(path);
-
-                // The hole in the middle.
-                const double hole = size * 0.14;
-                gc->SetBrush(wxBrush(background));
-                gc->DrawEllipse(c - hole, c - hole, 2 * hole, 2 * hole);
-            }
-            else {
-                // Most of a circle with an arrowhead at its end.
-                const double r = size * 0.33;
-                const double width = std::max(1.5, size * 0.11);
-                const double start = -kPi * 0.35 + turn;
-                const double end = start + kPi * 1.6;
-                gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(width)));
-                gc->SetBrush(*wxTRANSPARENT_BRUSH);
-                wxGraphicsPath arc = gc->CreatePath();
-                arc.AddArc(c, c, r, start, end, true);
-                gc->StrokePath(arc);
-
-                const double tipX = c + r * std::cos(end);
-                const double tipY = c + r * std::sin(end);
-                const double along = end + kPi / 2.0; // direction of travel
-                const double head = size * 0.2;
-                wxGraphicsPath arrow = gc->CreatePath();
-                arrow.MoveToPoint(tipX + head * std::cos(along), tipY + head * std::sin(along));
-                arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along + kPi * 0.6),
-                                     tipY + head * 0.8 * std::sin(along + kPi * 0.6));
-                arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along - kPi * 0.6),
-                                     tipY + head * 0.8 * std::sin(along - kPi * 0.6));
-                arrow.CloseSubpath();
-                gc->SetPen(*wxTRANSPARENT_PEN);
-                gc->SetBrush(wxBrush(colour));
-                gc->FillPath(arrow);
-            }
-            delete gc;
-        }
-        dc.SelectObject(wxNullBitmap);
-    }
-    return bitmap.ConvertToImage();
+    wxImage image(size, size);
+    image.InitAlpha();
+    for (int y = 0; y < size; ++y)
+        for (int x = 0; x < size; ++x)
+            image.SetAlpha(x, y, 0);
+    return image;
 }
 
-wxImage CheckIcon(const wxColour &colour, const wxColour &background, int size)
+} // namespace
+
+wxImage HeaderIcon(bool gear, const wxColour &colour, int size, double turn)
 {
-    wxBitmap bitmap(size, size, 24);
-    {
-        wxMemoryDC dc(bitmap);
-        dc.SetBackground(wxBrush(background));
-        dc.Clear();
-        wxGraphicsContext *gc = wxGraphicsContext::Create(dc);
-        if (gc) {
-            gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
-            const double width = std::max(1.5, size * 0.11);
-            gc->SetPen(gc->CreatePen(
-                wxGraphicsPenInfo(colour).Width(width).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
-            wxGraphicsPath path = gc->CreatePath();
-            path.MoveToPoint(size * 0.22, size * 0.52);
-            path.AddLineToPoint(size * 0.42, size * 0.72);
-            path.AddLineToPoint(size * 0.78, size * 0.30);
-            gc->StrokePath(path);
-            delete gc;
+    wxImage image = ClearIconImage(size);
+    wxGraphicsContext *gc = wxGraphicsContext::Create(image);
+    if (!gc)
+        return image;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+    const double kPi = 3.14159265358979323846;
+    const double c = size / 2.0;
+    if (gear) {
+        // Eight teeth around a ring with a hole in the middle.
+        const double outer = size * 0.46;
+        const double inner = size * 0.33;
+        wxGraphicsPath path = gc->CreatePath();
+        const int teeth = 8;
+        for (int i = 0; i < teeth * 4; ++i) {
+            const double angle = 2.0 * kPi * (i - 0.5) / (teeth * 4);
+            const double r = (i % 4 == 1 || i % 4 == 2) ? outer : inner;
+            const double x = c + r * std::cos(angle);
+            const double y = c + r * std::sin(angle);
+            if (i == 0)
+                path.MoveToPoint(x, y);
+            else
+                path.AddLineToPoint(x, y);
         }
-        dc.SelectObject(wxNullBitmap);
+        path.CloseSubpath();
+        path.AddCircle(c, c, size * 0.14);
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->SetBrush(wxBrush(colour));
+        gc->FillPath(path, wxODDEVEN_RULE);
     }
-    return bitmap.ConvertToImage();
+    else {
+        // Most of a circle with an arrowhead at its end.
+        const double r = size * 0.33;
+        const double width = std::max(1.5, size * 0.11);
+        const double start = -kPi * 0.35 + turn;
+        const double end = start + kPi * 1.6;
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(width)));
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        wxGraphicsPath arc = gc->CreatePath();
+        arc.AddArc(c, c, r, start, end, true);
+        gc->StrokePath(arc);
+
+        const double tipX = c + r * std::cos(end);
+        const double tipY = c + r * std::sin(end);
+        const double along = end + kPi / 2.0; // direction of travel
+        const double head = size * 0.2;
+        wxGraphicsPath arrow = gc->CreatePath();
+        arrow.MoveToPoint(tipX + head * std::cos(along), tipY + head * std::sin(along));
+        arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along + kPi * 0.6),
+                             tipY + head * 0.8 * std::sin(along + kPi * 0.6));
+        arrow.AddLineToPoint(tipX + head * 0.8 * std::cos(along - kPi * 0.6),
+                             tipY + head * 0.8 * std::sin(along - kPi * 0.6));
+        arrow.CloseSubpath();
+        gc->SetPen(*wxTRANSPARENT_PEN);
+        gc->SetBrush(wxBrush(colour));
+        gc->FillPath(arrow);
+    }
+    delete gc;
+    return image;
+}
+
+wxImage CheckIcon(const wxColour &colour, int size)
+{
+    wxImage image = ClearIconImage(size);
+    wxGraphicsContext *gc = wxGraphicsContext::Create(image);
+    if (!gc)
+        return image;
+    gc->SetAntialiasMode(wxANTIALIAS_DEFAULT);
+    const double width = std::max(1.5, size * 0.11);
+    gc->SetPen(gc->CreatePen(
+        wxGraphicsPenInfo(colour).Width(width).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+    wxGraphicsPath path = gc->CreatePath();
+    path.MoveToPoint(size * 0.22, size * 0.52);
+    path.AddLineToPoint(size * 0.42, size * 0.72);
+    path.AddLineToPoint(size * 0.78, size * 0.30);
+    gc->StrokePath(path);
+    delete gc;
+    return image;
 }

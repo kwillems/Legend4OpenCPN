@@ -907,3 +907,9 @@ msgstr " kaartobject"
 
 msgid " light characteristic"
 msgstr " lichtkarakter"
+
+msgid "Reading charts and layers again…"
+msgstr "Kaarten en lagen opnieuw inlezen…"
+
+msgid "Refreshed: "
+msgstr "Ververst: "

@@ -375,6 +375,9 @@ bool legend_pi::DeInit()
         m_rename_button = nullptr;
         m_delete_button = nullptr;
         m_save_button = nullptr;
+        m_settings_button = nullptr;
+        m_refresh_button = nullptr;
+        m_reorder_done_button = nullptr;
         m_format_bar = nullptr;
         m_format_icons.clear();
         m_editor = nullptr;
@@ -1082,7 +1085,7 @@ void legend_pi::ShowEmptyState()
     if (m_content_book && m_markdown_view)
         m_content_book->SetSelection(1);
 
-    UpdateSearchVisibility();
+    UpdateLegendControls();
 }
 
 void legend_pi::UpdateImageScale()
@@ -1185,7 +1188,7 @@ void legend_pi::ShowLegend(size_t index)
     if (path == kDynamicGpxId) {
         m_current_image = wxImage();
         m_current_legend_path = path;
-        UpdateSearchVisibility();
+        UpdateLegendControls();
         ShowDynamicLegend();
     }
     else if (ext == "png") {
@@ -1221,7 +1224,7 @@ void legend_pi::ShowLegend(size_t index)
         RestoreMarkdownScroll(path);
     }
 
-    UpdateSearchVisibility();
+    UpdateLegendControls();
     UpdateNoteButtons();
 
     if (m_legend_window)

@@ -187,7 +187,7 @@ private:
     // What is under the mouse in the dynamic legend: a row, its counter, a
     // heading, a button, ..., with its number in the page.
     enum class HitKind { None, Row, All, Section, MoveUp, MoveDown, MoveBlockUp, MoveBlockDown,
-                         Ahead, Tip, Tap, Match, Button, AheadVhf, VhfArea, AheadNote, Note };
+                         Ahead, Tap, Match, Button, AheadVhf, VhfArea, AheadNote, Note };
     struct Hit
     {
         HitKind kind = HitKind::None;
@@ -242,7 +242,7 @@ private:
     void LoadRowIcons(DynamicPage &page);
     void GroupIcons(const DynamicGroup &group, const wxColour &iconBackground,
                     const wxColour &muted, double iconScale, wxImage *icon, wxImage *image2);
-    void RenderTitleBar(DynamicPage &page);
+    void RenderStatusLine(DynamicPage &page);
     // The icons beside the folded heading of the Uitkijk: its first rows
     // in order of arrival, as in its list, with the number of the others.
     wxString AheadStrip(const DynamicPage &page,
@@ -356,7 +356,7 @@ private:
     // Search field above the dynamic legend: only rows whose text holds
     // every word typed stay in the list. The text of a row is its name,
     // its heading and its icon or chart symbol name.
-    void UpdateSearchVisibility();
+    void UpdateLegendControls();
     void SetFilter(const wxString &text);
     bool GroupMatchesFilter(const DynamicGroup &group) const;
 
@@ -506,6 +506,12 @@ private:
     wxButton *m_rename_button = nullptr;  // another name for this note
     wxButton *m_delete_button = nullptr;  // into the folder for deleted notes
     wxButton *m_save_button = nullptr;    // while editing: save and stop
+    wxBitmapButton *m_settings_button = nullptr; // chart legend: the settings menu
+    wxBitmapButton *m_refresh_button = nullptr;  // chart legend: read all again
+    wxButton *m_reorder_done_button = nullptr;   // ends changing the order
+    void AddLegendButtons(wxPanel *panel, wxSizer *headerRow);
+    void RunRefresh();
+    void SetLegendButtonIcons();
     wxPanel *m_format_bar = nullptr;      // buttons that format the note
     std::vector<std::pair<wxBitmapButton *, wxString>> m_format_icons; // and their icons
     NoteEditor *m_editor = nullptr;
@@ -899,7 +905,6 @@ private:
     wxTimer m_refresh_icon_timer;
     wxLongLong m_refresh_state_since = 0; // milliseconds
     int m_refresh_turn = 0;               // steps of the spin
-    int m_refresh_page_height = 0;        // pixels of the list before it
     // Rows before Ververs: key -> text and heading.
     std::map<wxString, std::pair<wxString, int>> m_refresh_rows_before;
     wxString m_refresh_message;           // what changed, next to the check
