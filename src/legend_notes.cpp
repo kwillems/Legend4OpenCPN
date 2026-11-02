@@ -266,7 +266,8 @@ void legend_pi::UpdateNoteButtons()
     if (m_save_button)
         m_save_button->Show(m_editing);
     m_format_bar->Show(m_editing);
-    m_nav_panel->Show(!m_editing);
+    // Vorige / Volgende only when there is more than the chart legend.
+    m_nav_panel->Show(!m_editing && m_legend_files.GetCount() > 1);
     m_edit_footer->Show(m_editing);
     if (m_place_bar)
         m_place_bar->Show(m_editing && m_note_has_place);
