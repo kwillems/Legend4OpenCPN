@@ -1516,7 +1516,7 @@ void legend_pi::ShowSettingsMenu()
             ->Check(m_vhf_notice_on);
     }
     menu.AppendSeparator();
-    menu.AppendCheckItem(kNotes, _("Own notes: write, read and show on the chart"))->Check(m_notes_on);
+    menu.AppendCheckItem(kNotes, _("Notes: write, read and show on the chart"))->Check(m_notes_on);
     if (!m_note_places.empty())
         menu.AppendCheckItem(kNoteNotice, _("Notice when near a note"))
             ->Check(m_note_notice_on);
