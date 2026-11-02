@@ -25,6 +25,9 @@
 #include "layer_waypoints.h"
 #include "vhf_areas.h"
 #include "vhf_highlight.h"
+#ifdef __ANDROID__
+#include "gles_overlay.h"
+#endif
 #include "chart_notice.h"
 
 #include <map>
@@ -162,6 +165,13 @@ private:
     void CreateNoteEditor();
     wxWindow *CreateNavigation(wxPanel *panel);
     wxWindow *CreateEditFooter(wxPanel *panel);
+#ifdef __ANDROID__
+    // Android draws no frame around the window: a bar of its own to move
+    // and close it, and a grip in the corner to resize it.
+    wxWindow *CreateTitleBar(wxPanel *panel);
+    void CreateResizeGrip(wxPanel *panel);
+    void BindWindowDrag(wxWindow *handle, bool resize);
+#endif
     // The window's labels and tooltips, set once the window is made.
     void SetWindowTexts();
     wxString ButtonTip(const wxString &icon) const;
@@ -430,6 +440,12 @@ private:
     void NotePlaceChanged();
     void MoveNotePlace(const wxString &path, double lat, double lon);
     void UndoNoteMove();
+    void FinishNoteMove(NotePlace place, double fromLat, double fromLon);
+#ifdef __ANDROID__
+    void StartNoteMove();
+    void SetNoteMovePath(const wxString &path);
+    void PlaceMovingNote(const wxPoint &at);
+#endif
     void UpdatePlaceBar();
     wxString FormatPosition(double lat, double lon) const;
     bool ParseGeoUri(const wxString &uri, double *lat, double *lon) const;
@@ -451,6 +467,18 @@ private:
     wxBitmap m_toolbar_bitmap;
     wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
+#ifdef __ANDROID__
+    GlesOverlay m_gles_overlay; // the drawings on the chart, see there
+    wxPanel *m_title_bar = nullptr;
+    wxStaticText *m_title_text = nullptr;
+    wxButton *m_close_button = nullptr;
+    wxWindow *m_resize_grip = nullptr;
+    wxPoint m_drag_start;   // where the finger went down, on the screen
+    wxRect m_drag_rect;     // the window at that moment
+    wxWindow *m_drag_handle = nullptr; // what the finger is dragging
+    wxRect m_drag_target;   // where the window goes at the next tick
+    wxTimer m_drag_timer;
+#endif
 
     wxSimplebook *m_header_book;
     wxStaticText *m_single_title;
@@ -482,7 +510,12 @@ private:
     wxString m_editing_path;
     wxTimer m_save_timer;
 
+#ifdef __ANDROID__
+    // OpenCPN on Android has no wxSearchCtrl; a plain text field instead.
+    wxTextCtrl *m_search = nullptr;
+#else
     wxSearchCtrl *m_search = nullptr;
+#endif
     wxString m_filter;                    // search text, trimmed
     std::vector<wxString> m_filter_words; // its words, folded for matching
     wxTimer m_filter_timer;               // waits for a pause in typing
@@ -660,6 +693,11 @@ private:
     wxString m_undo_move_title;
     double m_undo_move_lat = 0.0;
     double m_undo_move_lon = 0.0;
+#ifdef __ANDROID__
+    wxString m_note_move_path;           // note waiting for a tap on the chart
+    wxBitmapButton *m_move_button = nullptr;
+    wxPoint m_note_move_down;
+#endif
     std::set<wxString> m_notes_near;     // notes the boat is within the radius of
     bool m_note_places_known = false;
     bool m_note_notice_on = true;        // setting

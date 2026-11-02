@@ -630,7 +630,12 @@ void legend_pi::UpdateRefreshIcon()
                             kRefreshSpinSteps;
         image = HeaderIcon(false, palette.text, palette.header, pixels, turn);
     }
+#ifdef __ANDROID__
+    // wxWidgets 3.1.0 on Qt has no bitmaps with a scale factor.
+    g_refresh_icon = wxBitmap(image);
+#else
     g_refresh_icon = wxBitmap(image, -1, scale);
+#endif
 }
 
 // The title, with the icons of the settings menu and Ververs on the right

@@ -13,6 +13,7 @@
 #include "ocpn_plugin.h"
 
 #include <wx/cursor.h>
+#include <wx/dcclient.h>
 #include <wx/filename.h>
 #include <wx/frame.h>
 #include <wx/log.h>
@@ -155,6 +156,16 @@ void ChartNotice::Show(const wxString &title,
     m_close_button.label->SetLabel(m_close_label);
     m_action_button.label->SetLabel(actionLabel);
     m_action_button.frame->Show(!actionLabel.IsEmpty());
+#ifdef __ANDROID__
+    // wxWidgets on Android keeps the size a label had when it was made, so
+    // the notice came out a few letters wide. The labels get the size of
+    // their text here.
+    for (wxStaticText *label : {m_title, m_text, m_close_button.label, m_action_button.label}) {
+        wxClientDC dc(label);
+        dc.SetFont(label->GetFont());
+        label->SetMinSize(dc.GetMultiLineTextExtent(label->GetLabel()));
+    }
+#endif
     m_panel->GetSizer()->Layout();
     m_panel->GetSizer()->Fit(m_panel);
     m_frame->SetClientSize(m_panel->GetBestSize());
@@ -167,7 +178,12 @@ void ChartNotice::Show(const wxString &title,
     const wxRect area = canvas->GetScreenRect();
     const wxSize size = m_frame->GetSize();
     m_frame->Move(area.x + (area.width - size.x) / 2, area.y + 16);
+#ifdef __ANDROID__
+    // wxWidgets on Android has no ShowWithoutActivating: it does nothing.
+    m_frame->Show();
+#else
     m_frame->ShowWithoutActivating();
+#endif
     m_frame->Raise();
     m_hide_timer.StartOnce(12000);
 

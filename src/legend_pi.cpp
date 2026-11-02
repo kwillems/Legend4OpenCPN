@@ -13,7 +13,6 @@
 #include "legend_html_window.h"
 #include "legend_shared.h"
 
-#include <wx/bmpbndl.h>
 #include <wx/dir.h>
 #include <wx/display.h>
 #include <wx/file.h>
@@ -285,16 +284,32 @@ int legend_pi::Init()
            WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
 }
 
+// The menu a new context menu item belongs to until OpenCPN puts it in
+// the chart's menu: none, except on Android, where wxQt makes the item's
+// QAction with that menu as its parent and crashes without one. It stays
+// for the items, which OpenCPN keeps.
+namespace {
+wxMenu *MenuItemOwner()
+{
+#ifdef __ANDROID__
+    static wxMenu *owner = new wxMenu();
+    return owner;
+#else
+    return nullptr;
+#endif
+}
+} // namespace
+
 // In the chart's right-click menu: "Toon in legenda" and "Welk
 // marifoonkanaal hier?", and "Notitie" with a submenu that
 // PrepareContextMenu() fills each time for the spot and the state.
 void legend_pi::AddContextMenuItems()
 {
     m_menu_reveal = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, _("Show in legend")), this);
+        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Show in legend")), this);
     m_menu_actions.push_back(m_menu_reveal);
     m_menu_vhf = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY,
+        new wxMenuItem(MenuItemOwner(), wxID_ANY,
                        _("Which VHF channel here?")),
         this);
     m_menu_actions.push_back(m_menu_vhf);
@@ -305,7 +320,7 @@ void legend_pi::AddContextMenuItems()
     // with that id too (it looks through all items, hidden ones as well).
     auto action = [this](const char *label) {
         const int id = AddCanvasContextMenuItem(
-            new wxMenuItem(nullptr, wxID_ANY, wxString::FromUTF8(label)), this);
+            new wxMenuItem(MenuItemOwner(), wxID_ANY, wxString::FromUTF8(label)), this);
         SetCanvasContextMenuItemViz(id, false);
         m_menu_actions.push_back(id);
         return id;
@@ -321,7 +336,7 @@ void legend_pi::AddContextMenuItems()
     m_menu_pin_boat = action("Vastpinnen op de positie van de boot");
     m_context_submenu = new wxMenu();
     m_menu_parent = AddCanvasContextMenuItem(
-        new wxMenuItem(nullptr, wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
+        new wxMenuItem(MenuItemOwner(), wxID_ANY, _("Note"), wxEmptyString, wxITEM_NORMAL,
                        m_context_submenu),
         this);
     PrepareContextMenu(0);
@@ -363,6 +378,9 @@ bool legend_pi::DeInit()
     m_visibility_timer.Stop();
     m_flash_timer.Stop();
     m_filter_timer.Stop();
+#ifdef __ANDROID__
+    m_drag_timer.Stop();
+#endif
     m_chosen_light.Clear();
     m_all_lights.Clear();
     m_vhf_highlight.Clear();
@@ -476,7 +494,12 @@ wxBitmap *legend_pi::GetPlugInBitmap()
         // those in a cache by file name and size, so a changed icon would
         // not show. At 64 pixels, as OpenCPN scales it down to the list.
         const wxSize size(64, 64);
+#if wxCHECK_VERSION(3, 1, 6)
         m_plugin_bitmap = wxBitmapBundle::FromSVGFile(path, size).GetBitmap(size);
+#else
+        // Older wxWidgets (Android) has no SVG support of its own.
+        m_plugin_bitmap = GetBitmapFromSVGFile(path, size.x, size.y);
+#endif
     }
     return &m_plugin_bitmap;
 }
@@ -971,9 +994,8 @@ wxString legend_pi::RenderMarkdownFile(const wxString &path) const
         const wxString pin = "legend_pin_" + HtmlColour(ink).Mid(1) + "_" +
                              HtmlColour(fill).Mid(1) + ".png";
         if (m_pin_images.insert(pin).second) {
-            const wxBitmapBundle bundle = NoteToolIcon("place", ink);
-            const wxImage image1x = FlattenImage(bundle.GetBitmap(wxSize(16, 16)).ConvertToImage(), fill);
-            const wxImage image2x = FlattenImage(bundle.GetBitmap(wxSize(32, 32)).ConvertToImage(), fill);
+            const wxImage image1x = FlattenImage(NoteToolImage("place", ink, 16), fill);
+            const wxImage image2x = FlattenImage(NoteToolImage("place", ink, 32), fill);
             wxMemoryFSHandler::AddFile(pin, image1x, wxBITMAP_TYPE_PNG);
             wxMemoryFSHandler::AddFile(pin.Left(pin.length() - 4) + "@2x.png", image2x,
                                        wxBITMAP_TYPE_PNG);

@@ -19,6 +19,7 @@
 #include <wx/dc.h>
 #include <wx/glcanvas.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/time.h>
 
 #include <algorithm>
@@ -137,6 +138,7 @@ bool VhfHighlight::Draw(wxDC &dc, PlugIn_ViewPort *vp, double lineScale, bool di
 
 bool VhfHighlight::DrawGL(PlugIn_ViewPort *vp, double lineScale, bool dim) const
 {
+#ifndef __ANDROID__
     wxColour fill;
     wxColour line;
     HighlightColours(m_alpha, dim, &fill, &line);
@@ -173,4 +175,8 @@ bool VhfHighlight::DrawGL(PlugIn_ViewPort *vp, double lineScale, bool dim) const
     glLineWidth(1.0f);
     glPopAttrib();
     return true;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }

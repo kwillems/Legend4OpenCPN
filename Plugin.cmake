@@ -98,6 +98,8 @@ set(SRC
     src/symbol_meanings.cpp
     src/geo.h
     src/geo.cpp
+    src/wx_compat.h
+    src/qt_graphics.h
     src/msvc_wx_vector.cpp
 
     third_party/md4c/src/md4c.c
@@ -115,6 +117,12 @@ set(PKG_API_LIB api-18)
 # included api.
 ## set(MIN_API_VERSION 1.21)
 
+# OpenCPN on Android uses the shared C++ library. With a copy of its own
+# in the plugin, a wxTextCtrl made by the plugin (the note editor) freed
+# memory of the other copy when the plugin was switched off, and OpenCPN
+# crashed. The setting only counts on Android.
+set(CMAKE_ANDROID_STL_TYPE c++_shared)
+
 macro(late_init)
     include_directories(
         ${CMAKE_SOURCE_DIR}/third_party/md4c/src
@@ -122,6 +130,22 @@ macro(late_init)
 endmacro()
 
 macro(add_plugin_libraries)
+    # OpenCPN on Android lacks some wxWidgets classes the plugin uses:
+    # wxMemoryFSHandler comes from its wxWidgets source, and the note editor
+    # is a plain text field instead of a wxRichTextCtrl.
+    if (QT_ANDROID)
+        target_sources(${PACKAGE_NAME} PRIVATE
+            ${CMAKE_SOURCE_DIR}/third_party/wxwidgets/fs_mem.cpp
+            ${CMAKE_SOURCE_DIR}/src/note_editor_plain.cpp
+            ${CMAKE_SOURCE_DIR}/src/gles_overlay.cpp
+        )
+
+        # On Android _() reads its text as UTF-8; see the header.
+        target_compile_options(${PACKAGE_NAME} PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${CMAKE_SOURCE_DIR}/src/android_translation.h>"
+        )
+    endif ()
+
     # The note editor uses wxRichTextCtrl, which is not among the
     # template's wxWidgets components (cmake/PluginLibs.cmake).
     if (NOT QT_ANDROID)

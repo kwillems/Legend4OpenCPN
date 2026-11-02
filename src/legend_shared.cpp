@@ -254,6 +254,7 @@ LegendPalette GetLegendPalette()
     if (IsDimScheme())
         return GetDimPalette();
 
+#if wxCHECK_VERSION(3, 1, 3)
     if (wxSystemSettings::GetAppearance().IsDark()) {
         return {
             wxColour(30, 30, 30),    // background
@@ -269,6 +270,7 @@ LegendPalette GetLegendPalette()
             wxColour(80, 98, 122)    // header rule
         };
     }
+#endif
 
     return {
         wxColour(255, 255, 255),

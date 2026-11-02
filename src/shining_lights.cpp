@@ -19,6 +19,7 @@
 #include <wx/dc.h>
 #include <wx/glcanvas.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/time.h>
 
 #include <algorithm>
@@ -125,6 +126,7 @@ void DrawSectorsGC(
     }
 }
 
+#ifndef __ANDROID__
 void DrawSectorsGL(
     PlugIn_ViewPort *vp,
     double lat,
@@ -166,6 +168,7 @@ void DrawSectorsGL(
         glEnd();
     }
 }
+#endif
 
 // Night blue, dark enough that only lights stand out, light enough that
 // coast and fairways stay faintly visible.
@@ -426,6 +429,7 @@ bool ChosenLight::Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
 bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
                          const LightSectors &sectors) const
 {
+#ifndef __ANDROID__
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_positions);
     if (centres.empty() || m_colours.empty())
         return false;
@@ -563,6 +567,10 @@ bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
     glPopAttrib();
 
     return true;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }
 
 // --- ShiningLights ---
@@ -748,6 +756,7 @@ bool ShiningLights::Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
 bool ShiningLights::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
                            const LightSectors &sectors) const
 {
+#ifndef __ANDROID__
     if (m_lights.empty())
         return false;
 
@@ -842,6 +851,10 @@ bool ShiningLights::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
     glLineWidth(1.0f);
     glPopAttrib();
     return drew;
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+    return false;
+#endif
 }
 
 // --- Night shade ---
@@ -858,6 +871,7 @@ void DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp)
 
 void DrawNightShadeGL(PlugIn_ViewPort *vp)
 {
+#ifndef __ANDROID__
     glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_ENABLE_BIT);
     glDisable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
@@ -872,4 +886,7 @@ void DrawNightShadeGL(PlugIn_ViewPort *vp)
     glEnd();
     glColor4ub(255, 255, 255, 255);
     glPopAttrib();
+#else
+    // Android has OpenGL ES only, without these drawing calls.
+#endif
 }

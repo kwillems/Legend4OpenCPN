@@ -16,12 +16,15 @@
 #include <wx/dcclient.h>
 #include <wx/filename.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/image.h>
 #include <wx/settings.h>
 #include <wx/tokenzr.h>
 
 #include "md4c.h"
 
+// The rich editor; Android has a plain one in note_editor_plain.cpp.
+#ifndef __ANDROID__
 namespace {
 
 // Paragraph kinds, stored as the paragraph style name.
@@ -1159,6 +1162,7 @@ void NoteEditor::OnLeftDown(wxMouseEvent &event)
     ApplyKind(para->GetRange().GetStart(), para->GetRange().GetEnd(), kTask, level, !checked);
     event.Skip(false);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // Icons of the buttons.
@@ -1333,8 +1337,17 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
 
 } // namespace
 
-wxBitmapBundle NoteToolIcon(const wxString &name, const wxColour &colour)
+NoteToolBitmap NoteToolIcon(const wxString &name, const wxColour &colour)
 {
+#if wxCHECK_VERSION(3, 1, 6)
     return wxBitmapBundle::FromBitmaps(wxBitmap(DrawToolIcon(name, colour, 18)),
                                        wxBitmap(DrawToolIcon(name, colour, 36)));
+#else
+    return wxBitmap(DrawToolIcon(name, colour, 18));
+#endif
+}
+
+wxImage NoteToolImage(const wxString &name, const wxColour &colour, int size)
+{
+    return DrawToolIcon(name, colour, size);
 }

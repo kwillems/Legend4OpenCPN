@@ -51,6 +51,8 @@ public:
               const wxString &actionLabel = wxEmptyString);
 
     bool IsShown() const;
+    // The notice stays until it is closed, instead of a few seconds.
+    void KeepShown() { m_hide_timer.Stop(); }
     void Hide();
 
     // "Sluiten" or "Close": the close button in the plugin's language,

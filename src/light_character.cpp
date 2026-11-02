@@ -17,6 +17,7 @@
 #include <wx/bitmap.h>
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
+#include "wx_compat.h"
 #include <wx/tokenzr.h>
 #include <wx/wxcrt.h>
 
