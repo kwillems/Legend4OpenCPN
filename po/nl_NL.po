@@ -562,6 +562,9 @@ msgstr "Notitie: "
 msgid "Notes"
 msgstr "Notities"
 
+msgid "Own notes: write, read and show on the chart"
+msgstr "Eigen notities: schrijven, lezen en op de kaart tonen"
+
 msgid "Notice on entering a VHF area"
 msgstr "Melding bij nieuw marifoongebied"
 

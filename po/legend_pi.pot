@@ -532,6 +532,10 @@ msgstr ""
 msgid "Notes"
 msgstr ""
 
+#: src/legend_window.cpp:1519
+msgid "Own notes: write, read and show on the chart"
+msgstr ""
+
 #: src/legend_render.cpp:1300
 msgid "tap along with the light"
 msgstr ""

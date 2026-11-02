@@ -783,13 +783,15 @@ void legend_pi::ConvertLooseImages()
 
 void legend_pi::ScanLegendFiles()
 {
-    ConvertLooseImages();
     m_legend_files.Clear();
 
+    // Every file of the Legend folder is a note: with notes off the
+    // window has the chart legend only, and loose images stay as they are.
     wxString legend_dir = GetLegendDirectory();
     wxDir dir(legend_dir);
 
-    if (dir.IsOpened()) {
+    if (m_notes_on && dir.IsOpened()) {
+        ConvertLooseImages();
         wxString filename;
         bool found = dir.GetFirst(&filename, wxEmptyString, wxDIR_FILES);
 
