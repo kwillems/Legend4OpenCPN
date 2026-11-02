@@ -165,12 +165,20 @@ panning, zooming or rotating, and also when you switch a layer on or off.
 
 ### Header and settings
 
-At the top is **Chart legend** with two buttons on the right:
+When the **Chart legend** is chosen in the drop-down list, two buttons sit
+next to it. They belong to the fixed part of the window, so they do not
+scroll away with the list:
 
 - the **gear** opens the *Settings* menu;
 - the **arrow** (*Refresh*) reads all waypoints, chart cells and
   VHF areas again. Use it when you have changed a waypoint while the chart
-  is at rest.
+  is at rest. The arrow turns while it works and then briefly becomes a
+  check mark; the top of the list then says what changed, for example
+  *Refreshed: 2 new, 1 gone*.
+
+A grey line at the top of the list appears only when there is something to
+say: that the chart position is not known yet, or how many symbols match
+the search.
 
 In the Settings menu:
 
@@ -215,7 +223,8 @@ The list is divided into headings, which you create yourself in
   headings are folded.
 - **Change order** shows only the headings, with large
   ▲ and ▼ buttons that also work well on a touch screen. The new order is
-  saved to `symbolen.txt` right away.
+  saved to `symbolen.txt` right away. **Done** next to the drop-down list
+  takes you back to the normal list.
 - **Chart symbols** and **Light characteristics** are the plugin's own
   headings: they hold chart symbols
   without a meaning of their own and lights that stand on nothing in the
@@ -500,7 +509,7 @@ bin appear only with a note:
 | Pencil | Edit the note |
 | Text box with cursor | Give it another title: the file and the `# Title` at the top change along |
 | Bin | Delete, after confirmation. The file goes to the folder for deleted notes in the Legend folder: `Deleted` in English, `Verwijderd` in Dutch. Move it back to use it again. After a change of language the folder gets its new name when the next note is deleted |
-| Plus | A new note: you give a title and start writing right away |
+| Sheet with a plus | A new note: you give a title and start writing right away |
 
 While editing you see the note as it looks, without Markdown characters. At
 the top is a row of buttons:
@@ -544,7 +553,7 @@ standard other chart programs understand too.
 **Where the boat is now.** With a GPS position from the last minute, you can
 also use the boat's position, wherever you click:
 
-- the plus button in the window then asks *New note* or *New note at the
+- the new-note button (sheet with a plus) then asks *New note* or *New note at the
   boat*; with a right-click: *Note ▸ New note at the boat*;
 - while editing, via the pin button or *Note ▸* in the right-click menu:
   *Pin to the boat's position*, or *Boat's position in the text*. The

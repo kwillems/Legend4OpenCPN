@@ -165,12 +165,20 @@ zoomen of draaien, en ook als je een laag aan- of uitzet.
 
 ### Kopblok en instellingen
 
-Bovenaan staat **Kaartlegenda** met rechts twee knoppen:
+Staat de **Kaartlegenda** in de keuzelijst, dan staan daarnaast twee knoppen.
+Ze horen bij het vaste deel van het venster en scrollen dus niet mee met de
+lijst:
 
 - het **tandwiel** opent het menu Instellingen;
 - de **pijl** (Ververs) leest alle waypoints, kaartcellen en marifoongebieden
   opnieuw in. Gebruik dit als je een waypoint hebt veranderd terwijl de kaart
-  stilstaat.
+  stilstaat. De pijl draait zolang dat duurt en wordt daarna even een vinkje;
+  bovenaan de lijst staat dan wat er veranderde, bijvoorbeeld *Ververst: 2
+  nieuw, 1 weg*.
+
+Bovenaan de lijst staat alleen een grijze regel als er iets te melden is:
+dat de positie van de kaart nog onbekend is, of hoeveel symbolen bij de
+zoekwoorden passen.
 
 In het menu Instellingen:
 
@@ -215,7 +223,8 @@ De lijst is verdeeld in kopjes, die je zelf maakt in `symbolen.txt` (zie
   kopjes dicht zijn.
 - **Volgorde wijzigen** toont alleen de kopjes, met grote knoppen ▲ en ▼ die
   ook op een aanraakscherm goed werken. De nieuwe volgorde wordt meteen in
-  `symbolen.txt` bewaard.
+  `symbolen.txt` bewaard. Met **Klaar** naast de keuzelijst ben je terug in
+  de gewone lijst.
 - **Kaartsymbolen** en **Lichtkarakters** zijn kopjes van de plugin zelf: daar
   staan kaartsymbolen zonder eigen betekenis en lichten die op niets uit de
   lijst staan. Ze zijn net zo te verplaatsen als je eigen kopjes.
@@ -493,7 +502,7 @@ prullenbak verschijnen alleen bij een notitie:
 | Potlood | De notitie bewerken |
 | Tekstvak met cursor | Een andere titel geven: het bestand en de `# Titel` bovenaan veranderen mee |
 | Prullenbak | Verwijderen, na bevestiging. Het bestand gaat naar de map voor verwijderde notities in de Legend-map: `Verwijderd` in het Nederlands, `Deleted` in het Engels. Zet het terug om het weer te gebruiken. Na een wissel van taal krijgt de map zijn nieuwe naam zodra je weer een notitie verwijdert |
-| Plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
+| Blaadje met plus | Een nieuwe notitie: je geeft een titel en begint meteen te schrijven |
 
 Tijdens het bewerken zie je de notitie zoals hij eruitziet, zonder
 Markdown-tekens. Bovenin staat een rij knoppen:
@@ -540,7 +549,7 @@ standaard die ook andere kaartprogramma's begrijpen.
 **Waar de boot nu is.** Met een GPS-positie van de laatste minuut kan het ook
 op de positie van de boot, waar je ook klikt:
 
-- de plus-knop in het venster vraagt dan *Nieuwe notitie* of *Nieuwe notitie
+- de knop voor een nieuwe notitie (blaadje met plus) vraagt dan *Nieuwe notitie* of *Nieuwe notitie
   bij de boot*; met een rechtsklik: *Notitie ▸ Nieuwe notitie bij de boot*;
 - tijdens het bewerken, via de speld-knop of *Notitie ▸* in het
   rechtsklikmenu: *Vastpinnen op de positie van de boot*, of *Positie van de
