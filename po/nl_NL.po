@@ -889,3 +889,6 @@ msgstr "Weer aan"
 
 msgid " notes (turned off)"
 msgstr " notities (uitgezet)"
+
+msgid " notes"
+msgstr " notities"

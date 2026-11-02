@@ -894,11 +894,11 @@ bool legend_pi::NotePlaceInView(const NotePlace &place) const
     return place.lat >= view.lat_min && place.lat <= view.lat_max && lonIn;
 }
 
-// With notes off: how many signs this view would show.
-size_t legend_pi::NotesOffInView()
+// How many signs of notes this view shows, or would show with notes off.
+size_t legend_pi::NotesInView()
 {
     size_t count = 0;
-    for (const NotePlace &place : m_notes_off_places) {
+    for (const NotePlace &place : m_notes_on ? m_note_places : m_notes_off_places) {
         if (NotePlaceInView(place) && !NoteHiddenAtScale(place))
             ++count;
     }

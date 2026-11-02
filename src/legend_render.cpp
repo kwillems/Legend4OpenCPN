@@ -1916,11 +1916,10 @@ void legend_pi::RenderFooter(DynamicPage &page)
         html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
              << _(" hidden at this scale");
     }
-    if (!m_notes_on) {
-        const size_t notes = NotesOffInView();
-        if (notes > 0)
-            html << " &middot; " << static_cast<int>(notes) << _(" notes (turned off)");
-    }
+    const size_t notes = NotesInView();
+    if (notes > 0)
+        html << " &middot; " << static_cast<int>(notes)
+             << (m_notes_on ? _(" notes") : _(" notes (turned off)"));
     html << ".</font></p>";
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"

@@ -688,7 +688,7 @@ private:
     std::vector<NotePlace> m_note_places;
     std::vector<NotePlace> m_notes_off_places; // with notes off: only counted
     bool NotePlaceInView(const NotePlace &place) const;
-    size_t NotesOffInView();
+    size_t NotesInView();
     int m_note_selected = -1;            // clicked sign: its radius shows
     int m_note_hover = -1;               // sign under the mouse
     int m_note_drag = -1;                // sign held down by the mouse
