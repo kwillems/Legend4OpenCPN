@@ -1269,17 +1269,13 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         // right corner, where the edge breaks open for it.
         gc->SetBrush(*wxTRANSPARENT_BRUSH);
         gc->SetPen(gc->CreatePen(
-            wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+            wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND).Join(wxJOIN_MITER)));
         const double left = 0.14 * s, top = 0.2 * s, right = 0.78 * s, bottom = 0.9 * s;
-        const double r = 0.12 * s;
         wxGraphicsPath sheet = gc->CreatePath();
         sheet.MoveToPoint(0.56 * s, top);
-        sheet.AddLineToPoint(left + r, top);
-        sheet.AddArcToPoint(left, top, left, top + r, r);
-        sheet.AddLineToPoint(left, bottom - r);
-        sheet.AddArcToPoint(left, bottom, left + r, bottom, r);
-        sheet.AddLineToPoint(right - r, bottom);
-        sheet.AddArcToPoint(right, bottom, right, bottom - r, r);
+        sheet.AddLineToPoint(left, top);
+        sheet.AddLineToPoint(left, bottom);
+        sheet.AddLineToPoint(right, bottom);
         sheet.AddLineToPoint(right, 0.42 * s);
         gc->StrokePath(sheet);
         stroke(0.3, 0.46, 0.62, 0.46);
