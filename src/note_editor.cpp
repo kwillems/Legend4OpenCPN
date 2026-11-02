@@ -1265,8 +1265,27 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokeLine(-0.24 * s, -h / 2, -0.24 * s, h / 2);
     }
     else if (name == "new") {
-        stroke(0.5, 0.2, 0.5, 0.8);
-        stroke(0.2, 0.5, 0.8, 0.5);
+        // The sign of a note on the chart (a sheet with three lines of
+        // text) in outline, with a plus in its top right corner, where the
+        // edge stays open around it.
+        const double x = 0.46, y = 0.5, w = 0.32, h = 0.4;
+        const double plusX = 0.69, plusY = 0.22, arm = 0.12, gap = 0.11;
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.07).Join(wxJOIN_MITER)));
+        wxGraphicsPath sheet = gc->CreatePath();
+        sheet.MoveToPoint((plusX - arm - gap) * s, (y - h) * s);
+        sheet.AddLineToPoint((x - w) * s, (y - h) * s);
+        sheet.AddLineToPoint((x - w) * s, (y + h) * s);
+        sheet.AddLineToPoint((x + w) * s, (y + h) * s);
+        sheet.AddLineToPoint((x + w) * s, (plusY + arm + gap) * s);
+        gc->StrokePath(sheet);
+        for (int line = 0; line < 3; ++line) {
+            const double ly = y - h * 0.1 + line * h * 0.32;
+            stroke(x - w * 0.6, ly, x + w * 0.6, ly);
+        }
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND)));
+        stroke(plusX - arm, plusY, plusX + arm, plusY);
+        stroke(plusX, plusY - arm, plusX, plusY + arm);
     }
     else if (name == "rename") {
         // A text field with the text cursor in it.
