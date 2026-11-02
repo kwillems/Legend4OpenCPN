@@ -8,7 +8,8 @@ bakens, tekens en andere symbolen die op dat moment op je scherm staan, en
 verandert mee als je de kaart verschuift of zoomt. Daarnaast vertelt hij wat
 de lichten doen en houdt hij voor je de uitkijk: wat er op je koers ligt en
 hoe ver het weg is. Ook toont hij je eigen legenda's, notities en
-routebeschrijvingen.
+routebeschrijvingen, en pin je notities vast op een plek op de kaart. Wil je
+alleen een legenda, dan zet je de notities helemaal uit.
 
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
 > Silicon) met OpenCPN 5.14.
@@ -102,6 +103,7 @@ routebeschrijvingen.
 - Sleep een blaadje naar een andere plek; per ongeluk verplaatst zet je met
   één klik terug.
 - In de tekst een link naar een plek: een klik laat de kaart erheen gaan.
+- Alles rond notities kan uit; dan is de plugin alleen een legenda.
 
 **Weergave**
 
@@ -123,7 +125,8 @@ De Legend-knop opent en sluit het venster. Bovenin staat een keuzelijst met
 alle items, met daarnaast de positie (`2 van 12`). Het eerste item is altijd
 de **Kaartlegenda**; daarna volgen je notities op alfabet.
 
-- Blader met **Vorige** en **Volgende**, of met `←` en `→`.
+- Blader met **Vorige** en **Volgende**, of met `←` en `→`. Is de
+  Kaartlegenda het enige item, dan staan die knoppen er niet.
 - Heeft de keuzelijst de focus, dan werken ook `↑` en `↓`.
 - `Esc` sluit het venster.
 - Het laatst getoonde item, de vensterpositie en -grootte worden onthouden.
@@ -181,6 +184,7 @@ In het menu Instellingen:
 | Licht herkennen | Een licht herkennen aan zijn ritme |
 | Marifoongebied blijft oplichten | Een aangeklikt marifoongebied blijft rood tot de volgende klik op de kaart, in plaats van na zes seconden te vervagen |
 | Melding bij nieuw marifoongebied | Een melding met pieptonen als de boot een nieuw marifoongebied binnenvaart |
+| Notities: schrijven, lezen en op de kaart tonen | Alles rond notities aan of uit (zie *Notities uitzetten*); standaard aan |
 | Melding bij notitie in de buurt | Een melding met pieptonen als de boot binnen de straal van een vastgepinde notitie komt |
 | Uitkijkbundel op de kaart | De uitkijkbundel licht getekend op de kaart; standaard aan |
 | Uitkijkbundel: breedte ▸ | Smal (15°), Middel (30°) of Breed (45°) aan weerszijden van de koers |
@@ -189,8 +193,9 @@ In het menu Instellingen:
 | Alles inklappen / uitklappen | Alle kopjes tegelijk |
 | Volgorde wijzigen… | De kopjes in een andere volgorde zetten |
 
-Hoeveel symbolen, waypoints, kaartobjecten en lichtkarakters er in beeld zijn,
-staat onderaan de lijst.
+Hoeveel symbolen, waypoints, kaartobjecten, lichtkarakters en notities er in
+beeld zijn, staat onderaan de lijst. Staan notities uit, dan telt de lijst ze
+nog wel: *3 notities (uitgezet)*.
 
 ### Zoeken
 
@@ -586,6 +591,21 @@ straal: 0.5
 verschijnt daar eveneens op de kaart. `straal` is in zeemijl. Met een regel
 `schaal: 1:50000` geef je een notitie een andere schaalgrens dan 1:200 000.
 Andere regels die je in het blokje zet, zoals `tags`, blijven bewaard.
+
+### Notities uitzetten
+
+Wil je alleen een legenda, zet dan in Instellingen *Notities: schrijven,
+lezen en op de kaart tonen* uit. Dan:
+
+- toont het venster alleen de Kaartlegenda;
+- staan er geen blaadjes op de kaart en geen notities onder *Notities* of in
+  de *Uitkijk*, en komen er geen meldingen;
+- verdwijnen de knoppen voor notities en *Notitie ▸* uit het rechtsklikmenu;
+- wordt een losse PNG in de Legend-map niet meer omgezet.
+
+Er wordt niets verwijderd: de bestanden blijven in de Legend-map. Bij het
+uitzetten zegt een melding hoeveel notities op de kaart verborgen zijn, met
+een knop **Weer aan**.
 
 ## Weergave
 

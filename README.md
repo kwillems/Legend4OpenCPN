@@ -7,7 +7,8 @@ what you see on the chart. It keeps a legend of exactly the buoys, beacons,
 signs and other symbols on your screen at that moment, and it changes as you
 pan or zoom the chart. It also tells you what the lights do and keeps a
 lookout for you: what lies on your course and how far away it is. It shows
-your own legends, notes and route descriptions too.
+your own legends, notes and route descriptions too, and pins notes to a
+place on the chart. If you only want a legend, you turn notes off entirely.
 
 > Status: alpha. The plugin is developed and tested on macOS (Apple Silicon)
 > with OpenCPN 5.14.
@@ -101,6 +102,8 @@ your own legends, notes and route descriptions too.
 - Drag a sticky note to another place; moved it by accident? One click puts
   it back.
 - A link to a place in the text: one click takes the chart there.
+- Everything to do with notes can be turned off; the plugin is then a legend
+  only.
 
 **Display**
 
@@ -123,7 +126,8 @@ The Legend button opens and closes the window. At the top is a drop-down
 list of all items, with the position next to it (`2 of 12`). The first item
 is always the **Chart legend**; your notes follow in alphabetical order.
 
-- Page through with **Previous** and **Next**, or with `←` and `→`.
+- Page through with **Previous** and **Next**, or with `←` and `→`. When the
+  Chart legend is the only item, these buttons are not shown.
 - When the drop-down list has focus, `↑` and `↓` work too.
 - `Esc` closes the window.
 - The last item shown and the window's position and size are remembered.
@@ -180,6 +184,7 @@ In the Settings menu:
 | Identify a light | Identify a light by its rhythm |
 | VHF area stays highlighted | A clicked VHF area stays red until the next click on the chart, instead of fading after six seconds |
 | Notice on entering a VHF area | A notice with beeps when the boat enters a new VHF area |
+| Notes: write, read and show on the chart | Everything to do with notes on or off (see *Turning notes off*); on by default |
 | Notice when near a note | A notice with beeps when the boat comes within the radius of a pinned note |
 | Lookout beam on the chart | The lookout beam drawn faintly on the chart; on by default |
 | Lookout beam: width ▸ | Narrow (15°), Medium (30°) or Wide (45°) on either side of the course |
@@ -188,8 +193,9 @@ In the Settings menu:
 | Fold all / Unfold all | All headings at once |
 | Change order… | Put the headings in a different order |
 
-How many symbols, waypoints, chart objects and light characteristics are in
-view is shown at the bottom of the list.
+How many symbols, waypoints, chart objects, light characteristics and notes
+are in view is shown at the bottom of the list. With notes off the list
+still counts them: *3 notes (turned off)*.
 
 ### Searching
 
@@ -586,6 +592,21 @@ The Obsidian plugin *Map View* writes `location` the same way, so the note
 shows up on its map as well. `straal` (radius) is in nautical miles. With a
 line `schaal: 1:50000` (scale) you give a note a different scale limit than
 1:200,000. Other lines you put in the block, such as `tags`, are kept.
+
+### Turning notes off
+
+If you only want a legend, turn off *Notes: write, read and show on the
+chart* in Settings. Then:
+
+- the window shows the Chart legend only;
+- there are no sticky notes on the chart, no notes under *Notes* or in the
+  *Lookout*, and no notices;
+- the buttons for notes and *Note ▸* in the right-click menu are gone;
+- a loose PNG in the Legend folder is no longer turned into a note.
+
+Nothing is deleted: the files stay in the Legend folder. When you turn notes
+off, a notice says how many notes on the chart are hidden, with a **Back on**
+button.
 
 ## Display
 
