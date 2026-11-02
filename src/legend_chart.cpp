@@ -1198,11 +1198,14 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     }
 }
 
+int legend_pi::AheadFanFontPixels() const
+{
+    return static_cast<int>(std::lround(12.0 * std::max(1.0, ViewportPixelsPerWindowPixel())));
+}
+
 wxFont legend_pi::AheadFanFont() const
 {
-    const int height =
-        static_cast<int>(std::lround(12.0 * std::max(1.0, ViewportPixelsPerWindowPixel())));
-    return wxFont(wxFontInfo(wxSize(0, height)).Family(wxFONTFAMILY_SWISS));
+    return wxFont(wxFontInfo(wxSize(0, AheadFanFontPixels())).Family(wxFONTFAMILY_SWISS));
 }
 
 bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
@@ -1314,14 +1317,10 @@ void legend_pi::DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabe
         screen.GetTextExtent(label.text, &width, &height);
     }
 #else
-    // On Android piDC draws no text (see GlesPicture): a picture instead,
-    // measured on a wxMemoryDC with a bitmap, which has a painter there.
-    {
-        wxBitmap probe(1, 1);
-        wxMemoryDC measure(probe);
-        measure.SetFont(font);
-        measure.GetTextExtent(label.text, &width, &height);
-    }
+    // On Android piDC draws no text (see GlesPicture): a picture instead.
+    const wxSize text = GlesTextSize(label.text, AheadFanFontPixels());
+    width = text.x;
+    height = text.y;
 #endif
     const wxSize box(width + 2 * margin, height + 2 * margin);
     const wxPoint at = AheadLabelCorner(label.anchor, label.dx, label.dy, box, 4.0 * scale);
@@ -1342,13 +1341,13 @@ void legend_pi::DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabe
                          [&](wxDC &picture) {
                              std::unique_ptr<wxGraphicsContext> gc(
                                  wxGraphicsContext::CreateFromUnknownDC(picture));
-                             if (!gc)
-                                 return;
-                             gc->SetPen(*wxTRANSPARENT_PEN);
-                             gc->SetBrush(wxBrush(AheadLabelGround()));
-                             gc->DrawRoundedRectangle(0, 0, box.x, box.y, margin);
-                             gc->SetFont(font, textColour);
-                             gc->DrawText(label.text, margin, margin);
+                             if (gc) {
+                                 gc->SetPen(*wxTRANSPARENT_PEN);
+                                 gc->SetBrush(wxBrush(AheadLabelGround()));
+                                 gc->DrawRoundedRectangle(0, 0, box.x, box.y, margin);
+                             }
+                             GlesDrawText(picture, label.text, AheadFanFontPixels(),
+                                          textColour, margin, margin);
                          });
 #endif
 }

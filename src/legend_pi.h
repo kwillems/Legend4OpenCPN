@@ -831,6 +831,7 @@ private:
     };
     void AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoint>> *lines,
                        AheadFanLabel *label) const;
+    int AheadFanFontPixels() const;
     wxFont AheadFanFont() const;
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const;

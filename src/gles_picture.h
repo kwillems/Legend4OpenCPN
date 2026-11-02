@@ -11,11 +11,14 @@
 #define _GLES_PICTURE_H_
 
 #include <functional>
+#include <vector>
 
 #include <wx/gdicmn.h>
 
+class wxColour;
 class wxDC;
 class wxGLContext;
+class wxString;
 
 // A small picture made with a wxDC, laid on the chart with OpenGL ES
 // (Android), for what piDC cannot draw there: text. piDC measures and
@@ -39,5 +42,18 @@ private:
     int m_texcoord = -1;
     int m_sampler = -1;
 };
+
+// Fills triangles (three corners each, in pixels of the view) in one
+// colour with OpenGL ES. piDC's fills are not reliable there: its
+// tessellated polygon takes a transformation left by an earlier call, and
+// its triangle overwrites its own corners with its colour.
+void GlesFillTriangles(const wxColour &colour, const std::vector<wxPoint> &corners);
+
+// Text for such a picture, in a sans-serif font `pixels` high. OpenCPN's
+// wxWidgets on Qt does not pass a wxFont's size in pixels on to Qt (the
+// text came out a few pixels high), so this measures and draws with Qt.
+wxSize GlesTextSize(const wxString &text, int pixels);
+void GlesDrawText(wxDC &dc, const wxString &text, int pixels, const wxColour &colour, int x,
+                  int y);
 
 #endif

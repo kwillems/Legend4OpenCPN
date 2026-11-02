@@ -14,9 +14,8 @@
 // desktop OpenGL and with OpenGL ES on Android. They work around what piDC
 // does differently there:
 // - DrawPolygon draws nothing with desktop OpenGL, where
-//   DrawPolygonTessellated fills; on Android the tessellated fill takes a
-//   transformation left by an earlier call, and only triangles
-//   (DrawPolygon with three points) fill reliably.
+//   DrawPolygonTessellated fills; on Android neither fills reliably, and
+//   fills go through GlesFillTriangles.
 // - DrawLines turns blending off on the desktop, so lines that are partly
 //   transparent are drawn as separate DrawLine calls.
 // - DrawCircle on Android fills without the brush's transparency.

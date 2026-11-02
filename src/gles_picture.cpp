@@ -9,14 +9,24 @@
 
 #include "gles_picture.h"
 
+#include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+#include <QFont>
+#include <QFontMetricsF>
 #include <QImage>
+#include <QPainter>
 #include <QPixmap>
 
 #include <wx/bitmap.h>
+#include <wx/colour.h>
 #include <wx/dcmemory.h>
+#include <wx/dc.h>
 #include <wx/log.h>
+#include <wx/string.h>
+
+#include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -35,6 +45,22 @@ const char *kFragmentShader =
     "varying vec2 uv;\n"
     "void main() {\n"
     "    gl_FragColor = texture2D(picture, uv);\n"
+    "}\n";
+
+// Triangles in one colour, with their corners in pixels of the view.
+const char *kFillVertexShader =
+    "attribute vec2 position;\n"
+    "uniform vec2 view;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(2.0 * position.x / view.x - 1.0,\n"
+    "                       1.0 - 2.0 * position.y / view.y, 0.0, 1.0);\n"
+    "}\n";
+
+const char *kFillFragmentShader =
+    "precision mediump float;\n"
+    "uniform vec4 colour;\n"
+    "void main() {\n"
+    "    gl_FragColor = colour;\n"
     "}\n";
 
 GLuint CompileShader(GLenum type, const char *source)
@@ -95,22 +121,12 @@ struct SavedState
     }
 };
 
-} // namespace
-
-// The shader program and the texture, made once per GL context.
-bool GlesPicture::Prepare(wxGLContext *context)
+GLuint LinkProgram(const char *vertexSource, const char *fragmentSource)
 {
-    if (m_program && context == m_context)
-        return true;
-    m_program = 0;
-    m_texture = 0;
-    m_context = nullptr;
-
-    const GLuint vertex = CompileShader(GL_VERTEX_SHADER, kVertexShader);
-    const GLuint fragment = CompileShader(GL_FRAGMENT_SHADER, kFragmentShader);
+    const GLuint vertex = CompileShader(GL_VERTEX_SHADER, vertexSource);
+    const GLuint fragment = CompileShader(GL_FRAGMENT_SHADER, fragmentSource);
     if (!vertex || !fragment)
-        return false;
-
+        return 0;
     const GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
     glAttachShader(program, fragment);
@@ -122,8 +138,68 @@ bool GlesPicture::Prepare(wxGLContext *context)
     if (!ok) {
         wxLogMessage("Legend: shader program not linked");
         glDeleteProgram(program);
-        return false;
+        return 0;
     }
+    return program;
+}
+
+} // namespace
+
+void GlesFillTriangles(const wxColour &colour, const std::vector<wxPoint> &corners)
+{
+    if (corners.size() < 3 || colour.Alpha() == 0)
+        return;
+
+    // One program per GL context, which OpenCPN may make anew.
+    static EGLContext programContext = EGL_NO_CONTEXT;
+    static GLuint program = 0;
+    static GLint position = -1, view = -1, colourAt = -1;
+    const EGLContext current = eglGetCurrentContext();
+    if (!program || current != programContext) {
+        program = LinkProgram(kFillVertexShader, kFillFragmentShader);
+        if (!program)
+            return;
+        programContext = current;
+        position = glGetAttribLocation(program, "position");
+        view = glGetUniformLocation(program, "view");
+        colourAt = glGetUniformLocation(program, "colour");
+    }
+
+    std::vector<GLfloat> xy;
+    xy.reserve(corners.size() * 2);
+    for (const wxPoint &corner : corners) {
+        xy.push_back(static_cast<GLfloat>(corner.x));
+        xy.push_back(static_cast<GLfloat>(corner.y));
+    }
+    GLint viewport[4] = {0, 0, 1, 1};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    SavedState saved;
+    glUseProgram(program);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glUniform2f(view, static_cast<GLfloat>(viewport[2]), static_cast<GLfloat>(viewport[3]));
+    glUniform4f(colourAt, colour.Red() / 255.0f, colour.Green() / 255.0f, colour.Blue() / 255.0f,
+                colour.Alpha() / 255.0f);
+    glEnableVertexAttribArray(position);
+    glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, xy.data());
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(corners.size() / 3 * 3));
+    glDisableVertexAttribArray(position);
+}
+
+// The shader program and the texture, made once per GL context.
+bool GlesPicture::Prepare(wxGLContext *context)
+{
+    if (m_program && context == m_context)
+        return true;
+    m_program = 0;
+    m_texture = 0;
+    m_context = nullptr;
+
+    const GLuint program = LinkProgram(kVertexShader, kFragmentShader);
+    if (!program)
+        return false;
 
     m_program = program;
     m_position = glGetAttribLocation(program, "position");
@@ -191,4 +267,40 @@ bool GlesPicture::Draw(wxGLContext *context, int viewWidth, int viewHeight, cons
     glDisableVertexAttribArray(m_position);
     glDisableVertexAttribArray(m_texcoord);
     return true;
+}
+
+namespace {
+
+QFont LabelFont(int pixels)
+{
+    QFont font;
+    font.setStyleHint(QFont::SansSerif);
+    font.setPixelSize(std::max(1, pixels));
+    return font;
+}
+
+} // namespace
+
+wxSize GlesTextSize(const wxString &text, int pixels)
+{
+    const QFontMetricsF metrics(LabelFont(pixels));
+    return wxSize(static_cast<int>(std::ceil(
+                      metrics.horizontalAdvance(QString::fromUtf8(text.utf8_str())))),
+                  static_cast<int>(std::ceil(metrics.height())));
+}
+
+void GlesDrawText(wxDC &dc, const wxString &text, int pixels, const wxColour &colour, int x,
+                  int y)
+{
+    QPainter *painter = static_cast<QPainter *>(dc.GetHandle());
+    if (!painter || !painter->isActive())
+        return;
+    const QFont font = LabelFont(pixels);
+    painter->save();
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    painter->setFont(font);
+    painter->setPen(QColor(colour.Red(), colour.Green(), colour.Blue(), colour.Alpha()));
+    painter->drawText(QPointF(x, y + QFontMetricsF(font).ascent()),
+                      QString::fromUtf8(text.utf8_str()));
+    painter->restore();
 }

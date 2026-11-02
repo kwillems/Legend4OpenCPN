@@ -10,6 +10,9 @@
 #include "pidc_shapes.h"
 
 #include "pidc.h"
+#ifdef __ANDROID__
+#include "gles_picture.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -78,19 +81,19 @@ void FillFan(piDC &dc, const wxPoint &centre, const std::vector<wxPoint> &rim, b
     polygon.insert(polygon.end(), rim.begin(), rim.end());
     FillPolygon(dc, polygon);
 #else
-    // On Android piDC fills a triangle reliably: its tessellated polygon
-    // takes the transformation left by an earlier call and came out grey
-    // or in part. A triangle also draws its edge in the pen: a pen in the
-    // brush colour, fully transparent, hides it.
-    const wxColour fill = dc.GetBrush().GetColour();
-    const wxPen pen = dc.GetPen();
-    dc.SetPen(wxPen(wxColour(fill.Red(), fill.Green(), fill.Blue(), 0)));
+    // piDC's fills are not reliable on Android (see GlesFillTriangles).
+    const wxBrush brush = dc.GetBrush();
+    if (!brush.IsOk() || brush.GetStyle() == wxBRUSHSTYLE_TRANSPARENT)
+        return;
+    std::vector<wxPoint> corners;
     const size_t count = closed ? rim.size() : rim.size() - 1;
+    corners.reserve(count * 3);
     for (size_t i = 0; i < count; ++i) {
-        wxPoint triangle[3] = {centre, rim[i], rim[(i + 1) % rim.size()]};
-        dc.DrawPolygon(3, triangle);
+        corners.push_back(centre);
+        corners.push_back(rim[i]);
+        corners.push_back(rim[(i + 1) % rim.size()]);
     }
-    dc.SetPen(pen);
+    GlesFillTriangles(brush.GetColour(), corners);
 #endif
 }
 
