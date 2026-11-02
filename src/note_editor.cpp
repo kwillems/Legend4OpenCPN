@@ -1265,26 +1265,28 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokeLine(-0.24 * s, -h / 2, -0.24 * s, h / 2);
     }
     else if (name == "new") {
-        // A sheet with a folded corner, as the sign of a note on the
-        // chart, with a plus on it.
+        // The sheet of a note with its lines of text, and a plus on its top
+        // right corner, where the edge breaks open for it.
         gc->SetBrush(*wxTRANSPARENT_BRUSH);
-        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.07).Join(wxJOIN_ROUND)));
+        gc->SetPen(gc->CreatePen(
+            wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND).Join(wxJOIN_ROUND)));
+        const double left = 0.14 * s, top = 0.2 * s, right = 0.78 * s, bottom = 0.9 * s;
+        const double r = 0.12 * s;
         wxGraphicsPath sheet = gc->CreatePath();
-        sheet.MoveToPoint(0.18 * s, 0.08 * s);
-        sheet.AddLineToPoint(0.58 * s, 0.08 * s);
-        sheet.AddLineToPoint(0.82 * s, 0.32 * s);
-        sheet.AddLineToPoint(0.82 * s, 0.92 * s);
-        sheet.AddLineToPoint(0.18 * s, 0.92 * s);
-        sheet.CloseSubpath();
+        sheet.MoveToPoint(0.56 * s, top);
+        sheet.AddLineToPoint(left + r, top);
+        sheet.AddArcToPoint(left, top, left, top + r, r);
+        sheet.AddLineToPoint(left, bottom - r);
+        sheet.AddArcToPoint(left, bottom, left + r, bottom, r);
+        sheet.AddLineToPoint(right - r, bottom);
+        sheet.AddArcToPoint(right, bottom, right, bottom - r, r);
+        sheet.AddLineToPoint(right, 0.42 * s);
         gc->StrokePath(sheet);
-        wxGraphicsPath fold = gc->CreatePath();
-        fold.MoveToPoint(0.58 * s, 0.08 * s);
-        fold.AddLineToPoint(0.58 * s, 0.32 * s);
-        fold.AddLineToPoint(0.82 * s, 0.32 * s);
-        gc->StrokePath(fold);
-        gc->SetPen(pen);
-        stroke(0.5, 0.45, 0.5, 0.77);
-        stroke(0.34, 0.61, 0.66, 0.61);
+        stroke(0.3, 0.46, 0.62, 0.46);
+        stroke(0.3, 0.6, 0.62, 0.6);
+        stroke(0.3, 0.74, 0.5, 0.74);
+        stroke(0.78, 0.06, 0.78, 0.34);
+        stroke(0.64, 0.2, 0.92, 0.2);
     }
     else if (name == "rename") {
         // A text field with the text cursor in it.
