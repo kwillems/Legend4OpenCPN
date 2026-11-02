@@ -52,11 +52,46 @@ void FillPolygon(piDC &dc, const std::vector<wxPoint> &points)
 {
     if (points.size() < 3)
         return;
+#ifndef __ANDROID__
     // Some of piDC's calls turn blending off when done.
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::vector<wxPoint> copy(points);
     dc.DrawPolygonTessellated(static_cast<int>(copy.size()), copy.data());
+#else
+    FillFan(dc, points.front(),
+            std::vector<wxPoint>(points.begin() + 1, points.end()), false);
+#endif
+}
+
+void FillFan(piDC &dc, const wxPoint &centre, const std::vector<wxPoint> &rim, bool closed)
+{
+    if (rim.size() < 2)
+        return;
+#ifndef __ANDROID__
+    // The tessellated polygon covers each spot once, also where the rim
+    // bends back as seen from the centre.
+    std::vector<wxPoint> polygon;
+    polygon.reserve(rim.size() + 1);
+    if (!closed)
+        polygon.push_back(centre);
+    polygon.insert(polygon.end(), rim.begin(), rim.end());
+    FillPolygon(dc, polygon);
+#else
+    // On Android piDC fills a triangle reliably: its tessellated polygon
+    // takes the transformation left by an earlier call and came out grey
+    // or in part. A triangle also draws its edge in the pen: a pen in the
+    // brush colour, fully transparent, hides it.
+    const wxColour fill = dc.GetBrush().GetColour();
+    const wxPen pen = dc.GetPen();
+    dc.SetPen(wxPen(wxColour(fill.Red(), fill.Green(), fill.Blue(), 0)));
+    const size_t count = closed ? rim.size() : rim.size() - 1;
+    for (size_t i = 0; i < count; ++i) {
+        wxPoint triangle[3] = {centre, rim[i], rim[(i + 1) % rim.size()]};
+        dc.DrawPolygon(3, triangle);
+    }
+    dc.SetPen(pen);
+#endif
 }
 
 void StrokePolyline(piDC &dc, const std::vector<wxPoint> &points, bool closed)

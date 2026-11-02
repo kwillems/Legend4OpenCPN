@@ -1272,11 +1272,14 @@ bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp)
     AheadFanColours(m_ahead_colour, &fill, &edge);
     const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
 
-    // Tessellated, so where the outline bends outward the fan is still
-    // covered once (no darker edge).
+    // The outline bends outward where the strip near the boat starts to
+    // widen; from the boat, the middle of the circle, every point is in
+    // sight, so triangles from there cover the fan once.
+    wxPoint boat;
+    GetCanvasPixLL(vp, &boat, m_ship_lat, m_ship_lon);
     dc.SetPen(*wxTRANSPARENT_PEN);
     dc.SetBrush(wxBrush(fill));
-    FillPolygon(dc, points);
+    FillFan(dc, boat, points, true);
     dc.SetPen(wxPen(edge, PenWidth(1.5, scale)));
     StrokePolyline(dc, points, true);
 

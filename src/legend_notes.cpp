@@ -25,6 +25,7 @@
 #include <wx/graphics.h>
 #include "wx_compat.h"
 #include "pidc.h"
+#include "pidc_shapes.h"
 #include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -802,11 +803,9 @@ bool legend_pi::DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp)
         wxPoint sheet[5] = {point(x - w, y - h), point(x + w - fold, y - h),
                             point(x + w, y - h + fold), point(x + w, y + h),
                             point(x - w, y + h)};
-        // piDC's DrawPolygon draws nothing with desktop OpenGL; the
-        // tessellated one fills on all platforms, the edge is a line.
         dc.SetPen(*wxTRANSPARENT_PEN);
         dc.SetBrush(wxBrush(wxColour(fill.Red(), fill.Green(), fill.Blue(), 245)));
-        dc.DrawPolygonTessellated(5, sheet);
+        FillPolygon(dc, std::vector<wxPoint>(sheet, sheet + 5));
         wxPoint edgeLine[6] = {sheet[0], sheet[1], sheet[2], sheet[3], sheet[4], sheet[0]};
         dc.SetPen(wxPen(edge, width(1.3)));
         dc.DrawLines(6, edgeLine);

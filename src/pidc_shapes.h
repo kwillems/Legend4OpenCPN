@@ -13,8 +13,10 @@
 // Shapes drawn with piDC (opencpn-libs/plugin_dc) that look the same with
 // desktop OpenGL and with OpenGL ES on Android. They work around what piDC
 // does differently there:
-// - DrawPolygon draws nothing with desktop OpenGL; DrawPolygonTessellated
-//   fills on both.
+// - DrawPolygon draws nothing with desktop OpenGL, where
+//   DrawPolygonTessellated fills; on Android the tessellated fill takes a
+//   transformation left by an earlier call, and only triangles
+//   (DrawPolygon with three points) fill reliably.
 // - DrawLines turns blending off on the desktop, so lines that are partly
 //   transparent are drawn as separate DrawLine calls.
 // - DrawCircle on Android fills without the brush's transparency.
@@ -36,6 +38,12 @@ std::vector<wxPoint> ArcPoints(double cx, double cy, double r, double start, dou
 // Fills the polygon with the current brush, transparency included (with
 // blending turned on, which some of piDC's calls turn off).
 void FillPolygon(piDC &dc, const std::vector<wxPoint> &points);
+
+// The same for a shape that every point of the rim sees from `centre`:
+// triangles from the centre (closed: the last point joins the first).
+// On Android FillPolygon fills this way from its first point, so it is
+// meant for shapes that are convex or seen whole from their first point.
+void FillFan(piDC &dc, const wxPoint &centre, const std::vector<wxPoint> &rim, bool closed);
 
 // The line through the points with the current pen, blended.
 void StrokePolyline(piDC &dc, const std::vector<wxPoint> &points, bool closed);
