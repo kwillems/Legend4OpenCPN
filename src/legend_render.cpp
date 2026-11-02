@@ -1919,7 +1919,8 @@ void legend_pi::RenderFooter(DynamicPage &page)
     const size_t notes = NotesInView();
     if (notes > 0)
         html << " &middot; " << static_cast<int>(notes)
-             << (m_notes_on ? _(" notes") : _(" notes (turned off)"));
+             << (notes == 1 ? (m_notes_on ? _(" note") : _(" note (turned off)"))
+                            : (m_notes_on ? _(" notes") : _(" notes (turned off)")));
     html << ".</font></p>";
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"

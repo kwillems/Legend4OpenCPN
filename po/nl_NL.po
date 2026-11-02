@@ -892,3 +892,9 @@ msgstr " notities (uitgezet)"
 
 msgid " notes"
 msgstr " notities"
+
+msgid " note"
+msgstr " notitie"
+
+msgid " note (turned off)"
+msgstr " notitie (uitgezet)"
