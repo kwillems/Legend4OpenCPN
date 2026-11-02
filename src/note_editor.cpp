@@ -1265,8 +1265,26 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokeLine(-0.24 * s, -h / 2, -0.24 * s, h / 2);
     }
     else if (name == "new") {
-        stroke(0.5, 0.2, 0.5, 0.8);
-        stroke(0.2, 0.5, 0.8, 0.5);
+        // A sheet with a folded corner, as the sign of a note on the
+        // chart, with a plus on it.
+        gc->SetBrush(*wxTRANSPARENT_BRUSH);
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.07).Join(wxJOIN_ROUND)));
+        wxGraphicsPath sheet = gc->CreatePath();
+        sheet.MoveToPoint(0.18 * s, 0.08 * s);
+        sheet.AddLineToPoint(0.58 * s, 0.08 * s);
+        sheet.AddLineToPoint(0.82 * s, 0.32 * s);
+        sheet.AddLineToPoint(0.82 * s, 0.92 * s);
+        sheet.AddLineToPoint(0.18 * s, 0.92 * s);
+        sheet.CloseSubpath();
+        gc->StrokePath(sheet);
+        wxGraphicsPath fold = gc->CreatePath();
+        fold.MoveToPoint(0.58 * s, 0.08 * s);
+        fold.AddLineToPoint(0.58 * s, 0.32 * s);
+        fold.AddLineToPoint(0.82 * s, 0.32 * s);
+        gc->StrokePath(fold);
+        gc->SetPen(pen);
+        stroke(0.5, 0.45, 0.5, 0.77);
+        stroke(0.34, 0.61, 0.66, 0.61);
     }
     else if (name == "rename") {
         // A text field with the text cursor in it.
