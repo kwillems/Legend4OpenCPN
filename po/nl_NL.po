@@ -898,3 +898,12 @@ msgstr " notitie"
 
 msgid " note (turned off)"
 msgstr " notitie (uitgezet)"
+
+msgid " symbol"
+msgstr " symbool"
+
+msgid " chart object"
+msgstr " kaartobject"
+
+msgid " light characteristic"
+msgstr " lichtkarakter"

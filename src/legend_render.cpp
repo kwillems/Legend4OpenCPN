@@ -1903,24 +1903,27 @@ void legend_pi::RenderFooter(DynamicPage &page)
     const wxColour &muted = page.palette.muted;
     wxString &html = page.html;
 
+    // A count with the word for one or for more (also for none).
+    auto count = [](size_t n, const wxString &one, const wxString &more) {
+        return wxString::Format("%d", static_cast<int>(n)) + (n == 1 ? one : more);
+    };
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"
          << _("In view: ")
-         << static_cast<int>(m_dynamic_groups.size() - page.lightRows) << _(" symbols")
-         << " &middot; " << m_dynamic_total << " waypoints";
+         << count(m_dynamic_groups.size() - page.lightRows, _(" symbol"), _(" symbols"))
+         << " &middot; " << count(m_dynamic_total, " waypoint", " waypoints");
     if (m_chart_object_total > 0)
-        html << " &middot; " << m_chart_object_total << _(" chart objects");
+        html << " &middot; "
+             << count(m_chart_object_total, _(" chart object"), _(" chart objects"));
     if (page.lightRows > 0)
-        html << " &middot; " << static_cast<int>(page.lightRows)
-             << _(" light characteristics");
+        html << " &middot; "
+             << count(page.lightRows, _(" light characteristic"), _(" light characteristics"));
     if (m_show_hidden_at_scale && m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
         html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
              << _(" hidden at this scale");
     }
-    const size_t notes = NotesInView();
-    if (notes > 0)
-        html << " &middot; " << static_cast<int>(notes)
-             << (notes == 1 ? (m_notes_on ? _(" note") : _(" note (turned off)"))
-                            : (m_notes_on ? _(" notes") : _(" notes (turned off)")));
+    html << " &middot; "
+         << (m_notes_on ? count(NotesInView(), _(" note"), _(" notes"))
+                        : count(NotesInView(), _(" note (turned off)"), _(" notes (turned off)")));
     html << ".</font></p>";
 
     html << "<p><font size=\"-1\" color=\"" << HtmlColour(muted) << "\">"

@@ -1073,3 +1073,15 @@ msgstr ""
 #: src/legend_render.cpp
 msgid " note (turned off)"
 msgstr ""
+
+#: src/legend_render.cpp
+msgid " symbol"
+msgstr ""
+
+#: src/legend_render.cpp
+msgid " chart object"
+msgstr ""
+
+#: src/legend_render.cpp
+msgid " light characteristic"
+msgstr ""
