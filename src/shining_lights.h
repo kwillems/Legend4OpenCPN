@@ -91,7 +91,7 @@ public:
 
     bool Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
               const LightSectors &sectors) const;
-    bool DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
+    bool Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
                 const LightSectors &sectors) const;
 
 private:
@@ -134,7 +134,7 @@ public:
 
     bool Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
               const LightSectors &sectors) const;
-    bool DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
+    bool Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
                 const LightSectors &sectors) const;
 
 private:

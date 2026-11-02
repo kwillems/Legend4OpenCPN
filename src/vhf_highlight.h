@@ -19,6 +19,7 @@
 #include <wx/timer.h>
 
 class wxDC;
+class piDC;
 class PlugIn_ViewPort;
 
 // VHF areas lit on the chart in light red: for six seconds, then fading
@@ -40,7 +41,7 @@ public:
 
     // lineScale: viewport pixels per window pixel; dim: dusk or night.
     bool Draw(wxDC &dc, PlugIn_ViewPort *vp, double lineScale, bool dim) const;
-    bool DrawGL(PlugIn_ViewPort *vp, double lineScale, bool dim) const;
+    bool Draw(piDC &dc, PlugIn_ViewPort *vp, double lineScale, bool dim) const;
 
 private:
     void OnTimer();

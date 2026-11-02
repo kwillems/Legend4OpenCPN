@@ -26,7 +26,6 @@
 #include "vhf_areas.h"
 #include "vhf_highlight.h"
 #ifdef __ANDROID__
-#include "gles_overlay.h"
 #endif
 #include "chart_notice.h"
 
@@ -470,7 +469,6 @@ private:
     wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
 #ifdef __ANDROID__
-    GlesOverlay m_gles_overlay; // the drawings on the chart, see there
     wxPanel *m_title_bar = nullptr;
     wxStaticText *m_title_text = nullptr;
     wxButton *m_close_button = nullptr;
@@ -833,9 +831,7 @@ private:
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const;
-    bool DrawFanVhfLights(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawFanVhfLightsGL(PlugIn_ViewPort *vp);
-    bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
+    bool DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp) const;
     void SetAheadAngle(int angle);
     static constexpr double kAheadMinMiles = 0.5;
     static constexpr double kAheadMaxMiles = 50.0;

@@ -21,6 +21,7 @@
 #include <wx/graphics.h>
 #include "wx_compat.h"
 #include "pidc.h"
+#include "pidc_shapes.h"
 #include <wx/time.h>
 
 #include <algorithm>
@@ -127,8 +128,9 @@ void DrawSectorsGC(
     }
 }
 
-#ifndef __ANDROID__
-void DrawSectorsGL(
+// The same with piDC, for OpenGL.
+void DrawSectors(
+    piDC &dc,
     PlugIn_ViewPort *vp,
     double lat,
     double lon,
@@ -149,27 +151,18 @@ void DrawSectorsGL(
         const int steps = std::max(4, static_cast<int>(sweep / 4.0));
         const wxColour colour = LightDisplayColour(sector.colour, dim);
 
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45);
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= steps; ++i) {
-            const double angle = start + (end - start) * i / steps;
-            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
-        }
-        glEnd();
-
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90);
-        glLineWidth(1.2f);
-        glBegin(GL_LINE_LOOP);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= steps; ++i) {
-            const double angle = start + (end - start) * i / steps;
-            glVertex2d(cx + radius * std::cos(angle), cy + radius * std::sin(angle));
-        }
-        glEnd();
+        std::vector<wxPoint> wedge = ArcPoints(cx, cy, radius, start, end, steps);
+        wedge.insert(wedge.begin(), wxPoint(static_cast<int>(std::lround(cx)),
+                                            static_cast<int>(std::lround(cy))));
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(
+            wxColour(colour.Red(), colour.Green(), colour.Blue(), lit ? 120 : 45)));
+        FillPolygon(dc, wedge);
+        dc.SetPen(wxPen(wxColour(outline.Red(), outline.Green(), outline.Blue(), lit ? 200 : 90),
+                        1));
+        StrokePolyline(dc, wedge, true);
     }
 }
-#endif
 
 // Night blue, dark enough that only lights stand out, light enough that
 // coast and fairways stay faintly visible.
@@ -427,10 +420,9 @@ bool ChosenLight::Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
     return true;
 }
 
-bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
-                         const LightSectors &sectors) const
+bool ChosenLight::Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
+                       const LightSectors &sectors) const
 {
-#ifndef __ANDROID__
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_positions);
     if (centres.empty() || m_colours.empty())
         return false;
@@ -444,66 +436,14 @@ bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
     const LightMarkerLook look = MakeLightMarkerLook(style.pixelsPerPoint, dimPart);
     const double s = look.scale;
 
-    // GL_CURRENT_BIT included: the drawing colour set here would otherwise
-    // stay in effect for whatever OpenCPN draws next, and chart symbols
-    // are modulated by it (black symbols in the night scheme).
-    // GL_LIGHTING_BIT keeps the shade model, set to smooth for the glow.
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT | GL_LIGHTING_BIT);
-
-    glShadeModel(GL_SMOOTH);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    const int segments = 64;
-
-    auto circle = [&](double x, double y, double r) {
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    // A disc that fades from the centre colour to transparent at its edge.
-    auto glowDisc = [&](double x, double y, double r, unsigned char alpha) {
-        glBegin(GL_TRIANGLE_FAN);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), alpha);
-        glVertex2d(x, y);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    auto disc = [&](double x, double y, double r) {
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(x, y);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
     auto ticks = [&](double x, double y, double r, double length) {
-        glBegin(GL_LINES);
-        glVertex2d(x - r - length, y);
-        glVertex2d(x - r + 2 * s, y);
-        glVertex2d(x + r - 2 * s, y);
-        glVertex2d(x + r + length, y);
-        glVertex2d(x, y - r - length);
-        glVertex2d(x, y - r + 2 * s);
-        glVertex2d(x, y + r - 2 * s);
-        glVertex2d(x, y + r + length);
-        glEnd();
+        auto line = [&](double x1, double y1, double x2, double y2) {
+            dc.DrawLine(std::lround(x1), std::lround(y1), std::lround(x2), std::lround(y2));
+        };
+        line(x - r - length, y, x - r + 2 * s, y);
+        line(x + r - 2 * s, y, x + r + length, y);
+        line(x, y - r - length, x, y - r + 2 * s);
+        line(x, y + r - 2 * s, x, y + r + length);
     };
 
     // Sectors first, under the light.
@@ -514,24 +454,24 @@ bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
             continue;
         wxPoint centre;
         GetCanvasPixLL(vp, &centre, position.first, position.second);
-        DrawSectorsGL(vp, position.first, position.second, centre.x, centre.y,
-                      here, 90.0 * s, lit, outline, style.dim);
+        DrawSectors(dc, vp, position.first, position.second, centre.x, centre.y, here,
+                    90.0 * s, lit, outline, style.dim);
     }
 
     for (const wxPoint &centre : centres) {
         const double cx = centre.x;
         const double cy = centre.y;
+        const int ring = static_cast<int>(std::lround(look.ring));
 
         if (lit)
-            glowDisc(cx, cy, look.glow, dimPart ? 120 : 210);
+            GlowDisc(dc, cx, cy, look.glow, colour, dimPart ? 120 : 210);
 
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(6.0 * s));
-        circle(cx, cy, look.ring);
+        dc.SetBrush(*wxTRANSPARENT_BRUSH);
+        dc.SetPen(wxPen(outline, PenWidth(6.0, s)));
+        dc.DrawCircle(centre.x, centre.y, ring);
         ticks(cx, cy, look.ring, 12.0 * s);
-        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
-        glLineWidth(static_cast<float>(3.0 * s));
-        circle(cx, cy, look.ring);
+        dc.SetPen(wxPen(highlight, PenWidth(3.0, s)));
+        dc.DrawCircle(centre.x, centre.y, ring);
         ticks(cx, cy, look.ring, 10.0 * s);
 
         if (!lit)
@@ -539,39 +479,24 @@ bool ChosenLight::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
 
         if (!dimPart) {
             for (int pass = 0; pass < 2; ++pass) {
-                if (pass == 0)
-                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-                else
-                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
-                glLineWidth(static_cast<float>((pass == 0 ? 5.0 : 3.0) * s));
-                glBegin(GL_LINES);
+                dc.SetPen(wxPen(pass == 0 ? outline : colour,
+                                PenWidth(pass == 0 ? 5.0 : 3.0, s)));
                 for (int r = 0; r < look.rays; ++r) {
                     const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    glVertex2d(cx + look.rayFrom * std::cos(angle),
-                               cy + look.rayFrom * std::sin(angle));
-                    glVertex2d(cx + look.rayTo * std::cos(angle),
-                               cy + look.rayTo * std::sin(angle));
+                    dc.DrawLine(std::lround(cx + look.rayFrom * std::cos(angle)),
+                                std::lround(cy + look.rayFrom * std::sin(angle)),
+                                std::lround(cx + look.rayTo * std::cos(angle)),
+                                std::lround(cy + look.rayTo * std::sin(angle)));
                 }
-                glEnd();
             }
         }
 
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
-        disc(cx, cy, look.core);
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(2.0 * s));
-        circle(cx, cy, look.core);
+        OutlinedDisc(dc, cx, cy, look.core,
+                     wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255),
+                     outline, PenWidth(2.0, s));
     }
 
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-
     return true;
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
-#endif
 }
 
 // --- ShiningLights ---
@@ -754,27 +679,15 @@ bool ShiningLights::Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
     return drew;
 }
 
-bool ShiningLights::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
-                           const LightSectors &sectors) const
+bool ShiningLights::Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
+                         const LightSectors &sectors) const
 {
-#ifndef __ANDROID__
     if (m_lights.empty())
         return false;
 
     const wxColour &outline = style.outline;
     const double pixels = style.pixelsPerPoint * 0.65;
     const double s = std::max(0.65, pixels);
-    const int segments = 40;
-
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT | GL_LIGHTING_BIT);
-    glShadeModel(GL_SMOOTH);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
     bool drew = false;
     for (const Light &light : m_lights) {
@@ -797,65 +710,31 @@ bool ShiningLights::DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
         const std::vector<LightSector> here =
             sectors.At(light.lat, light.lon, m_characters[light.character].rhythm);
         if (!here.empty())
-            DrawSectorsGL(vp, light.lat, light.lon, cx, cy, here, 60.0 * s, true, outline,
-                          style.dim);
+            DrawSectors(dc, vp, light.lat, light.lon, cx, cy, here, 60.0 * s, true, outline,
+                        style.dim);
 
-        glBegin(GL_TRIANGLE_FAN);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 120 : 210);
-        glVertex2d(cx, cy);
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 0);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.glow * std::cos(angle), cy + look.glow * std::sin(angle));
-        }
-        glEnd();
+        GlowDisc(dc, cx, cy, look.glow, colour, dimPart ? 120 : 210);
 
         if (!dimPart) {
             for (int pass = 0; pass < 2; ++pass) {
-                if (pass == 0)
-                    glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-                else
-                    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), 255);
-                glLineWidth(static_cast<float>((pass == 0 ? 4.0 : 2.5) * s));
-                glBegin(GL_LINES);
+                dc.SetPen(wxPen(pass == 0 ? outline : colour,
+                                PenWidth(pass == 0 ? 4.0 : 2.5, s)));
                 for (int r = 0; r < look.rays; ++r) {
                     const double angle = kPi / 8.0 + 2.0 * kPi * r / look.rays;
-                    glVertex2d(cx + look.rayFrom * std::cos(angle),
-                               cy + look.rayFrom * std::sin(angle));
-                    glVertex2d(cx + look.rayTo * std::cos(angle),
-                               cy + look.rayTo * std::sin(angle));
+                    dc.DrawLine(std::lround(cx + look.rayFrom * std::cos(angle)),
+                                std::lround(cy + look.rayFrom * std::sin(angle)),
+                                std::lround(cx + look.rayTo * std::cos(angle)),
+                                std::lround(cy + look.rayTo * std::sin(angle)));
                 }
-                glEnd();
             }
         }
 
-        glColor4ub(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255);
-        glBegin(GL_TRIANGLE_FAN);
-        glVertex2d(cx, cy);
-        for (int i = 0; i <= segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
-        }
-        glEnd();
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(static_cast<float>(1.5 * s));
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(cx + look.core * std::cos(angle), cy + look.core * std::sin(angle));
-        }
-        glEnd();
+        OutlinedDisc(dc, cx, cy, look.core,
+                     wxColour(colour.Red(), colour.Green(), colour.Blue(), dimPart ? 170 : 255),
+                     outline, PenWidth(1.5, s));
         drew = true;
     }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
     return drew;
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
-#endif
 }
 
 // --- Night shade ---
