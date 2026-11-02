@@ -33,7 +33,8 @@ std::vector<wxPoint> CirclePoints(double cx, double cy, double r, int segments);
 std::vector<wxPoint> ArcPoints(double cx, double cy, double r, double start, double end,
                                int segments);
 
-// Fills the polygon with the current brush, transparency included.
+// Fills the polygon with the current brush, transparency included (with
+// blending turned on, which some of piDC's calls turn off).
 void FillPolygon(piDC &dc, const std::vector<wxPoint> &points);
 
 // The line through the points with the current pen, blended.

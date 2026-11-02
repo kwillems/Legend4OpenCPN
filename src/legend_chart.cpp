@@ -974,6 +974,7 @@ bool legend_pi::RenderGLOverlayMultiCanvas(
     piDC dc(pcontext);
     dc.SetVP(vp);
     PiDCState state;
+    m_gl_context = pcontext;
 
     if (m_night_preview)
         DrawNightShade(dc, vp);
@@ -1260,7 +1261,7 @@ bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
     return true;
 }
 
-bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp) const
+bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp)
 {
     const std::vector<wxPoint> points = AheadFanPixels(vp);
     if (points.empty())
@@ -1287,32 +1288,64 @@ bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp) const
     for (const auto &line : lines)
         StrokeDashed(dc, line, 4.0 * scale, 4.0 * scale);
 
-    if (!label.text.IsEmpty()) {
-        dc.SetFont(AheadFanFont());
-        // Measured as piDC draws it, on a wxScreenDC: its own
-        // GetTextExtent measures on a wxMemoryDC, smaller on a Retina
-        // screen, and the text ran out of its ground.
-        wxCoord width = 0;
-        wxCoord height = 0;
-        {
-            wxScreenDC screen;
-            screen.SetFont(AheadFanFont());
-            screen.GetTextExtent(label.text, &width, &height);
-        }
-        const int margin = static_cast<int>(std::lround(3.0 * scale));
-        const wxSize box(width + 2 * margin, height + 2 * margin);
-        const wxPoint at =
-            AheadLabelCorner(label.anchor, label.dx, label.dy, box, 4.0 * scale);
-        dc.SetPen(*wxTRANSPARENT_PEN);
-        dc.SetBrush(wxBrush(AheadLabelGround()));
-        dc.DrawRoundedRectangle(at.x, at.y, box.x, box.y, margin);
-        dc.SetTextForeground(wxColour(edge.Red(), edge.Green(), edge.Blue(), 220));
-#ifndef __ANDROID__
-        // piDC draws the text as a texture in its colour, under a colour
-        // set to black: replace, not modulate, keeps the colour.
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-#endif
-        dc.DrawText(label.text, at.x + margin, at.y + margin);
-    }
+    if (!label.text.IsEmpty())
+        DrawAheadLabel(dc, vp, label, edge, scale);
     return true;
+}
+
+// The label of the fan: its length and sailing time on a light ground.
+void legend_pi::DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabel &label,
+                               const wxColour &edge, double scale)
+{
+    const wxFont font = AheadFanFont();
+    const wxColour textColour(edge.Red(), edge.Green(), edge.Blue(), 220);
+    const int margin = static_cast<int>(std::lround(3.0 * scale));
+    wxCoord width = 0;
+    wxCoord height = 0;
+#ifndef __ANDROID__
+    // Measured as piDC draws it, on a wxScreenDC: its own GetTextExtent
+    // measures on a wxMemoryDC without a bitmap, which ignores the font.
+    {
+        wxScreenDC screen;
+        screen.SetFont(font);
+        screen.GetTextExtent(label.text, &width, &height);
+    }
+#else
+    // On Android piDC draws no text (see GlesPicture): a picture instead,
+    // measured on a wxMemoryDC with a bitmap, which has a painter there.
+    {
+        wxBitmap probe(1, 1);
+        wxMemoryDC measure(probe);
+        measure.SetFont(font);
+        measure.GetTextExtent(label.text, &width, &height);
+    }
+#endif
+    const wxSize box(width + 2 * margin, height + 2 * margin);
+    const wxPoint at = AheadLabelCorner(label.anchor, label.dx, label.dy, box, 4.0 * scale);
+
+#ifndef __ANDROID__
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(AheadLabelGround()));
+    dc.DrawRoundedRectangle(at.x, at.y, box.x, box.y, margin);
+    dc.SetFont(font);
+    dc.SetTextForeground(textColour);
+    // piDC draws the text as a texture in its colour, under a colour set
+    // to black: replace, not modulate, keeps the colour.
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    dc.DrawText(label.text, at.x + margin, at.y + margin);
+#else
+    (void)dc;
+    m_label_picture.Draw(m_gl_context, vp->pix_width, vp->pix_height, wxRect(at, box),
+                         [&](wxDC &picture) {
+                             std::unique_ptr<wxGraphicsContext> gc(
+                                 wxGraphicsContext::CreateFromUnknownDC(picture));
+                             if (!gc)
+                                 return;
+                             gc->SetPen(*wxTRANSPARENT_PEN);
+                             gc->SetBrush(wxBrush(AheadLabelGround()));
+                             gc->DrawRoundedRectangle(0, 0, box.x, box.y, margin);
+                             gc->SetFont(font, textColour);
+                             gc->DrawText(label.text, margin, margin);
+                         });
+#endif
 }

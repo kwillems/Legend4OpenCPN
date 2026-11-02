@@ -102,6 +102,10 @@ struct CachedWaypoint
     wxString light;     // light character found in its name or description
 };
 
+#ifdef __ANDROID__
+#include "gles_picture.h"
+#endif
+
 class piDC;
 
 // The plugin. Its functions are spread over files by topic: legend_pi.cpp
@@ -831,7 +835,13 @@ private:
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const;
     bool DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const;
-    bool DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp);
+    void DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabel &label,
+                        const wxColour &edge, double scale);
+    wxGLContext *m_gl_context = nullptr; // of the overlay being drawn
+#ifdef __ANDROID__
+    GlesPicture m_label_picture;          // the fan's label, see there
+#endif
     void SetAheadAngle(int angle);
     static constexpr double kAheadMinMiles = 0.5;
     static constexpr double kAheadMaxMiles = 50.0;

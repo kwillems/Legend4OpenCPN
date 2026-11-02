@@ -52,6 +52,9 @@ void FillPolygon(piDC &dc, const std::vector<wxPoint> &points)
 {
     if (points.size() < 3)
         return;
+    // Some of piDC's calls turn blending off when done.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     std::vector<wxPoint> copy(points);
     dc.DrawPolygonTessellated(static_cast<int>(copy.size()), copy.data());
 }
