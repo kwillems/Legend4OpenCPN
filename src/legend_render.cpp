@@ -1169,11 +1169,7 @@ void legend_pi::RenderNotesBlock(DynamicPage &page)
     size_t shownCount = 0;
     for (size_t i = 0; i < m_note_places.size(); ++i) {
         const NotePlace &place = m_note_places[i];
-        bool lonIn = false;
-        for (double offset : {0.0, 360.0, -360.0})
-            lonIn = lonIn || (place.lon + offset >= view.lon_min &&
-                              place.lon + offset <= view.lon_max);
-        if (place.lat < view.lat_min || place.lat > view.lat_max || !lonIn)
+        if (!NotePlaceInView(place))
             continue;
         const bool hidden = NoteHiddenAtScale(place);
         if (hidden && !m_show_hidden_at_scale)
@@ -1919,6 +1915,11 @@ void legend_pi::RenderFooter(DynamicPage &page)
     if (m_show_hidden_at_scale && m_dynamic_hidden + m_chart_objects_scale_hidden > 0) {
         html << " &middot; " << m_dynamic_hidden + m_chart_objects_scale_hidden
              << _(" hidden at this scale");
+    }
+    if (!m_notes_on) {
+        const size_t notes = NotesOffInView();
+        if (notes > 0)
+            html << " &middot; " << static_cast<int>(notes) << _(" notes (turned off)");
     }
     html << ".</font></p>";
 

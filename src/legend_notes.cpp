@@ -777,10 +777,9 @@ void legend_pi::ShowNoGpsNotice()
 // the folder changes and after a note is saved.
 void legend_pi::RefreshNotePlaces()
 {
-    // With notes off there are none on the chart.
     std::vector<wxString> paths;
     wxDir dir(GetLegendDirectory());
-    if (m_notes_on && dir.IsOpened()) {
+    if (dir.IsOpened()) {
         wxString name;
         bool found = dir.GetFirst(&name, wxEmptyString, wxDIR_FILES);
         while (found) {
@@ -796,6 +795,11 @@ void legend_pi::RefreshNotePlaces()
     if (m_note_selected >= 0 && static_cast<size_t>(m_note_selected) < m_note_places.size())
         selected = m_note_places[m_note_selected].path;
     m_note_places = ReadNotePlaces(paths);
+    // With notes off there are none on the chart; the foot of the legend
+    // only counts them.
+    m_notes_off_places.clear();
+    if (!m_notes_on)
+        m_notes_off_places.swap(m_note_places);
     m_note_selected = -1;
     for (size_t i = 0; i < m_note_places.size(); ++i) {
         if (!selected.IsEmpty() && m_note_places[i].path == selected)
@@ -878,6 +882,27 @@ double legend_pi::CurrentDisplayedScale()
             m_scale_cache = m_viewport.chart_scale;
     }
     return m_scale_cache;
+}
+
+// Whether a note's place lies in the chart's view.
+bool legend_pi::NotePlaceInView(const NotePlace &place) const
+{
+    const PlugIn_ViewPort &view = m_viewport;
+    bool lonIn = false;
+    for (double offset : {0.0, 360.0, -360.0})
+        lonIn = lonIn || (place.lon + offset >= view.lon_min && place.lon + offset <= view.lon_max);
+    return place.lat >= view.lat_min && place.lat <= view.lat_max && lonIn;
+}
+
+// With notes off: how many signs this view would show.
+size_t legend_pi::NotesOffInView()
+{
+    size_t count = 0;
+    for (const NotePlace &place : m_notes_off_places) {
+        if (NotePlaceInView(place) && !NoteHiddenAtScale(place))
+            ++count;
+    }
+    return count;
 }
 
 // Beyond its scale limit a note's sign is not drawn, like the buoys of a

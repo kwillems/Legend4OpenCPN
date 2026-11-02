@@ -1057,3 +1057,7 @@ msgstr ""
 #: src/legend_notes.cpp
 msgid "Back on"
 msgstr ""
+
+#: src/legend_render.cpp
+msgid " notes (turned off)"
+msgstr ""

@@ -886,3 +886,6 @@ msgstr "Weer aanzetten via Instellingen ▸ Notities."
 
 msgid "Back on"
 msgstr "Weer aan"
+
+msgid " notes (turned off)"
+msgstr " notities (uitgezet)"
