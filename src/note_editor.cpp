@@ -1265,24 +1265,33 @@ wxImage DrawToolIcon(const wxString &name, const wxColour &colour, int size)
         gc->StrokeLine(-0.24 * s, -h / 2, -0.24 * s, h / 2);
     }
     else if (name == "new") {
-        // The sheet of a note with its lines of text, and a plus on its top
-        // right corner, where the edge breaks open for it.
+        // The sign of a note on the chart (a sheet with a folded corner
+        // and three lines of text), in outline, with a plus at its top
+        // right.
         gc->SetBrush(*wxTRANSPARENT_BRUSH);
-        gc->SetPen(gc->CreatePen(
-            wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND).Join(wxJOIN_MITER)));
-        const double left = 0.14 * s, top = 0.2 * s, right = 0.78 * s, bottom = 0.9 * s;
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.07).Join(wxJOIN_MITER)));
+        const double x = 0.42 * s, y = 0.56 * s, w = 0.3 * s, h = 0.375 * s, fold = 0.15 * s;
         wxGraphicsPath sheet = gc->CreatePath();
-        sheet.MoveToPoint(0.56 * s, top);
-        sheet.AddLineToPoint(left, top);
-        sheet.AddLineToPoint(left, bottom);
-        sheet.AddLineToPoint(right, bottom);
-        sheet.AddLineToPoint(right, 0.42 * s);
+        sheet.MoveToPoint(x - w, y - h);
+        sheet.AddLineToPoint(x + w - fold, y - h);
+        sheet.AddLineToPoint(x + w, y - h + fold);
+        sheet.AddLineToPoint(x + w, y + h);
+        sheet.AddLineToPoint(x - w, y + h);
+        sheet.CloseSubpath();
         gc->StrokePath(sheet);
-        stroke(0.3, 0.46, 0.62, 0.46);
-        stroke(0.3, 0.6, 0.62, 0.6);
-        stroke(0.3, 0.74, 0.5, 0.74);
-        stroke(0.78, 0.06, 0.78, 0.34);
-        stroke(0.64, 0.2, 0.92, 0.2);
+        wxGraphicsPath marks = gc->CreatePath();
+        marks.MoveToPoint(x + w - fold, y - h);
+        marks.AddLineToPoint(x + w - fold, y - h + fold);
+        marks.AddLineToPoint(x + w, y - h + fold);
+        for (int line = 0; line < 3; ++line) {
+            const double ly = y - h * 0.25 + line * h * 0.35;
+            marks.MoveToPoint(x - w * 0.6, ly);
+            marks.AddLineToPoint(x + w * 0.6, ly);
+        }
+        gc->StrokePath(marks);
+        gc->SetPen(gc->CreatePen(wxGraphicsPenInfo(colour).Width(s * 0.08).Cap(wxCAP_ROUND)));
+        stroke(0.84, 0.05, 0.84, 0.31);
+        stroke(0.71, 0.18, 0.97, 0.18);
     }
     else if (name == "rename") {
         // A text field with the text cursor in it.
