@@ -9,6 +9,9 @@
 
 #include "pidc_shapes.h"
 
+// Before pidc.h: on Windows GL/gl.h needs windows.h, which wxWidgets
+// brings in.
+#include <wx/glcanvas.h>
 #include "pidc.h"
 #ifdef __ANDROID__
 #include "gles_picture.h"
