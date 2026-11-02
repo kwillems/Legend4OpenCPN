@@ -24,6 +24,8 @@
 #include <wx/dc.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
+#include "pidc.h"
+#include "pidc_shapes.h"
 #include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -750,9 +752,11 @@ bool legend_pi::DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp)
     return drew;
 }
 
-bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
+// The same with piDC, for OpenGL. piDC draws in whole pixels and its
+// circles have no dashes on Android, so the dashed radius is drawn as
+// short lines.
+bool legend_pi::DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp)
 {
-#ifndef __ANDROID__
     if (m_note_places.empty())
         return false;
     wxColour fill;
@@ -760,15 +764,10 @@ bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
     NoteSignColours(&fill, &edge);
     const double s = std::max(1.0, ViewportPixelsPerWindowPixel());
     const double kPi = 3.14159265358979323846;
+    auto width = [s](double points) {
+        return std::max(1, static_cast<int>(std::lround(points * s)));
+    };
     bool drew = false;
-
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-                 GL_HINT_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
     for (size_t i = 0; i < m_note_places.size(); ++i) {
         const NotePlace &place = m_note_places[i];
@@ -785,58 +784,44 @@ bool legend_pi::DrawNoteSignsGL(PlugIn_ViewPort *vp)
             wxPoint north;
             GetCanvasPixLL(vp, &north, place.lat + place.radius / 60.0, place.lon);
             const double r = std::fabs(north.y - at.y);
-            glColor4ub(edge.Red(), edge.Green(), edge.Blue(), 230);
-            glLineWidth(static_cast<float>(1.5 * s));
-            glBegin(GL_LINES);
+            dc.SetPen(wxPen(wxColour(edge.Red(), edge.Green(), edge.Blue(), 230), width(1.5)));
             const int segments = 72;
             for (int k = 0; k < segments; k += 2) {
                 const double a1 = 2.0 * kPi * k / segments;
                 const double a2 = 2.0 * kPi * (k + 1) / segments;
-                glVertex2d(x + r * std::cos(a1), y + r * std::sin(a1));
-                glVertex2d(x + r * std::cos(a2), y + r * std::sin(a2));
+                dc.DrawLine(std::lround(x + r * std::cos(a1)), std::lround(y + r * std::sin(a1)),
+                            std::lround(x + r * std::cos(a2)), std::lround(y + r * std::sin(a2)));
             }
-            glEnd();
         }
 
         const double w = 9.0 * s;
         const double h = 11.0 * s;
         const double fold = 4.0 * s;
-        const double sheet[5][2] = {{x - w, y - h}, {x + w - fold, y - h}, {x + w, y - h + fold},
-                                    {x + w, y + h}, {x - w, y + h}};
-        glColor4ub(fill.Red(), fill.Green(), fill.Blue(), 245);
-        glBegin(GL_POLYGON);
-        for (const auto &p : sheet)
-            glVertex2d(p[0], p[1]);
-        glEnd();
-        glColor4ub(edge.Red(), edge.Green(), edge.Blue(), 255);
-        glLineWidth(static_cast<float>(1.3 * s));
-        glBegin(GL_LINE_LOOP);
-        for (const auto &p : sheet)
-            glVertex2d(p[0], p[1]);
-        glEnd();
-        glLineWidth(static_cast<float>(1.0 * s));
-        glBegin(GL_LINES);
-        glVertex2d(x + w - fold, y - h);
-        glVertex2d(x + w - fold, y - h + fold);
-        glVertex2d(x + w - fold, y - h + fold);
-        glVertex2d(x + w, y - h + fold);
+        auto point = [](double px, double py) {
+            return wxPoint(static_cast<int>(std::lround(px)), static_cast<int>(std::lround(py)));
+        };
+        wxPoint sheet[5] = {point(x - w, y - h), point(x + w - fold, y - h),
+                            point(x + w, y - h + fold), point(x + w, y + h),
+                            point(x - w, y + h)};
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(wxColour(fill.Red(), fill.Green(), fill.Blue(), 245)));
+        FillPolygon(dc, std::vector<wxPoint>(sheet, sheet + 5));
+        wxPoint edgeLine[6] = {sheet[0], sheet[1], sheet[2], sheet[3], sheet[4], sheet[0]};
+        dc.SetPen(wxPen(edge, width(1.3)));
+        dc.DrawLines(6, edgeLine);
+
+        dc.SetPen(wxPen(edge, width(1.0)));
+        const wxPoint corner = point(x + w - fold, y - h + fold);
+        dc.DrawLine(sheet[1].x, sheet[1].y, corner.x, corner.y);
+        dc.DrawLine(corner.x, corner.y, sheet[2].x, sheet[2].y);
         for (int line = 0; line < 3; ++line) {
-            const double ly = y - h * 0.25 + line * h * 0.35;
-            glVertex2d(x - w * 0.6, ly);
-            glVertex2d(x + w * 0.6, ly);
+            const wxPoint from = point(x - w * 0.6, y - h * 0.25 + line * h * 0.35);
+            const wxPoint to = point(x + w * 0.6, y - h * 0.25 + line * h * 0.35);
+            dc.DrawLine(from.x, from.y, to.x, to.y);
         }
-        glEnd();
         drew = true;
     }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
     return drew;
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
-#endif
 }
 
 // With every fix: a notice when the boat comes within the radius of a

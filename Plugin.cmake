@@ -100,6 +100,8 @@ set(SRC
     src/geo.cpp
     src/wx_compat.h
     src/qt_graphics.h
+    src/pidc_shapes.cpp
+    src/pidc_shapes.h
     src/msvc_wx_vector.cpp
 
     third_party/md4c/src/md4c.c
@@ -130,6 +132,11 @@ macro(late_init)
 endmacro()
 
 macro(add_plugin_libraries)
+    # Drawing on the chart: piDC from opencpn-libs draws with OpenGL,
+    # OpenGL ES (Android) or a wxDC, whichever the chart canvas uses.
+    add_subdirectory("${CMAKE_SOURCE_DIR}/opencpn-libs/plugin_dc")
+    target_link_libraries(${PACKAGE_NAME} ocpn::plugin-dc)
+
     # OpenCPN on Android lacks some wxWidgets classes the plugin uses:
     # wxMemoryFSHandler comes from its wxWidgets source, and the note editor
     # is a plain text field instead of a wxRichTextCtrl.
@@ -137,7 +144,7 @@ macro(add_plugin_libraries)
         target_sources(${PACKAGE_NAME} PRIVATE
             ${CMAKE_SOURCE_DIR}/third_party/wxwidgets/fs_mem.cpp
             ${CMAKE_SOURCE_DIR}/src/note_editor_plain.cpp
-            ${CMAKE_SOURCE_DIR}/src/gles_overlay.cpp
+            ${CMAKE_SOURCE_DIR}/src/gles_picture.cpp
         )
 
         # On Android _() reads its text as UTF-8; see the header.

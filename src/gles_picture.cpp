@@ -7,16 +7,26 @@
 // Free Software Foundation; either version 2 of the License, or (at your
 // option) any later version. See the LICENSE file for details.
 
-#include "gles_overlay.h"
+#include "gles_picture.h"
 
+#include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+#include <QFont>
+#include <QFontMetricsF>
 #include <QImage>
+#include <QPainter>
 #include <QPixmap>
 
 #include <wx/bitmap.h>
+#include <wx/colour.h>
 #include <wx/dcmemory.h>
+#include <wx/dc.h>
 #include <wx/log.h>
+#include <wx/string.h>
+
+#include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -37,6 +47,22 @@ const char *kFragmentShader =
     "    gl_FragColor = texture2D(picture, uv);\n"
     "}\n";
 
+// Triangles in one colour, with their corners in pixels of the view.
+const char *kFillVertexShader =
+    "attribute vec2 position;\n"
+    "uniform vec2 view;\n"
+    "void main() {\n"
+    "    gl_Position = vec4(2.0 * position.x / view.x - 1.0,\n"
+    "                       1.0 - 2.0 * position.y / view.y, 0.0, 1.0);\n"
+    "}\n";
+
+const char *kFillFragmentShader =
+    "precision mediump float;\n"
+    "uniform vec4 colour;\n"
+    "void main() {\n"
+    "    gl_FragColor = colour;\n"
+    "}\n";
+
 GLuint CompileShader(GLenum type, const char *source)
 {
     const GLuint shader = glCreateShader(type);
@@ -54,7 +80,7 @@ GLuint CompileShader(GLenum type, const char *source)
     return shader;
 }
 
-// The GL state the overlay changes, given back to OpenCPN afterwards.
+// The GL state the picture changes, given back to OpenCPN afterwards.
 struct SavedState
 {
     GLint program = 0;
@@ -95,27 +121,12 @@ struct SavedState
     }
 };
 
-}
-
-void GlesOverlay::Release()
+GLuint LinkProgram(const char *vertexSource, const char *fragmentSource)
 {
-    m_program = 0;
-    m_texture = 0;
-    m_context = nullptr;
-}
-
-// The shader program and the texture, made once per GL context.
-bool GlesOverlay::Prepare(wxGLContext *context)
-{
-    if (m_program && context == m_context)
-        return true;
-    Release();
-
-    const GLuint vertex = CompileShader(GL_VERTEX_SHADER, kVertexShader);
-    const GLuint fragment = CompileShader(GL_FRAGMENT_SHADER, kFragmentShader);
+    const GLuint vertex = CompileShader(GL_VERTEX_SHADER, vertexSource);
+    const GLuint fragment = CompileShader(GL_FRAGMENT_SHADER, fragmentSource);
     if (!vertex || !fragment)
-        return false;
-
+        return 0;
     const GLuint program = glCreateProgram();
     glAttachShader(program, vertex);
     glAttachShader(program, fragment);
@@ -127,8 +138,68 @@ bool GlesOverlay::Prepare(wxGLContext *context)
     if (!ok) {
         wxLogMessage("Legend: shader program not linked");
         glDeleteProgram(program);
-        return false;
+        return 0;
     }
+    return program;
+}
+
+} // namespace
+
+void GlesFillTriangles(const wxColour &colour, const std::vector<wxPoint> &corners)
+{
+    if (corners.size() < 3 || colour.Alpha() == 0)
+        return;
+
+    // One program per GL context, which OpenCPN may make anew.
+    static EGLContext programContext = EGL_NO_CONTEXT;
+    static GLuint program = 0;
+    static GLint position = -1, view = -1, colourAt = -1;
+    const EGLContext current = eglGetCurrentContext();
+    if (!program || current != programContext) {
+        program = LinkProgram(kFillVertexShader, kFillFragmentShader);
+        if (!program)
+            return;
+        programContext = current;
+        position = glGetAttribLocation(program, "position");
+        view = glGetUniformLocation(program, "view");
+        colourAt = glGetUniformLocation(program, "colour");
+    }
+
+    std::vector<GLfloat> xy;
+    xy.reserve(corners.size() * 2);
+    for (const wxPoint &corner : corners) {
+        xy.push_back(static_cast<GLfloat>(corner.x));
+        xy.push_back(static_cast<GLfloat>(corner.y));
+    }
+    GLint viewport[4] = {0, 0, 1, 1};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    SavedState saved;
+    glUseProgram(program);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glUniform2f(view, static_cast<GLfloat>(viewport[2]), static_cast<GLfloat>(viewport[3]));
+    glUniform4f(colourAt, colour.Red() / 255.0f, colour.Green() / 255.0f, colour.Blue() / 255.0f,
+                colour.Alpha() / 255.0f);
+    glEnableVertexAttribArray(position);
+    glVertexAttribPointer(position, 2, GL_FLOAT, GL_FALSE, 0, xy.data());
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(corners.size() / 3 * 3));
+    glDisableVertexAttribArray(position);
+}
+
+// The shader program and the texture, made once per GL context.
+bool GlesPicture::Prepare(wxGLContext *context)
+{
+    if (m_program && context == m_context)
+        return true;
+    m_program = 0;
+    m_texture = 0;
+    m_context = nullptr;
+
+    const GLuint program = LinkProgram(kVertexShader, kFragmentShader);
+    if (!program)
+        return false;
 
     m_program = program;
     m_position = glGetAttribLocation(program, "position");
@@ -147,25 +218,21 @@ bool GlesOverlay::Prepare(wxGLContext *context)
     return true;
 }
 
-bool GlesOverlay::Draw(wxGLContext *context, int width, int height,
-                       const std::function<bool(wxDC &)> &paint)
+bool GlesPicture::Draw(wxGLContext *context, int viewWidth, int viewHeight, const wxRect &place,
+                       const std::function<void(wxDC &)> &paint)
 {
-    if (width <= 0 || height <= 0)
+    if (viewWidth <= 0 || viewHeight <= 0 || place.width <= 0 || place.height <= 0)
         return false;
 
     // The picture, transparent where nothing is drawn.
-    QPixmap pixmap(width, height);
+    QPixmap pixmap(place.width, place.height);
     pixmap.fill(Qt::transparent);
     wxBitmap bitmap(pixmap);
-    bool drew = false;
     {
         wxMemoryDC dc(bitmap);
-        drew = paint(dc);
+        paint(dc);
         dc.SelectObject(wxNullBitmap);
     }
-    if (!drew)
-        return false;
-
     const QImage image =
         bitmap.GetHandle()->toImage().convertToFormat(QImage::Format_RGBA8888_Premultiplied);
 
@@ -178,8 +245,13 @@ bool GlesOverlay::Draw(wxGLContext *context, int width, int height,
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width(), image.height(), 0, GL_RGBA,
                  GL_UNSIGNED_BYTE, image.constBits());
 
-    // The whole viewport; the first row of the picture is the top.
-    const GLfloat positions[] = {-1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, -1.f};
+    // From pixels, y down, to OpenGL's -1..1, y up; the first row of the
+    // picture is its top.
+    const GLfloat left = 2.0f * place.x / viewWidth - 1.0f;
+    const GLfloat right = 2.0f * (place.x + place.width) / viewWidth - 1.0f;
+    const GLfloat top = 1.0f - 2.0f * place.y / viewHeight;
+    const GLfloat bottom = 1.0f - 2.0f * (place.y + place.height) / viewHeight;
+    const GLfloat positions[] = {left, top, right, top, left, bottom, right, bottom};
     const GLfloat texcoords[] = {0.f, 0.f, 1.f, 0.f, 0.f, 1.f, 1.f, 1.f};
 
     glUseProgram(m_program);
@@ -195,4 +267,40 @@ bool GlesOverlay::Draw(wxGLContext *context, int width, int height,
     glDisableVertexAttribArray(m_position);
     glDisableVertexAttribArray(m_texcoord);
     return true;
+}
+
+namespace {
+
+QFont LabelFont(int pixels)
+{
+    QFont font;
+    font.setStyleHint(QFont::SansSerif);
+    font.setPixelSize(std::max(1, pixels));
+    return font;
+}
+
+} // namespace
+
+wxSize GlesTextSize(const wxString &text, int pixels)
+{
+    const QFontMetricsF metrics(LabelFont(pixels));
+    return wxSize(static_cast<int>(std::ceil(
+                      metrics.horizontalAdvance(QString::fromUtf8(text.utf8_str())))),
+                  static_cast<int>(std::ceil(metrics.height())));
+}
+
+void GlesDrawText(wxDC &dc, const wxString &text, int pixels, const wxColour &colour, int x,
+                  int y)
+{
+    QPainter *painter = static_cast<QPainter *>(dc.GetHandle());
+    if (!painter || !painter->isActive())
+        return;
+    const QFont font = LabelFont(pixels);
+    painter->save();
+    painter->setRenderHint(QPainter::TextAntialiasing, true);
+    painter->setFont(font);
+    painter->setPen(QColor(colour.Red(), colour.Green(), colour.Blue(), colour.Alpha()));
+    painter->drawText(QPointF(x, y + QFontMetricsF(font).ascent()),
+                      QString::fromUtf8(text.utf8_str()));
+    painter->restore();
 }

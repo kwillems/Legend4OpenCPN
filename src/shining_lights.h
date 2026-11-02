@@ -22,6 +22,8 @@
 #include <wx/gdicmn.h>
 #include <wx/longlong.h>
 #include <wx/string.h>
+
+class piDC;
 #include <wx/timer.h>
 
 class wxDC;
@@ -89,7 +91,7 @@ public:
 
     bool Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
               const LightSectors &sectors) const;
-    bool DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
+    bool Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
                 const LightSectors &sectors) const;
 
 private:
@@ -132,7 +134,7 @@ public:
 
     bool Draw(wxDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
               const LightSectors &sectors) const;
-    bool DrawGL(PlugIn_ViewPort *vp, const LightStyle &style,
+    bool Draw(piDC &dc, PlugIn_ViewPort *vp, const LightStyle &style,
                 const LightSectors &sectors) const;
 
 private:
@@ -165,8 +167,8 @@ private:
 };
 
 // Nachtvoorbeeld: a dark shade over the chart, through which the coast
-// still shows faintly.
+// still shows faintly. With OpenGL it is drawn with piDC.
 void DrawNightShade(wxDC &dc, PlugIn_ViewPort *vp);
-void DrawNightShadeGL(PlugIn_ViewPort *vp);
+void DrawNightShade(piDC &dc, PlugIn_ViewPort *vp);
 
 #endif

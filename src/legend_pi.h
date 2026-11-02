@@ -26,7 +26,6 @@
 #include "vhf_areas.h"
 #include "vhf_highlight.h"
 #ifdef __ANDROID__
-#include "gles_overlay.h"
 #endif
 #include "chart_notice.h"
 
@@ -102,6 +101,12 @@ struct CachedWaypoint
     double scamin = 0.0;
     wxString light;     // light character found in its name or description
 };
+
+#ifdef __ANDROID__
+#include "gles_picture.h"
+#endif
+
+class piDC;
 
 // The plugin. Its functions are spread over files by topic: legend_pi.cpp
 // (start, settings, legend files and the toolbar), legend_window.cpp,
@@ -468,7 +473,6 @@ private:
     wxBitmap m_plugin_bitmap;   // in colour, on the Plugins tab of OpenCPN's options
     wxFrame *m_legend_window;
 #ifdef __ANDROID__
-    GlesOverlay m_gles_overlay; // the drawings on the chart, see there
     wxPanel *m_title_bar = nullptr;
     wxStaticText *m_title_text = nullptr;
     wxButton *m_close_button = nullptr;
@@ -719,7 +723,7 @@ private:
     double m_scale_cache_ppm = -1.0;
     double m_scale_cache_lat = 0.0;
     bool DrawNoteSigns(wxDC &dc, PlugIn_ViewPort *vp);
-    bool DrawNoteSignsGL(PlugIn_ViewPort *vp);
+    bool DrawNoteSigns(piDC &dc, PlugIn_ViewPort *vp);
     void CheckNotePlaces();
     void ShowPendingNoteNotice();
     bool HighlightVhfAreaAt(const wxPoint &pixel, double tolerancePx);
@@ -827,9 +831,18 @@ private:
     };
     void AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoint>> *lines,
                        AheadFanLabel *label) const;
+    int AheadFanFontPixels() const;
     wxFont AheadFanFont() const;
     bool DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const;
-    bool DrawAheadFanGL(PlugIn_ViewPort *vp) const;
+    bool DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const;
+    bool DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp);
+    void DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabel &label,
+                        const wxColour &edge, double scale);
+    wxGLContext *m_gl_context = nullptr; // of the overlay being drawn
+#ifdef __ANDROID__
+    GlesPicture m_label_picture;          // the fan's label, see there
+#endif
     void SetAheadAngle(int angle);
     static constexpr double kAheadMinMiles = 0.5;
     static constexpr double kAheadMaxMiles = 50.0;

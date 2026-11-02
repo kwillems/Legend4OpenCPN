@@ -20,6 +20,8 @@
 #include <wx/glcanvas.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
+#include "pidc.h"
+#include "pidc_shapes.h"
 #include <wx/time.h>
 
 #include <algorithm>
@@ -136,47 +138,30 @@ bool VhfHighlight::Draw(wxDC &dc, PlugIn_ViewPort *vp, double lineScale, bool di
     return true;
 }
 
-bool VhfHighlight::DrawGL(PlugIn_ViewPort *vp, double lineScale, bool dim) const
+bool VhfHighlight::Draw(piDC &dc, PlugIn_ViewPort *vp, double lineScale, bool dim) const
 {
-#ifndef __ANDROID__
     wxColour fill;
     wxColour line;
     HighlightColours(m_alpha, dim, &fill, &line);
     const double s = std::max(1.0, lineScale);
-
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-                 GL_HINT_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
     for (const VhfArea &area : m_areas) {
         std::vector<wxPoint> points(area.polygon.size());
         for (size_t i = 0; i < area.polygon.size(); ++i)
             GetCanvasPixLL(vp, &points[i], area.polygon[i].first, area.polygon[i].second);
 
-        glColor4ub(fill.Red(), fill.Green(), fill.Blue(), fill.Alpha());
-        glBegin(GL_TRIANGLES);
-        for (int index : area.triangles)
-            glVertex2d(points[index].x, points[index].y);
-        glEnd();
+        // The area's own triangles: the outline may be concave.
+        dc.SetPen(*wxTRANSPARENT_PEN);
+        dc.SetBrush(wxBrush(fill));
+        for (size_t t = 0; t + 2 < area.triangles.size(); t += 3)
+            FillPolygon(dc, {points[area.triangles[t]], points[area.triangles[t + 1]],
+                             points[area.triangles[t + 2]]});
 
-        glColor4ub(line.Red(), line.Green(), line.Blue(), line.Alpha());
-        glLineWidth(static_cast<float>(2.0 * s));
-        glBegin(GL_LINE_LOOP);
-        for (size_t i = 0; i + 1 < points.size(); ++i)
-            glVertex2d(points[i].x, points[i].y);
-        glEnd();
+        // The last point repeats the first.
+        if (points.size() > 1)
+            points.pop_back();
+        dc.SetPen(wxPen(line, PenWidth(2.0, s)));
+        StrokePolyline(dc, points, true);
     }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
     return true;
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
-#endif
 }

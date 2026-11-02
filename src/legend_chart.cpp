@@ -23,8 +23,11 @@
 #include <wx/glcanvas.h>
 #include <wx/dc.h>
 #include <wx/dcmemory.h>
+#include <wx/dcscreen.h>
 #include <wx/graphics.h>
 #include "wx_compat.h"
+#include "pidc.h"
+#include "pidc_shapes.h"
 #include <wx/log.h>
 #include <wx/menu.h>
 
@@ -110,79 +113,6 @@ wxColour AheadLabelGround()
         LegendScheme() == PI_GLOBAL_COLOR_SCHEME_NIGHT)
         return wxColour(0, 0, 0, 110);
     return wxColour(255, 255, 255, 150);
-}
-
-// OpenGL has no text: the text drawn white on black in a bitmap, its
-// brightness as the opacity of a texture in `colour`, on a ground of
-// `ground` a few pixels wider.
-void DrawTextGL(const wxString &text, const wxFont &font, const wxColour &colour,
-                const wxColour &ground, const wxPoint &anchor, double dx, double dy,
-                double gap, int margin)
-{
-#ifndef __ANDROID__
-    wxBitmap probe(1, 1, 24);
-    wxMemoryDC dc(probe);
-    dc.SetFont(font);
-    const wxSize size = dc.GetTextExtent(text);
-    if (size.x <= 0 || size.y <= 0)
-        return;
-    wxBitmap bitmap(size.x, size.y, 24);
-    dc.SelectObject(bitmap);
-    dc.SetBackground(*wxBLACK_BRUSH);
-    dc.Clear();
-    dc.SetTextForeground(*wxWHITE);
-    dc.DrawText(text, 0, 0);
-    dc.SelectObject(wxNullBitmap);
-
-    const wxImage image = bitmap.ConvertToImage();
-    const int width = image.GetWidth();
-    const int height = image.GetHeight();
-    std::vector<unsigned char> pixels(static_cast<size_t>(width) * height * 4, 255);
-    const unsigned char *rgb = image.GetData();
-    for (int i = 0; i < width * height; ++i)
-        pixels[i * 4 + 3] = std::max({rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]});
-
-    const wxPoint at = AheadLabelCorner(
-        anchor, dx, dy, wxSize(width + 2 * margin, height + 2 * margin), gap);
-    glColor4ub(ground.Red(), ground.Green(), ground.Blue(), ground.Alpha());
-    glBegin(GL_QUADS);
-    glVertex2i(at.x, at.y);
-    glVertex2i(at.x + width + 2 * margin, at.y);
-    glVertex2i(at.x + width + 2 * margin, at.y + height + 2 * margin);
-    glVertex2i(at.x, at.y + height + 2 * margin);
-    glEnd();
-
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 pixels.data());
-    glEnable(GL_TEXTURE_2D);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-    glColor4ub(colour.Red(), colour.Green(), colour.Blue(), colour.Alpha());
-
-    const int x = at.x + margin;
-    const int y = at.y + margin;
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex2i(x, y);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex2i(x + width, y);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex2i(x + width, y + height);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex2i(x, y + height);
-    glEnd();
-
-    glDisable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glDeleteTextures(1, &texture);
-#else
-    // Android has OpenGL ES only, without these drawing calls.
-#endif
 }
 
 } // namespace
@@ -984,17 +914,92 @@ bool legend_pi::RenderOverlayMultiCanvas(
                          m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
     const bool drewNotes = DrawNoteSigns(dc, vp);
     const LightStyle style = CurrentLightStyle();
-    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes || drewFan;
-    const bool drewLight =
-        (m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors)) ||
-        drewAll;
-    if (!m_marker_active)
-        return drewLight;
+    const bool drewAll = m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors);
+    const bool drewChosen =
+        m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors);
+    const bool drewMarker = DrawMarker(dc, vp);
+    return m_night_preview || drewFan || drewVhf || drewNotes || drewAll || drewChosen ||
+           drewMarker;
+}
 
+namespace {
+
+// piDC leaves its colour, line width, blending and texture mode set.
+// OpenCPN would draw on with them: chart symbols are tinted by the last
+// colour (black symbols in the night scheme). This keeps them for the time
+// piDC draws.
+class PiDCState
+{
+public:
+    PiDCState()
+    {
+#ifndef __ANDROID__
+        glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
+                     GL_HINT_BIT | GL_POLYGON_BIT | GL_TEXTURE_BIT);
+        glDisable(GL_TEXTURE_2D);
+#endif
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    ~PiDCState()
+    {
+#ifndef __ANDROID__
+        glPopAttrib();
+#endif
+    }
+};
+
+} // namespace
+
+// With OpenGL everything is drawn with piDC, which also draws with the
+// OpenGL ES of Android.
+bool legend_pi::RenderGLOverlayMultiCanvas(
+    wxGLContext *pcontext,
+    PlugIn_ViewPort *vp,
+    int canvasIndex,
+    int priority)
+{
+    (void)canvasIndex;
+
+    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
+         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
+         !AheadFanVisible()) ||
+        !vp)
+        return false;
+
+    // Draw once per frame.
+    if (priority != OVERLAY_LEGACY && priority != -1)
+        return false;
+
+    piDC dc(pcontext);
+    dc.SetVP(vp);
+    PiDCState state;
+    m_gl_context = pcontext;
+
+    if (m_night_preview)
+        DrawNightShade(dc, vp);
+    const bool drewFan = DrawAheadFan(dc, vp);
+    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
+                         m_vhf_highlight.Draw(dc, vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
+    const bool drewNotes = DrawNoteSigns(dc, vp);
+    const LightStyle style = CurrentLightStyle();
+    const bool drewAll = m_all_lights.IsOn() && m_all_lights.Draw(dc, vp, style, m_light_sectors);
+    const bool drewChosen =
+        m_chosen_light.IsActive() && m_chosen_light.Draw(dc, vp, style, m_light_sectors);
+    const bool drewMarker = DrawMarker(dc, vp);
+    return m_night_preview || drewFan || drewVhf || drewNotes || drewAll || drewChosen ||
+           drewMarker;
+}
+
+// The legend marker: rings with ticks around the symbols shown in the
+// legend, and a pulsing ring that draws the eye.
+bool legend_pi::DrawMarker(wxDC &dc, PlugIn_ViewPort *vp) const
+{
+    if (!m_marker_active)
+        return false;
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return drewLight;
+        return false;
 
     const int radius = 16;
     const int pulse = m_marker_phase % 10;
@@ -1033,132 +1038,47 @@ bool legend_pi::RenderOverlayMultiCanvas(
         dc.SetPen(wxPen(highlight, 2));
         dc.DrawCircle(centre, radius + 8 + pulse * 3);
     }
-
     return true;
 }
 
-bool legend_pi::RenderGLOverlayMultiCanvas(
-    wxGLContext *pcontext,
-    PlugIn_ViewPort *vp,
-    int canvasIndex,
-    int priority)
+bool legend_pi::DrawMarker(piDC &dc, PlugIn_ViewPort *vp) const
 {
-#ifndef __ANDROID__
-    (void)pcontext;
-    (void)canvasIndex;
-
-    if ((!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-         !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
-         !AheadFanVisible()) ||
-        !vp)
-        return false;
-
-    // Draw once per frame.
-    if (priority != OVERLAY_LEGACY && priority != -1)
-        return false;
-
-    if (m_night_preview)
-        DrawNightShadeGL(vp);
-    const bool drewFan = DrawAheadFanGL(vp);
-    const bool drewVhf = !m_vhf_highlight.IsEmpty() &&
-                         m_vhf_highlight.DrawGL(vp, ViewportPixelsPerWindowPixel(), IsDimScheme());
-    const bool drewNotes = DrawNoteSignsGL(vp);
-    const LightStyle style = CurrentLightStyle();
-    const bool drewAll = (m_all_lights.IsOn() && m_all_lights.DrawGL(vp, style, m_light_sectors)) ||
-                         m_night_preview || drewVhf || drewNotes || drewFan;
-    const bool drewLight =
-        (m_chosen_light.IsActive() && m_chosen_light.DrawGL(vp, style, m_light_sectors)) ||
-        drewAll;
     if (!m_marker_active)
-        return drewLight;
-
+        return false;
     const std::vector<wxPoint> centres = MarkerCentres(vp, m_marker_positions);
     if (centres.empty())
-        return drewLight;
+        return false;
 
-    const double radius = 16.0;
+    const int radius = 16;
     const int pulse = m_marker_phase % 10;
-
-    // GL_CURRENT_BIT included: the drawing colour set here would otherwise
-    // stay in effect for whatever OpenCPN draws next, and chart symbols
-    // are modulated by it (black symbols in the night scheme).
-    glPushAttrib(
-        GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-        GL_HINT_BIT);
-
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-    auto circle = [](double x, double y, double r) {
-        const int segments = 48;
-        const double kPi = 3.14159265358979323846;
-
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < segments; ++i) {
-            const double angle = 2.0 * kPi * i / segments;
-            glVertex2d(x + r * std::cos(angle), y + r * std::sin(angle));
-        }
-        glEnd();
-    };
-
-    auto ticks = [](double x, double y, double r, double length) {
-        glBegin(GL_LINES);
-        glVertex2d(x - r - length, y);
-        glVertex2d(x - r + 2, y);
-        glVertex2d(x + r - 2, y);
-        glVertex2d(x + r + length, y);
-        glVertex2d(x, y - r - length);
-        glVertex2d(x, y - r + 2);
-        glVertex2d(x, y + r - 2);
-        glVertex2d(x, y + r + length);
-        glEnd();
-    };
 
     wxColour outline;
     wxColour highlight;
     MarkerColours(outline, highlight);
 
+    auto ticks = [&dc](const wxPoint &c, int r, int length) {
+        dc.DrawLine(c.x - r - length, c.y, c.x - r + 2, c.y);
+        dc.DrawLine(c.x + r - 2, c.y, c.x + r + length, c.y);
+        dc.DrawLine(c.x, c.y - r - length, c.x, c.y - r + 2);
+        dc.DrawLine(c.x, c.y + r - 2, c.x, c.y + r + length);
+    };
+
+    dc.SetBrush(*wxTRANSPARENT_BRUSH);
     for (const wxPoint &centre : centres) {
-        const double cx = centre.x;
-        const double cy = centre.y;
-
         // Outline first, so the marker stands out on any chart colour.
-        glColor4ub(outline.Red(), outline.Green(), outline.Blue(), 255);
-        glLineWidth(7.0f);
-        circle(cx, cy, radius);
-        ticks(cx, cy, radius, 12.0);
+        dc.SetPen(wxPen(outline, 7));
+        dc.DrawCircle(centre.x, centre.y, radius);
+        ticks(centre, radius, 12);
 
-        glColor4ub(highlight.Red(), highlight.Green(), highlight.Blue(), 255);
-        glLineWidth(3.0f);
-        circle(cx, cy, radius);
-        ticks(cx, cy, radius, 10.0);
+        dc.SetPen(wxPen(highlight, 3));
+        dc.DrawCircle(centre.x, centre.y, radius);
+        ticks(centre, radius, 10);
 
         // A pulsing ring that draws the eye.
-        glLineWidth(2.0f);
-        circle(cx, cy, radius + 8.0 + pulse * 3.0);
+        dc.SetPen(wxPen(highlight, 2));
+        dc.DrawCircle(centre.x, centre.y, radius + 8 + pulse * 3);
     }
-
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopAttrib();
-
     return true;
-#else
-    // Android has OpenGL ES only, without these drawing calls: the drawings
-    // of the wxDC are laid over the chart as a picture.
-    if (!vp || (priority != OVERLAY_LEGACY && priority != -1))
-        return false;
-    if (!m_marker_active && !m_chosen_light.IsActive() && !m_all_lights.IsOn() &&
-        !m_night_preview && m_vhf_highlight.IsEmpty() && m_note_places.empty() &&
-        !AheadFanVisible())
-        return false;
-    return m_gles_overlay.Draw(pcontext, vp->pix_width, vp->pix_height, [&](wxDC &dc) {
-        return RenderOverlayMultiCanvas(dc, vp, canvasIndex, priority);
-    });
-#endif
 }
 
 // Nachtvoorbeeld: the chart as it looks from the water at night. A dark
@@ -1278,11 +1198,14 @@ void legend_pi::AheadFanMarks(PlugIn_ViewPort *vp, std::vector<std::vector<wxPoi
     }
 }
 
+int legend_pi::AheadFanFontPixels() const
+{
+    return static_cast<int>(std::lround(12.0 * std::max(1.0, ViewportPixelsPerWindowPixel())));
+}
+
 wxFont legend_pi::AheadFanFont() const
 {
-    const int height =
-        static_cast<int>(std::lround(12.0 * std::max(1.0, ViewportPixelsPerWindowPixel())));
-    return wxFont(wxFontInfo(wxSize(0, height)).Family(wxFONTFAMILY_SWISS));
+    return wxFont(wxFontInfo(wxSize(0, AheadFanFontPixels())).Family(wxFONTFAMILY_SWISS));
 }
 
 bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
@@ -1341,9 +1264,8 @@ bool legend_pi::DrawAheadFan(wxDC &dc, PlugIn_ViewPort *vp) const
     return true;
 }
 
-bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
+bool legend_pi::DrawAheadFan(piDC &dc, PlugIn_ViewPort *vp)
 {
-#ifndef __ANDROID__
     const std::vector<wxPoint> points = AheadFanPixels(vp);
     if (points.empty())
         return false;
@@ -1351,68 +1273,81 @@ bool legend_pi::DrawAheadFanGL(PlugIn_ViewPort *vp) const
     wxColour fill;
     wxColour edge;
     AheadFanColours(m_ahead_colour, &fill, &edge);
-
-    // GL_CURRENT_BIT included, see the marker in RenderGLOverlayMultiCanvas.
-    glPushAttrib(GL_CURRENT_BIT | GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_ENABLE_BIT |
-                 GL_HINT_BIT | GL_TEXTURE_BIT);
-    glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
-    glDisable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_LINE_SMOOTH);
-    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
 
     // The outline bends outward where the strip near the boat starts to
-    // widen, so triangles from one of its corners would overlap there (a
-    // darker edge). From the boat, the middle of the circle, every point
-    // is in sight: triangles from there cover the fan once.
+    // widen; from the boat, the middle of the circle, every point is in
+    // sight, so triangles from there cover the fan once.
     wxPoint boat;
     GetCanvasPixLL(vp, &boat, m_ship_lat, m_ship_lon);
-    glColor4ub(fill.Red(), fill.Green(), fill.Blue(), fill.Alpha());
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex2d(boat.x, boat.y);
-    for (const wxPoint &point : points)
-        glVertex2d(point.x, point.y);
-    glVertex2d(points.front().x, points.front().y);
-    glEnd();
-
-    glColor4ub(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha());
-    const double scale = std::max(1.0, ViewportPixelsPerWindowPixel());
-    glLineWidth(static_cast<float>(1.5 * scale));
-    glBegin(GL_LINE_LOOP);
-    for (const wxPoint &point : points)
-        glVertex2d(point.x, point.y);
-    glEnd();
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(fill));
+    FillFan(dc, boat, points, true);
+    dc.SetPen(wxPen(edge, PenWidth(1.5, scale)));
+    StrokePolyline(dc, points, true);
 
     std::vector<std::vector<wxPoint>> lines;
     AheadFanLabel label;
     AheadFanMarks(vp, &lines, &label);
-    if (!lines.empty()) {
-        glColor4ub(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha() * 2 / 3);
-        glLineWidth(static_cast<float>(scale));
-        glEnable(GL_LINE_STIPPLE);
-        glLineStipple(static_cast<GLint>(std::lround(scale)), 0x0F0F);
-        for (const auto &line : lines) {
-            glBegin(GL_LINE_STRIP);
-            for (const wxPoint &point : line)
-                glVertex2d(point.x, point.y);
-            glEnd();
-        }
-        glDisable(GL_LINE_STIPPLE);
-    }
-    if (!label.text.IsEmpty())
-        DrawTextGL(label.text, AheadFanFont(),
-                   wxColour(edge.Red(), edge.Green(), edge.Blue(), 220), AheadLabelGround(),
-                   label.anchor, label.dx, label.dy, 4.0 * scale,
-                   static_cast<int>(std::lround(3.0 * scale)));
+    dc.SetPen(wxPen(wxColour(edge.Red(), edge.Green(), edge.Blue(), edge.Alpha() * 2 / 3),
+                    PenWidth(1.0, scale)));
+    for (const auto &line : lines)
+        StrokeDashed(dc, line, 4.0 * scale, 4.0 * scale);
 
-    glColor4ub(255, 255, 255, 255);
-    glLineWidth(1.0f);
-    glPopClientAttrib();
-    glPopAttrib();
+    if (!label.text.IsEmpty())
+        DrawAheadLabel(dc, vp, label, edge, scale);
     return true;
+}
+
+// The label of the fan: its length and sailing time on a light ground.
+void legend_pi::DrawAheadLabel(piDC &dc, PlugIn_ViewPort *vp, const AheadFanLabel &label,
+                               const wxColour &edge, double scale)
+{
+    const wxFont font = AheadFanFont();
+    const wxColour textColour(edge.Red(), edge.Green(), edge.Blue(), 220);
+    const int margin = static_cast<int>(std::lround(3.0 * scale));
+    wxCoord width = 0;
+    wxCoord height = 0;
+#ifndef __ANDROID__
+    // Measured as piDC draws it, on a wxScreenDC: its own GetTextExtent
+    // measures on a wxMemoryDC without a bitmap, which ignores the font.
+    {
+        wxScreenDC screen;
+        screen.SetFont(font);
+        screen.GetTextExtent(label.text, &width, &height);
+    }
 #else
-    // Android has OpenGL ES only, without these drawing calls.
-    return false;
+    // On Android piDC draws no text (see GlesPicture): a picture instead.
+    const wxSize text = GlesTextSize(label.text, AheadFanFontPixels());
+    width = text.x;
+    height = text.y;
+#endif
+    const wxSize box(width + 2 * margin, height + 2 * margin);
+    const wxPoint at = AheadLabelCorner(label.anchor, label.dx, label.dy, box, 4.0 * scale);
+
+#ifndef __ANDROID__
+    dc.SetPen(*wxTRANSPARENT_PEN);
+    dc.SetBrush(wxBrush(AheadLabelGround()));
+    dc.DrawRoundedRectangle(at.x, at.y, box.x, box.y, margin);
+    dc.SetFont(font);
+    dc.SetTextForeground(textColour);
+    // piDC draws the text as a texture in its colour, under a colour set
+    // to black: replace, not modulate, keeps the colour.
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    dc.DrawText(label.text, at.x + margin, at.y + margin);
+#else
+    (void)dc;
+    m_label_picture.Draw(m_gl_context, vp->pix_width, vp->pix_height, wxRect(at, box),
+                         [&](wxDC &picture) {
+                             std::unique_ptr<wxGraphicsContext> gc(
+                                 wxGraphicsContext::CreateFromUnknownDC(picture));
+                             if (gc) {
+                                 gc->SetPen(*wxTRANSPARENT_PEN);
+                                 gc->SetBrush(wxBrush(AheadLabelGround()));
+                                 gc->DrawRoundedRectangle(0, 0, box.x, box.y, margin);
+                             }
+                             GlesDrawText(picture, label.text, AheadFanFontPixels(),
+                                          textColour, margin, margin);
+                         });
 #endif
 }
