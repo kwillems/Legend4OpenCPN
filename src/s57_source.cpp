@@ -9,6 +9,8 @@
 
 #include "s57_source.h"
 
+#include "iso8211.h"
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -42,113 +44,12 @@ const int kRecordConnectedNode = 120;
 const int kPrimPoint = 1;
 const int kAttrScamin = 133;
 
-const unsigned char kFieldTerminator = 0x1E;
-const unsigned char kUnitTerminator = 0x1F;
-
-// ---------------------------------------------------------------------------
-// ISO 8211: records made of tagged fields with raw contents.
-// ---------------------------------------------------------------------------
-
-struct Field
-{
-    std::string tag;
-    std::string data; // without the field terminator
-};
-
-struct Record
-{
-    std::vector<Field> fields;
-
-    const Field *Find(const char *tag) const
-    {
-        for (const Field &field : fields) {
-            if (field.tag == tag)
-                return &field;
-        }
-        return nullptr;
-    }
-};
-
-int AsciiInt(const std::string &text, size_t at, size_t length)
-{
-    int value = 0;
-    for (size_t i = at; i < at + length && i < text.size(); ++i) {
-        const char c = text[i];
-        if (c < '0' || c > '9')
-            return -1;
-        value = value * 10 + (c - '0');
-    }
-    return value;
-}
-
-// Reads every record of a file. The first record (the data descriptive
-// record) is skipped; S-57 field layouts are fixed and known here.
-bool ReadRecords(const wxString &path, std::vector<Record> *records)
-{
-    wxFFile file(path, "rb");
-    if (!file.IsOpened())
-        return false;
-
-    std::string data;
-    const wxFileOffset size = file.Length();
-    if (size <= 24 || size > 512 * 1024 * 1024)
-        return false;
-    data.resize(static_cast<size_t>(size));
-    if (file.Read(&data[0], data.size()) != data.size())
-        return false;
-
-    size_t pos = 0;
-    bool first = true;
-
-    while (pos + 24 <= data.size()) {
-        const int length = AsciiInt(data, pos, 5);
-        const int base = AsciiInt(data, pos + 12, 5);
-        const int lengthSize = AsciiInt(data, pos + 20, 1);
-        const int positionSize = AsciiInt(data, pos + 21, 1);
-        const int tagSize = AsciiInt(data, pos + 23, 1);
-
-        if (length < 24 || base < 24 || lengthSize <= 0 || positionSize <= 0 ||
-            tagSize <= 0 || pos + static_cast<size_t>(length) > data.size())
-            return !records->empty();
-
-        if (!first) {
-            Record record;
-            const size_t entrySize =
-                static_cast<size_t>(tagSize + lengthSize + positionSize);
-            size_t entry = pos + 24;
-
-            while (entry + entrySize <= pos + static_cast<size_t>(base) &&
-                   static_cast<unsigned char>(data[entry]) != kFieldTerminator) {
-                Field field;
-                field.tag = data.substr(entry, tagSize);
-                const int fieldLength = AsciiInt(data, entry + tagSize, lengthSize);
-                const int fieldPos =
-                    AsciiInt(data, entry + tagSize + lengthSize, positionSize);
-                entry += entrySize;
-
-                if (fieldLength <= 0 || fieldPos < 0)
-                    continue;
-
-                const size_t start = pos + base + fieldPos;
-                if (start + fieldLength > pos + static_cast<size_t>(length))
-                    continue;
-
-                field.data = data.substr(start, fieldLength);
-                if (!field.data.empty() &&
-                    static_cast<unsigned char>(field.data.back()) == kFieldTerminator)
-                    field.data.pop_back();
-                record.fields.push_back(field);
-            }
-
-            records->push_back(record);
-        }
-
-        first = false;
-        pos += static_cast<size_t>(length);
-    }
-
-    return !records->empty();
-}
+using iso8211::AsciiInt;
+using iso8211::Field;
+using iso8211::kFieldTerminator;
+using iso8211::kUnitTerminator;
+using iso8211::ReadRecords;
+using iso8211::Record;
 
 // Little-endian binary subfields.
 unsigned U8(const std::string &d, size_t at)
@@ -399,11 +300,18 @@ S57Source::ParsedCell S57Source::ParseCell(const wxString &basePath) const
     if (cell.features.empty() && cell.nodes.empty())
         return parsed;
 
+    // Updates build on each other: after one that cannot be read, the
+    // later ones are not applied either.
     const wxArrayString updates = UpdateFiles(basePath);
     for (size_t i = 0; i < updates.GetCount(); ++i) {
         std::vector<Record> updateRecords;
-        if (ReadRecords(updates[i], &updateRecords))
-            ApplyRecords(updateRecords, &cell, true);
+        if (!ReadRecords(updates[i], &updateRecords)) {
+            wxLogMessage("Legend: update %s could not be read, the cell is used "
+                         "without it and later updates",
+                         updates[i]);
+            break;
+        }
+        ApplyRecords(updateRecords, &cell, true);
     }
 
     // Extent from every node, so the whole coverage counts, not only the
@@ -745,8 +653,7 @@ std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &ar
             if (object.lat < area.lat_min || object.lat > area.lat_max ||
                 object.lon < area.lon_min || object.lon > area.lon_max)
                 continue;
-            const wxString key = wxString::Format(
-                "%s|%.5f|%.5f|%d", object.className, object.lat, object.lon, cell.scale);
+            const wxString key = ChartObjectKey(object) << '|' << cell.scale;
             if (!seen.insert(key).second)
                 continue;
             objects.push_back(object);
@@ -779,8 +686,7 @@ std::vector<ChartObject> S57Source::PointObjectsInView(const PlugIn_ViewPort &vp
                 object.lon < vp.lon_min || object.lon > vp.lon_max)
                 continue;
 
-            const wxString key = wxString::Format(
-                "%s|%.5f|%.5f", object.className, object.lat, object.lon);
+            const wxString key = ChartObjectKey(object);
             if (!seen.insert(key).second)
                 continue;
 

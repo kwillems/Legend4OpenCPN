@@ -822,7 +822,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     // An incomplete list never looks complete: while cells of the beam are
     // still read, or where no chart covers part of it, the heading says so
     // instead of "nothing in the beam".
-    if (m_ahead_reading)
+    if (!m_chart_sources_available)
+        summary << " &middot; <b>" << _("No vector charts to look in")
+                << "</b>";
+    else if (m_ahead_reading)
         summary << " &middot; <b>" << _("Charts still being read")
                 << "</b>";
     else if (m_ahead_uncovered)

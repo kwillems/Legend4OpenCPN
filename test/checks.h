@@ -114,5 +114,7 @@ void TestNotePlaces();
 void TestSymbolMeanings();
 void TestLayerWaypoints();
 void TestGeo();
+void TestChartObjects();
+void TestIso8211();
 
 #endif

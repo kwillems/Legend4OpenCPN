@@ -337,7 +337,11 @@ is uit te zetten met *Melding bij nieuw marifoongebied*.
 Het kopje **Uitkijk** laat zien wat je op koers tegenkomt. Het verschijnt
 zodra de boot vaart: een recente GPS-positie en minstens een halve knoop.
 Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld *tot 2 NM,
-± 20 min · breedte 30°*, en *niets in de bundel* als er niets ligt. De tijd
+± 20 min · breedte 30°*, en *niets in de bundel* als er niets ligt. Dat
+zegt de Uitkijk alleen als hij het weet: worden kaarten nog gelezen, dekt
+geen kaart een deel van de bundel of zijn er geen vectorkaarten, dan staat
+dat er in plaats daarvan. De Uitkijk leest je vectorkaarten (ENC en
+o-charts) zelf, ook als je een rasterkaart bekijkt. De tijd
 is een schatting bij je snelheid van dit moment. Klap je de Uitkijk in, dan
 staan rechts naast het kopje de iconen van wat je het eerst tegenkomt, op
 volgorde van aankomst (ook marifoongebieden en notities), met het aantal van
@@ -519,7 +523,10 @@ Enter na een kop geeft weer gewone tekst, Enter op een lege lijstregel
 beëindigt de lijst en `Shift+Enter` begint een nieuwe regel binnen dezelfde
 alinea. Alles wordt vanzelf bewaard, anderhalve seconde nadat je stopt met
 typen; onderin staat wanneer. **Opslaan**, bovenin naast de keuzelijst, of
-`Esc` bewaart en brengt je terug naar de gewone weergave.
+`Esc` bewaart en brengt je terug naar de gewone weergave. Lukt bewaren niet,
+bijvoorbeeld omdat de map niet beschrijfbaar is, dan vraagt de plugin eerst
+of je de notitie toch wilt sluiten; anders blijf je erin en raak je niets
+kwijt.
 
 Op schijf blijft een notitie gewone Markdown. Een tabel zie je tijdens het
 bewerken als Markdown-tekst in een vaste letter; zo kun je hem bewerken en

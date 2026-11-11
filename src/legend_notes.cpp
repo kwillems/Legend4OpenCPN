@@ -311,12 +311,22 @@ void legend_pi::StartEditing()
     m_editor->SetFocus();
 }
 
-void legend_pi::StopEditing()
+bool legend_pi::StopEditing()
 {
     if (!m_editing)
-        return;
+        return true;
 
-    SaveNote();
+    // A note that could not be saved is not closed without asking: the
+    // changes would be gone.
+    if (!SaveNote()) {
+        const int answer = wxMessageBox(
+            _("The note could not be saved. Close it anyway and lose the changes?"),
+            _("Save note"), wxYES_NO | wxNO_DEFAULT | wxICON_WARNING,
+            m_legend_window ? static_cast<wxWindow *>(m_legend_window)
+                            : GetOCPNCanvasWindow());
+        if (answer != wxYES)
+            return false;
+    }
     m_editing = false;
     m_editing_path.Clear();
 
@@ -324,15 +334,16 @@ void legend_pi::StopEditing()
     // as it is now.
     RefreshLegendFiles();
     UpdateNoteButtons();
+    return true;
 }
 
 // Writes the note as Markdown, through a temporary file so a failure never
 // leaves half a note behind.
-void legend_pi::SaveNote()
+bool legend_pi::SaveNote()
 {
     m_save_timer.Stop();
     if (!m_editor || m_editing_path.IsEmpty() || !m_note_dirty)
-        return;
+        return true;
 
     const wxString text =
         BlockWithPlace(m_note_block, m_note_has_place, m_note_lat, m_note_lon, m_note_radius) +
@@ -351,14 +362,37 @@ void legend_pi::SaveNote()
         if (m_save_status)
             m_save_status->SetLabel(_("Could not save"));
     }
+    return saved;
+}
+
+void legend_pi::RescueNote()
+{
+    if (!m_editor || m_editing_path.IsEmpty())
+        return;
+    const wxString text =
+        BlockWithPlace(m_note_block, m_note_has_place, m_note_lat, m_note_lon, m_note_radius) +
+        m_editor->ToMarkdown();
+    wxFileName rescue(wxFileName::GetTempDir(), wxFileName(m_editing_path).GetFullName());
+    rescue.SetName(rescue.GetName() + " (not saved)");
+    wxFile file;
+    if (file.Create(rescue.GetFullPath(), true) && file.Write(text, wxConvUTF8)) {
+        wxLogMessage("Legend: could not save %s, its text is in %s", m_editing_path,
+                     rescue.GetFullPath());
+        wxMessageBox(wxString::Format(_("The note could not be saved. Its text is in\n%s"),
+                                      rescue.GetFullPath()),
+                     _("Save note"), wxOK | wxICON_WARNING, GetOCPNCanvasWindow());
+    }
+    else {
+        wxLogMessage("Legend: could not save %s, nor a copy of it", m_editing_path);
+    }
 }
 
 // A new note in the Legend folder, named after its title, opened for
 // writing.
 bool legend_pi::NewNote()
 {
-    if (m_editing)
-        StopEditing();
+    if (m_editing && !StopEditing())
+        return false;
 
     wxTextEntryDialog dialog(m_legend_window, _("Title of the new note:"),
                              _("New note"));
@@ -620,8 +654,8 @@ void legend_pi::DeleteNoteFile(const wxString &path)
     for (int n = 2; target.FileExists(); ++n)
         target.SetName(wxString::Format("%s %d", wxFileName(path).GetName(), n));
     // A note being edited is saved and closed first.
-    if (m_editing && m_editing_path == path)
-        StopEditing();
+    if (m_editing && m_editing_path == path && !StopEditing())
+        return;
 
     if (!wxRenameFile(path, target.GetFullPath(), false)) {
         wxMessageBox(_("Could not move the note."),
@@ -814,8 +848,8 @@ void legend_pi::RefreshNotePlaces()
 // files stay in the list, to read.
 void legend_pi::SetNotesOn(bool on)
 {
-    if (!on && m_editing)
-        StopEditing();
+    if (!on && m_editing && !StopEditing())
+        return;
     // Turned off: once, a notice that the notes are hidden, not gone.
     const size_t onChart = m_note_places.size();
     size_t notes = 0;
@@ -917,8 +951,8 @@ bool legend_pi::NoteHiddenAtScale(const NotePlace &place)
 void legend_pi::OpenNote(const wxString &path)
 {
     CreateLegendWindow();
-    if (m_editing)
-        StopEditing();
+    if (m_editing && !StopEditing())
+        return;
     if (!m_legend_window->IsShown()) {
         RefreshLegendFiles();
         m_legend_window->Show();
@@ -1515,13 +1549,13 @@ void legend_pi::SetNotePlace(double lat, double lon)
 
 // A sign dragged to another place: the note is pinned there, its radius
 // and the rest of its settings stay.
-void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
+bool legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
 {
     if (m_editing && m_editing_path == path) {
         m_note_lat = lat;
         m_note_lon = lon;
         NotePlaceChanged();
-        return;
+        return true;
     }
 
     wxString text;
@@ -1529,14 +1563,15 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
         wxFile file(path);
         if (!file.IsOpened() || !file.ReadAll(&text, wxConvUTF8)) {
             RefreshNotePlaces();
-            return;
+            return false;
         }
     }
     const NoteFrontMatter front = SplitFrontMatter(text);
     const wxString moved =
         BlockWithPlace(front.block, true, lat, lon, front.radius) + front.body;
     wxTempFile out(path);
-    if (!out.IsOpened() || !out.Write(moved, wxConvUTF8) || !out.Commit())
+    const bool saved = out.IsOpened() && out.Write(moved, wxConvUTF8) && out.Commit();
+    if (!saved)
         wxMessageBox(_("Could not save the new place in the note."),
                      _("Move note"),
                      wxOK | wxICON_WARNING, GetOCPNCanvasWindow());
@@ -1545,6 +1580,7 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
     // The note in the window shows its place on top.
     if (m_legend_window && m_legend_window->IsShown() && m_current_legend_path == path)
         ShowLegend(m_legend_index);
+    return saved;
 }
 
 // The last dragged sign back where it was.
@@ -1553,12 +1589,14 @@ void legend_pi::MoveNotePlace(const wxString &path, double lat, double lon)
 // saving reads the places again.
 void legend_pi::FinishNoteMove(NotePlace place, double fromLat, double fromLon)
 {
+    // Only a move that is saved is confirmed, and can be put back.
+    if (!MoveNotePlace(place.path, place.lat, place.lon))
+        return;
     m_undo_move_valid = true;
     m_undo_move_path = place.path;
     m_undo_move_title = place.title;
     m_undo_move_lat = fromLat;
     m_undo_move_lon = fromLon;
-    MoveNotePlace(place.path, place.lat, place.lon);
     ShowNotice(_("Note moved"),
                wxString::FromUTF8("\u201C") + place.title + _("\u201D is in a new place."),
                false, wxColour(186, 117, 23), [this]() { UndoNoteMove(); }, _("Put back"));

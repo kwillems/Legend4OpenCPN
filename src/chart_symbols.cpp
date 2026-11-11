@@ -132,19 +132,6 @@ const char *const kTopmarkRigid[] = {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// ChartObject
-// ---------------------------------------------------------------------------
-
-const wxString *ChartObject::Attribute(const wxString &acronym) const
-{
-    for (const auto &entry : attributes) {
-        if (entry.first == acronym)
-            return &entry.second;
-    }
-    return nullptr;
-}
-
-// ---------------------------------------------------------------------------
 // ChartSymbols: loading
 // ---------------------------------------------------------------------------
 
