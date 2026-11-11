@@ -51,6 +51,9 @@ const double kDetailFactor = 4.0;
 
 // Layout of an attribute value inside OpenCPN (s52s57.h). The API only
 // declares the array type; the o-charts plugin fills it with this layout.
+// Nothing checks the layout for us: ToChartObject() reads the attributes
+// only while their acronyms look like S-57 acronyms, so a changed layout
+// gives objects without attributes rather than garbage.
 struct S57AttrValue
 {
     void *value;
@@ -84,6 +87,25 @@ wxString AttributeText(const S57AttrValue *val)
     }
 }
 
+// Six characters: an S-57 acronym (letters and digits, inland ones in
+// lower case), padded with spaces.
+bool LooksLikeAcronym(const char *text)
+{
+    int letters = 0;
+    for (int i = 0; i < 6; ++i) {
+        const char c = text[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            if (letters != i)
+                return false;  // a letter after padding
+            ++letters;
+        }
+        else if (c != ' ' && c != '\0') {
+            return false;
+        }
+    }
+    return letters >= 4;
+}
+
 ChartObject ToChartObject(const PI_S57Obj *obj)
 {
     ChartObject object;
@@ -92,13 +114,27 @@ ChartObject ToChartObject(const PI_S57Obj *obj)
     object.lat = obj->m_lat;
     object.lon = obj->m_lon;
 
-    if (obj->att_array && obj->attVal && obj->n_attr > 0) {
+    // An S-57 object has a few dozen attributes at most.
+    const int kMaxAttributes = 256;
+    if (obj->att_array && obj->attVal && obj->n_attr > 0 && obj->n_attr <= kMaxAttributes) {
         const auto *values =
             reinterpret_cast<const S57AttrValueArray *>(obj->attVal);
         const int count =
             std::min(obj->n_attr, static_cast<int>(values->GetCount()));
 
         for (int i = 0; i < count; ++i) {
+            if (!LooksLikeAcronym(obj->att_array + 6 * i)) {
+                static bool logged = false;
+                if (!logged) {
+                    wxLogMessage("Legend: o-charts attributes of %s are not laid out as "
+                                 "expected; they are not read",
+                                 object.className);
+                    logged = true;
+                }
+                object.attributes.clear();
+                object.scamin = 0;
+                break;
+            }
             wxString acronym = wxString::From8BitData(obj->att_array + 6 * i, 6);
             acronym.Trim(true);
             const wxString value = AttributeText(values->Item(i));
@@ -152,10 +188,20 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Create()
         if (!object)
             continue;
 
+        // Only a chart class of the plugin API this plugin was built
+        // against is used; anything else would be read with the wrong
+        // layout. OpenCPN creates plugin charts the same way.
         auto *chart = dynamic_cast<PlugInChartBaseExtendedPlus2 *>(object);
-        if (!chart)
-            chart = static_cast<PlugInChartBaseExtendedPlus2 *>(object);
-        return chart;
+        if (chart)
+            return chart;
+        static bool logged = false;
+        if (!logged) {
+            wxLogMessage("Legend: o-charts class %s is not a PlugInChartBaseExtendedPlus2; "
+                         "o-charts cells are not read",
+                         name);
+            logged = true;
+        }
+        delete object;
     }
     return nullptr;
 }
