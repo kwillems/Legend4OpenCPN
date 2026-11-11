@@ -343,7 +343,11 @@ The **Lookout** heading shows what you will meet on your course.
 It appears as soon as the boat is moving: a recent GPS position and at
 least half a knot. Next to the heading it says where the lookout is
 looking, for example *up to 2 NM, ± 20 min · width 30°*, and *nothing in the
-beam* when nothing is there. The time is an estimate at your current speed. When you
+beam* when nothing is there. The Lookout only says so when it knows: while
+charts are still being read, where no chart covers part of the beam or when
+there are no vector charts, it says that instead. The Lookout reads your
+vector charts (ENC and o-charts) itself, also while you look at a raster
+chart. The time is an estimate at your current speed. When you
 fold the Lookout, the icons of what you will meet first are shown to the
 right of the heading, in order of arrival (VHF areas and notes too), with
 the count of the rest after them, such as *+4*.
@@ -525,7 +529,10 @@ Enter after a heading gives plain text again, Enter on an empty list line
 ends the list and `Shift+Enter` starts a new line within the same paragraph.
 Everything is saved by itself, a second and a half after you stop typing;
 the bottom shows when. **Save**, at the top next to the drop-down
-list, or `Esc` saves and takes you back to the normal view.
+list, or `Esc` saves and takes you back to the normal view. When saving
+fails, for instance because the folder cannot be written to, the plugin
+first asks whether to close the note anyway; otherwise you stay in it and
+lose nothing.
 
 On disk a note stays plain Markdown. While editing, a table is shown as
 Markdown text in a fixed-width font; that way you can edit it and it is
