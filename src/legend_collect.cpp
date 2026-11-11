@@ -32,6 +32,15 @@
 
 namespace {
 
+// Topmarks, fog signals and radio aids belong to the buoy or beacon at
+// their spot; they carry no light and are not something of their own.
+bool IsAccessoryClass(const wxString &className)
+{
+    static const std::set<wxString> accessories = {
+        "TOPMAR", "topmar", "FOGSIG", "RTPBCN", "RADSTA", "RDOSTA", "RETRFL"};
+    return accessories.count(className) > 0;
+}
+
 // Chart lights are paired with the buoy or beacon at the same spot through
 // a grid of cells of this size in degrees, a few metres.
 const double kCarrierCell = 6e-5;
@@ -962,6 +971,7 @@ void legend_pi::GroupChartObjects(const std::vector<ChartObject> &objects,
             group.key = key;
             group.chartSymbol = true;
             group.lightSymbol = object.className == "LIGHTS";
+            group.accessory = IsAccessoryClass(object.className);
             group.symbol = resolved.symbol;
             group.hiddenAtScale = hiddenByScale;
             group.visibleFrom = hiddenByScale ? object.scamin : 0;
@@ -1049,10 +1059,7 @@ void legend_pi::GroupChartObjects(const std::vector<ChartObject> &objects,
         // What a light can stand on: buoys and beacons first, then other
         // structures. Topmarks, fog signals and radio aids share the spot
         // but carry nothing.
-        static const std::set<wxString> notCarriers = {
-            "TOPMAR", "topmar", "FOGSIG", "RTPBCN", "RADSTA", "RDOSTA",
-            "RETRFL", "SOUNDG"};
-        if (notCarriers.count(object.className) == 0) {
+        if (!IsAccessoryClass(object.className) && object.className != "SOUNDG") {
             const wxString prefix = object.className.Left(3).Upper();
             const int rank =
                 (prefix == "BOY" || prefix == "BCN" || prefix == "LIT") ? 0 : 1;

@@ -66,6 +66,9 @@ struct DynamicGroup
     // Chart objects (o-charts) are grouped by S-52 symbol instead of by
     // waypoint icon; the picture then comes from OpenCPN's symbol sheet.
     bool chartSymbol = false;
+    // Part of what stands at its spot (a topmark, fog signal or radar
+    // beacon), not something of its own.
+    bool accessory = false;
     wxString symbol;
     wxString iconName; // waypoint icon to load; key may carry a suffix
 
