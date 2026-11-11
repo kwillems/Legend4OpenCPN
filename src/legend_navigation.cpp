@@ -435,16 +435,40 @@ void legend_pi::ComputeAhead()
               [](const Found &a, const Found &b) { return a.along < b.along; });
 
     // The same buoy from two sources (a waypoint and a chart symbol) once;
-    // the first, or the one that knows its light. All of the fan is listed:
+    // the first, or the one that knows its light. Two chart symbols, or two
+    // waypoint icons, that differ are two things that lie close together,
+    // such as a beacon beside a buoy: both stay. All of the fan is listed:
     // what lies in the beam on the chart is in the list too.
+    auto sameThing = [](const DynamicGroup &a, const DynamicGroup &b) {
+        if (a.accessory || b.accessory || a.chartSymbol != b.chartSymbol)
+            return true;
+        if (a.chartSymbol)
+            return a.symbol == b.symbol;
+        const wxString &iconA = a.iconName.IsEmpty() ? a.key : a.iconName;
+        const wxString &iconB = b.iconName.IsEmpty() ? b.key : b.iconName;
+        return iconA == iconB;
+    };
     wxString key;
     for (const Found &f : found) {
         bool duplicate = false;
         for (AheadItem &kept : m_ahead) {
             const auto &p = m_ahead_groups[kept.group].positions[kept.position];
-            if (std::fabs(p.first - f.lat) < 0.0002 && std::fabs(p.second - f.lon) < 0.0003) {
-                if (kept.light.IsEmpty() && !f.item.light.IsEmpty())
+            if (std::fabs(p.first - f.lat) < 0.0002 && std::fabs(p.second - f.lon) < 0.0003 &&
+                sameThing(m_ahead_groups[kept.group], m_ahead_groups[f.item.group])) {
+                // The buoy rather than its topmark, and the one that
+                // knows its light.
+                const bool keptAccessory = m_ahead_groups[kept.group].accessory;
+                const bool newAccessory = m_ahead_groups[f.item.group].accessory;
+                if (keptAccessory && !newAccessory) {
+                    const wxString light = kept.light;
                     kept = f.item;
+                    if (kept.light.IsEmpty())
+                        kept.light = light;
+                }
+                else if (kept.light.IsEmpty() && !f.item.light.IsEmpty() &&
+                         keptAccessory == newAccessory) {
+                    kept = f.item;
+                }
                 duplicate = true;
                 break;
             }
