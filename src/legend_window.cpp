@@ -1089,8 +1089,10 @@ void legend_pi::BindWindowEvents()
     m_legend_window->Bind(
         wxEVT_CLOSE_WINDOW,
         [this](wxCloseEvent &event) {
-            if (m_editing)
-                StopEditing();
+            if (m_editing && !StopEditing()) {
+                event.Veto();
+                return;
+            }
             SaveCurrentMarkdownScroll();
             SaveWindowState();
             SaveConfig();
@@ -1288,8 +1290,8 @@ void legend_pi::ToggleLegendWindow()
     CreateLegendWindow();
 
     if (m_legend_window->IsShown()) {
-        if (m_editing)
-            StopEditing();
+        if (m_editing && !StopEditing())
+            return;
         SaveCurrentMarkdownScroll();
         SaveWindowState();
         SaveConfig();

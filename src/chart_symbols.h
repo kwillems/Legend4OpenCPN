@@ -13,6 +13,8 @@
 #include <cstdint>  // ocpn_plugin.h (api-18) uses uint64_t without it
 #include "ocpn_plugin.h"
 
+#include "chart_object.h"
+
 #include <map>
 #include <utility>
 #include <vector>
@@ -20,27 +22,6 @@
 #include <wx/gdicmn.h>
 #include <wx/image.h>
 #include <wx/string.h>
-
-// One object of a vector chart, independent of where it came from: the
-// o-charts plugin or an S-57 file read by this plugin.
-struct ChartObject
-{
-    enum Primitive { Point = 0, Line = 1, Area = 2 };
-
-    wxString className;   // S-57 acronym, e.g. BOYLAT
-    int primitive = Point;
-    double lat = 0.0;
-    double lon = 0.0;
-    int scamin = 0;       // 0 = no scale limit
-    int cellScale = 0;    // compilation scale of its cell, 0 = unknown
-
-    // Acronym and value as text, in chart order. List values are written
-    // as "3,4,3", the way the S-52 lookup tables write them.
-    std::vector<std::pair<wxString, wxString>> attributes;
-
-    // Value of an attribute, or nullptr when the object does not have it.
-    const wxString *Attribute(const wxString &acronym) const;
-};
 
 // Extent and compilation scale of a chart cell.
 struct CellExtent

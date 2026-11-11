@@ -448,6 +448,7 @@ bool legend_pi::PrefillFromLayers(const wxArrayString &guids)
             entry.visible = visible;
             entry.useScamin = point.useScamin;
             entry.scamin = point.scamin;
+            entry.layer = layer;
             LightCharacter light;
             if (light.FindInWaypoint(point.name, point.description))
                 entry.light = light.Abbreviation();
@@ -830,6 +831,10 @@ void legend_pi::CollectChartObjects(
     if (m_ocharts_available)
         objects = m_ocharts.PointObjectsInView(vp, m_show_hidden_at_scale);
 
+    // Where o-charts has an object, an ENC cell of the same waters adds
+    // nothing: the two may write attributes differently, so compare class
+    // and position only. The sources already count every sector of a
+    // sector light (ChartObjectKey).
     auto positionKey = [](const ChartObject &object) {
         return wxString::Format(
             "%s|%.5f|%.5f", object.className, object.lat, object.lon);
@@ -839,25 +844,9 @@ void legend_pi::CollectChartObjects(
     for (const ChartObject &object : objects)
         fromOcharts.insert(positionKey(object));
 
-    // Overlapping cells hold the same objects. A sector light is several
-    // lights at one position, which differ in colour and character, so
-    // for lights those count as well.
-    std::set<wxString> seenEnc;
     const std::vector<ChartObject> enc = m_s57.PointObjectsInView(vp);
     for (const ChartObject &object : enc) {
-        const wxString position = positionKey(object);
-        if (fromOcharts.count(position) > 0)
-            continue;
-
-        wxString key = position;
-        if (object.className == "LIGHTS") {
-            for (const char *acronym :
-                 {"LITCHR", "SIGGRP", "SIGPER", "COLOUR", "SECTR1", "SECTR2"}) {
-                const wxString *value = object.Attribute(acronym);
-                key << '|' << (value ? *value : wxString());
-            }
-        }
-        if (seenEnc.insert(key).second)
+        if (fromOcharts.count(positionKey(object)) == 0)
             objects.push_back(object);
     }
 

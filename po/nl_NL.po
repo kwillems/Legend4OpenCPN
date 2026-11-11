@@ -535,6 +535,9 @@ msgstr "Geen positie van de boot"
 msgid "No symbols in view match &lsquo;"
 msgstr "Geen symbolen in beeld die passen bij &lsquo;"
 
+msgid "No vector charts to look in"
+msgstr "Geen vectorkaarten om in te kijken"
+
 msgid "No visible waypoints in this chart view."
 msgstr "Geen zichtbare waypoints in dit kaartbeeld."
 
@@ -651,6 +654,9 @@ msgstr "Opslaan"
 
 msgid "Save and finish editing (Esc)"
 msgstr "Opslaan en klaar met bewerken (Esc)"
+
+msgid "Save note"
+msgstr "Notitie opslaan"
 
 msgid "Saved"
 msgstr "Bewaard"
@@ -877,6 +883,18 @@ msgstr "1 notitie op de kaart is verborgen, niet verwijderd."
 #, c-format
 msgid "%zu notes on the chart are hidden, not deleted."
 msgstr "%zu notities op de kaart zijn verborgen, niet verwijderd."
+
+msgid "The note could not be saved. Close it anyway and lose the changes?"
+msgstr ""
+"De notitie kon niet worden opgeslagen. Toch sluiten en de wijzigingen "
+"kwijtraken?"
+
+msgid ""
+"The note could not be saved. Its text is in\n"
+"%s"
+msgstr ""
+"De notitie kon niet worden opgeslagen. De tekst staat in\n"
+"%s"
 
 msgid "The notes are hidden, not deleted."
 msgstr "De notities zijn verborgen, niet verwijderd."

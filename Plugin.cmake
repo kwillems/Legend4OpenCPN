@@ -68,10 +68,14 @@ set(SRC
     src/legend_icons.cpp
     src/legend_html_window.h
     src/legend_html_window.cpp
+    src/chart_object.h
+    src/chart_object.cpp
     src/chart_symbols.h
     src/chart_symbols.cpp
     src/ocharts_source.h
     src/ocharts_source.cpp
+    src/iso8211.h
+    src/iso8211.cpp
     src/s57_source.h
     src/s57_source.cpp
     src/display_settings.h
@@ -185,12 +189,16 @@ macro(add_plugin_libraries)
             test/symbol_meanings_test.cpp
             test/layer_waypoints_test.cpp
             test/geo_test.cpp
+            test/chart_object_test.cpp
+            test/iso8211_test.cpp
             src/light_character.cpp
             src/vhf_areas.cpp
             src/note_places.cpp
             src/symbol_meanings.cpp
             src/layer_waypoints.cpp
             src/geo.cpp
+            src/chart_object.cpp
+            src/iso8211.cpp
         )
         target_include_directories(legend-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
         target_link_libraries(legend-tests ${wxWidgets_LIBRARIES})

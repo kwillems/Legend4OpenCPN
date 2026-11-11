@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <utility>
 
 #include <wx/dir.h>
 #include <wx/filename.h>
@@ -477,12 +478,12 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
             if (obj->m_lat < area.lat_min || obj->m_lat > area.lat_max ||
                 obj->m_lon < area.lon_min || obj->m_lon > area.lon_max)
                 continue;
-            const wxString key = wxString::Format("%s|%.5f|%.5f|%d", obj->FeatureName,
-                                                  obj->m_lat, obj->m_lon, cell.scale);
+            ChartObject object = ToChartObject(obj);
+            const wxString key = ChartObjectKey(object) << '|' << cell.scale;
             if (!seen.insert(key).second)
                 continue;
-            objects.push_back(ToChartObject(obj));
-            objects.back().cellScale = cell.scale;
+            object.cellScale = cell.scale;
+            objects.push_back(std::move(object));
         }
         // The objects belong to the chart; only the list is ours.
         list->Clear();
@@ -540,12 +541,11 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
                 continue;
 
             // The same object in two overlapping cells counts once.
-            const wxString key = wxString::Format(
-                "%s|%.5f|%.5f", obj->FeatureName, obj->m_lat, obj->m_lon);
-            if (!seen.insert(key).second)
+            ChartObject object = ToChartObject(obj);
+            if (!seen.insert(ChartObjectKey(object)).second)
                 continue;
 
-            objects.push_back(ToChartObject(obj));
+            objects.push_back(std::move(object));
         }
 
         // The objects belong to the chart; only the list is ours.

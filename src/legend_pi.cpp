@@ -317,8 +317,8 @@ void legend_pi::RemoveContextMenuItems()
 bool legend_pi::DeInit()
 {
     m_save_timer.Stop();
-    if (m_editing)
-        SaveNote();
+    if (m_editing && !SaveNote())
+        RescueNote();
     SaveCurrentMarkdownScroll();
     SaveWindowState();
     SaveConfig();
@@ -1377,11 +1377,17 @@ void legend_pi::CheckVisibilityChanges()
         return false;
     };
 
-    // Waypoints of one layer are next to each other in OpenCPN's list.
-    // Probe the first waypoint in view of every unbroken run, visible or
-    // not: hiding or showing a layer changes all of its waypoints at once.
+    // Hiding or showing a layer changes all of its waypoints at once, so
+    // one waypoint in view per layer tells. Where the layer files told
+    // which layer a waypoint is in, that is the first one in view of each
+    // layer. Elsewhere layers may follow each other in OpenCPN's list
+    // without a gap: of every unbroken run in view the first, the last
+    // and one in every kStride are asked.
+    const size_t kStride = 16;
+    const size_t none = static_cast<size_t>(-1);
     std::vector<size_t> probes;
-    size_t previous = static_cast<size_t>(-1);
+    size_t previous = none;
+    size_t runStart = none;
 
     for (size_t i = 0; i < m_waypoint_cache.size(); ++i) {
         const CachedWaypoint &wp = m_waypoint_cache[i];
@@ -1389,11 +1395,23 @@ void legend_pi::CheckVisibilityChanges()
         if (wp.lat < vp.lat_min || wp.lat > vp.lat_max || !lonInView(wp.lon))
             continue;
 
-        if (previous == static_cast<size_t>(-1) || i != previous + 1)
+        const bool newRun = previous == none || i != previous + 1 ||
+                            wp.layer != m_waypoint_cache[previous].layer;
+        if (newRun) {
+            if (previous != none && previous != runStart &&
+                m_waypoint_cache[previous].layer < 0)
+                probes.push_back(previous);
             probes.push_back(i);
+            runStart = i;
+        }
+        else if (wp.layer < 0 && (i - runStart) % kStride == 0) {
+            probes.push_back(i);
+        }
 
         previous = i;
     }
+    if (previous != none && previous != runStart && m_waypoint_cache[previous].layer < 0)
+        probes.push_back(previous);
 
     // Every probe asks OpenCPN for one waypoint; keep the total small.
     const size_t kMaxProbes = 200;

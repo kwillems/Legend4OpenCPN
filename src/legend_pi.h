@@ -100,6 +100,7 @@ struct CachedWaypoint
     bool useScamin = false;
     double scamin = 0.0;
     wxString light;     // light character found in its name or description
+    int layer = -1;     // layer file it came from, -1 = own or not known
 };
 
 #ifdef __ANDROID__
@@ -397,8 +398,14 @@ private:
     // own a moment after typing stops.
     bool IsMarkdownItem(const wxString &path) const;
     void StartEditing();
-    void StopEditing();
-    void SaveNote();
+    // False when the note could not be saved and the user keeps editing
+    // it: what was about to happen (closing, another note) must not.
+    bool StopEditing();
+    // True when the note is saved or there was nothing to save.
+    bool SaveNote();
+    // The text of the note being edited, for a save that fails when the
+    // plugin is unloaded: written next to the temporary files instead.
+    void RescueNote();
     bool NewNote();
     void NewNoteAt(double lat, double lon);
     void RenameNote();
@@ -446,7 +453,8 @@ private:
     void SetNotePlace(double lat, double lon);
     void AskNoteRadius();
     void NotePlaceChanged();
-    void MoveNotePlace(const wxString &path, double lat, double lon);
+    // True when the note has its new place on disk.
+    bool MoveNotePlace(const wxString &path, double lat, double lon);
     void UndoNoteMove();
     void FinishNoteMove(NotePlace place, double fromLat, double fromLon);
 #ifdef __ANDROID__
