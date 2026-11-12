@@ -822,7 +822,7 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     // An incomplete list never looks complete: while cells of the beam are
     // still read, or where no chart covers part of it, the heading says so
     // instead of "nothing in the beam".
-    if (!m_chart_sources_available)
+    if (m_ahead_area_valid && !m_ahead_sources_available)
         summary << " &middot; <b>" << _("No vector charts to look in")
                 << "</b>";
     else if (m_ahead_reading)
@@ -831,6 +831,10 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
     else if (m_ahead_uncovered)
         summary << " &middot; <b>"
                 << _("No chart for part of the beam")
+                << "</b>";
+    else if (m_ahead_limited)
+        summary << " &middot; <b>"
+                << _("Not every chart of the beam read")
                 << "</b>";
     else if (m_ahead.empty() && m_ahead_vhf.empty() && m_ahead_notes.empty())
         summary << " &middot; " << _("nothing in the beam");
@@ -1013,6 +1017,15 @@ void legend_pi::RenderAheadBlock(DynamicPage &page)
         else
             noteRow(nextNote++);
     }
+    // A long fan: the rest only counted.
+    if (m_ahead_more > 0) {
+        const wxColour &rowColour = row++ % 2 == 1 ? stripe : background;
+        html << "<tr bgcolor=\"" << HtmlColour(rowColour) << "\"><td width=\"" << cell
+             << "\"></td><td valign=\"middle\"><font size=\"-1\" color=\""
+             << HtmlColour(muted) << "\">"
+             << wxString::Format(_("%zu more further on in the beam"), m_ahead_more)
+             << "</font></td></tr>";
+    }
     html << "</table>";
 }
 
@@ -1080,9 +1093,9 @@ wxString legend_pi::AheadStrip(const DynamicPage &page,
         strip << "<img src=\"memory:" << name << "\"> ";
         ++shown;
     }
-    if (entries.size() > shown && shown > 0) {
+    if (entries.size() + m_ahead_more > shown && shown > 0) {
         strip << "<font color=\"" << HtmlColour(palette.muted) << "\">+"
-              << entries.size() - shown << "</font>";
+              << entries.size() + m_ahead_more - shown << "</font>";
     }
     return strip;
 }

@@ -178,7 +178,7 @@ void legend_pi::EnsureAheadGroups(double range)
         area.lon_max = lonMax + margin / cosLat;
         area.clat = (area.lat_min + area.lat_max) / 2.0;
         area.clon = (area.lon_min + area.lon_max) / 2.0;
-        ReadAheadArea(area);
+        ReadAheadArea(area, range);
     }
 
     if (!m_ahead_groups_key.IsEmpty() || !m_viewport_valid)
@@ -193,12 +193,16 @@ void legend_pi::EnsureAheadGroups(double range)
     LoadMeanings();
     CollectWaypointGroups(m_ahead_area, scaleForLimits, &groups, true);
     EnsureChartSymbols();
+    wxStopWatch watch;
+    size_t probes = 0;
     if (m_chart_symbols.IsLoaded()) {
-        size_t probes = 0;
         int unanswered = 0;
         GroupChartObjects(m_ahead_objects, vp, &groups, true, &probes, &unanswered);
     }
     m_ahead_groups = OrderGroups(groups, m_ship_lat, m_ship_lon);
+    wxLogMessage("Legend: lookout grouped %zu objects into %zu groups, %zu class probes, "
+                 "%ld ms",
+                 m_ahead_objects.size(), m_ahead_groups.size(), probes, watch.Time());
 }
 
 // Reads the chart objects of an area from the cells already open; the
@@ -206,16 +210,23 @@ void legend_pi::EnsureAheadGroups(double range)
 // read again. Where cells of different scales overlap, an object of a
 // coarser cell gives way to the same kind of object near it in a more
 // detailed one: the same buoy, drawn a little apart.
-void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
+void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area, double range)
 {
     m_ahead_area = area;
     m_ahead_area_valid = true;
     m_ahead_groups_key.Clear();
     m_ahead_cells_used.clear();
+    m_ahead_cells_skipped.clear();
+    m_ahead_read_lat = m_ship_lat;
+    m_ahead_read_lon = m_ship_lon;
+    m_ahead_read_cog = m_ship_cog;
+    m_ahead_read_range = range;
+    wxStopWatch watch;
 
-    // Points spread over the area: every one gets the most detailed cell
-    // that covers it, whatever the number of small harbour cells.
-    std::vector<std::pair<double, double>> samples;
+    // Points in the fan first, then spread over the area: every one gets
+    // the most detailed cell that covers it, whatever the number of small
+    // harbour cells; the limit only cuts the cells added after them.
+    std::vector<std::pair<double, double>> samples = AheadCheckPoints(range);
     const int kSteps = 8;
     for (int i = 0; i <= kSteps; ++i)
         for (int j = 0; j <= kSteps; ++j)
@@ -225,12 +236,16 @@ void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
     std::vector<ChartObject> objects;
     std::vector<wxString> unopened;
     std::vector<wxString> unread;
-    if (m_ocharts.Available())
+    const bool ocharts = m_ocharts.Available();
+    if (ocharts)
         objects = m_ocharts.PointObjectsInArea(area, kAheadMaxCellScale, kAheadOchartsCells,
-                                               samples, &unopened, &m_ahead_cells_used);
+                                               samples, &unopened, &m_ahead_cells_used,
+                                               &m_ahead_cells_skipped);
     const std::vector<ChartObject> enc = m_s57.PointObjectsInArea(
-        area, kAheadMaxCellScale, kAheadS57Cells, samples, &unread, &m_ahead_cells_used);
+        area, kAheadMaxCellScale, kAheadS57Cells, samples, &unread, &m_ahead_cells_used,
+        &m_ahead_cells_skipped);
     objects.insert(objects.end(), enc.begin(), enc.end());
+    m_ahead_sources_available = ocharts || m_s57.CellCount() > 0;
 
     std::stable_sort(objects.begin(), objects.end(),
                      [](const ChartObject &a, const ChartObject &b) {
@@ -281,10 +296,10 @@ void legend_pi::ReadAheadArea(const PlugIn_ViewPort &area)
             m_ahead_cells_to_open.emplace_back(false, path);
     m_ahead_reading = !m_ahead_cells_to_open.empty();
     wxLogMessage("Legend: lookout area %.3f..%.3f N, %.3f..%.3f E: %zu cells read, "
-                 "%zu to open, %zu objects",
+                 "%zu to open, %zu left out by the limit, %zu objects, %ld ms",
                  area.lat_min, area.lat_max, area.lon_min, area.lon_max,
                  m_ahead_cells_used.size(), m_ahead_cells_to_open.size(),
-                 m_ahead_objects.size());
+                 m_ahead_cells_skipped.size(), m_ahead_objects.size(), watch.Time());
     if (m_ahead_reading && !m_ahead_cell_timer.IsRunning())
         m_ahead_cell_timer.StartOnce(50);
 }
@@ -321,31 +336,65 @@ void legend_pi::OpenNextAheadCell()
 // Whether every part of the fan lies in a cell the Uitkijk read: points
 // along the course line and its edges. Without readable charts at all
 // there is nothing to say.
-bool legend_pi::AheadCovered(double range) const
+std::vector<std::pair<double, double>> legend_pi::AheadCheckPoints(double range) const
 {
-    if (!m_chart_sources_available)
-        return true;
+    std::vector<std::pair<double, double>> points;
     const double widen = std::tan(m_ahead_angle * 3.14159265358979323846 / 180.0);
     for (int step = 0; step <= 8; ++step) {
         const double along = range * step / 8.0;
         const double half = std::max(kAheadMinHalfWidth, along * widen);
-        for (double across : {-half, 0.0, half}) {
+        for (double across : {-half, -half / 2.0, 0.0, half / 2.0, half}) {
             double lat = 0.0;
             double lon = 0.0;
             PositionAt(m_ship_lat, m_ship_lon, m_ship_cog, along, across, &lat, &lon);
-            bool covered = false;
-            for (const CellExtent &cell : m_ahead_cells_used) {
-                if (lat >= cell.latMin && lat <= cell.latMax && lon >= cell.lonMin &&
-                    lon <= cell.lonMax) {
-                    covered = true;
-                    break;
-                }
-            }
-            if (!covered)
-                return false;
+            points.emplace_back(lat, lon);
         }
     }
+    return points;
+}
+
+namespace {
+
+bool CellHas(const CellExtent &cell, const std::pair<double, double> &point)
+{
+    return point.first >= cell.latMin && point.first <= cell.latMax &&
+           point.second >= cell.lonMin && point.second <= cell.lonMax;
+}
+
+}  // namespace
+
+bool legend_pi::AheadCovered(double range) const
+{
+    if (!m_ahead_sources_available)
+        return true;
+    for (const auto &point : AheadCheckPoints(range)) {
+        bool covered = false;
+        for (const CellExtent &cell : m_ahead_cells_used) {
+            if (CellHas(cell, point)) {
+                covered = true;
+                break;
+            }
+        }
+        if (!covered)
+            return false;
+    }
     return true;
+}
+
+bool legend_pi::AheadLimited(double range) const
+{
+    if (m_ahead_cells_skipped.empty())
+        return false;
+    for (const auto &point : AheadCheckPoints(range)) {
+        int best = 0;  // scale of the most detailed cell read here
+        for (const CellExtent &cell : m_ahead_cells_used)
+            if (CellHas(cell, point) && (best == 0 || cell.scale < best))
+                best = cell.scale;
+        for (const CellExtent &cell : m_ahead_cells_skipped)
+            if (CellHas(cell, point) && (best == 0 || cell.scale < best))
+                return true;
+    }
+    return false;
 }
 
 // The objects of the list in a fan ahead of the boat: a strip that widens
@@ -367,9 +416,29 @@ void legend_pi::ComputeAhead()
 
     const double range = AheadRange();
     EnsureVhfAreas();
+    // Timed: on a long fan this runs on every position, on the main thread.
+    wxStopWatch total;
     // Not only what is in view: the Uitkijk reads the fan's own area.
     EnsureAheadGroups(range);
+    const long ensureMs = total.Time();
     m_ahead_uncovered = !m_ahead_reading && !AheadCovered(range);
+    m_ahead_limited = !m_ahead_reading && !m_ahead_uncovered && AheadLimited(range);
+    // The area was read for the fan where it was then; sailed on, a cell
+    // the limit left out may now be the best one for part of the fan.
+    // Read again with the fan as it is now: its points come first. Not
+    // for the same fan again: then the limit itself is the reason.
+    const double cogTurn =
+        std::fabs(std::remainder(m_ship_cog - m_ahead_read_cog, 360.0));
+    const bool movedOn =
+        SeaMiles(m_ahead_read_lat, m_ahead_read_lon, m_ship_lat, m_ship_lon) >
+            std::max(0.5, range / 10.0) ||
+        cogTurn > 2.0 || std::fabs(range - m_ahead_read_range) > 0.01;
+    if (m_ahead_limited && movedOn) {
+        m_ahead_area_valid = false;
+        EnsureAheadGroups(range);
+        m_ahead_uncovered = !m_ahead_reading && !AheadCovered(range);
+        m_ahead_limited = !m_ahead_reading && !m_ahead_uncovered && AheadLimited(range);
+    }
 
     struct Found
     {
@@ -431,6 +500,7 @@ void legend_pi::ComputeAhead()
         }
     }
 
+    const long findMs = total.Time();
     std::sort(found.begin(), found.end(),
               [](const Found &a, const Found &b) { return a.along < b.along; });
 
@@ -448,12 +518,32 @@ void legend_pi::ComputeAhead()
         const wxString &iconB = b.iconName.IsEmpty() ? b.key : b.iconName;
         return iconA == iconB;
     };
+    // What is kept, by cells twice the tolerance in size: a match lies in
+    // the cell of the position or one next to it.
+    const double kJoinLat = 0.0002;
+    const double kJoinLon = 0.0003;
+    std::map<std::pair<long, long>, std::vector<size_t>> keptCells;
+    auto cellOf = [&](double lat, double lon) {
+        return std::make_pair(static_cast<long>(std::floor(lat / (2 * kJoinLat))),
+                              static_cast<long>(std::floor(lon / (2 * kJoinLon))));
+    };
     wxString key;
     for (const Found &f : found) {
         bool duplicate = false;
-        for (AheadItem &kept : m_ahead) {
+        const auto cell = cellOf(f.lat, f.lon);
+        std::vector<size_t> near;
+        for (long dLat = -1; dLat <= 1; ++dLat) {
+            for (long dLon = -1; dLon <= 1; ++dLon) {
+                auto bucket = keptCells.find(std::make_pair(cell.first + dLat, cell.second + dLon));
+                if (bucket != keptCells.end())
+                    near.insert(near.end(), bucket->second.begin(), bucket->second.end());
+            }
+        }
+        std::sort(near.begin(), near.end());  // the first kept first, as before
+        for (size_t index : near) {
+            AheadItem &kept = m_ahead[index];
             const auto &p = m_ahead_groups[kept.group].positions[kept.position];
-            if (std::fabs(p.first - f.lat) < 0.0002 && std::fabs(p.second - f.lon) < 0.0003 &&
+            if (std::fabs(p.first - f.lat) < kJoinLat && std::fabs(p.second - f.lon) < kJoinLon &&
                 sameThing(m_ahead_groups[kept.group], m_ahead_groups[f.item.group])) {
                 // The buoy rather than its topmark, and the one that
                 // knows its light.
@@ -475,7 +565,20 @@ void legend_pi::ComputeAhead()
         }
         if (duplicate)
             continue;
+        keptCells[cell].push_back(m_ahead.size());
         m_ahead.push_back(f.item);
+    }
+    m_ahead_more = 0;
+    if (m_ahead.size() > kAheadMaxRows) {
+        m_ahead_more = m_ahead.size() - kAheadMaxRows;
+        m_ahead.resize(kAheadMaxRows);
+    }
+    const long dedupMs = total.Time();
+    if (dedupMs > 100) {
+        wxLogMessage("Legend: lookout took %ld ms (groups %ld, finding %ld, %zu found, "
+                     "joining %ld, %zu listed)",
+                     dedupMs, ensureMs, findMs - ensureMs, found.size(), dedupMs - findMs,
+                     m_ahead.size());
     }
 
     for (const AheadItem &item : m_ahead) {
@@ -487,6 +590,10 @@ void legend_pi::ComputeAhead()
         key << "reading;";
     if (m_ahead_uncovered)
         key << "uncovered;";
+    if (m_ahead_limited)
+        key << "limited;";
+    if (m_ahead_more > 0)
+        key << "more:" << m_ahead_more / 50 << ';';
 
     CollectAheadNotes(range, key);
 

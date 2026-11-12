@@ -46,7 +46,8 @@ public:
                                                 size_t maxCells,
                                                 const std::vector<std::pair<double, double>> &samples,
                                                 std::vector<wxString> *unread,
-                                                std::vector<CellExtent> *used);
+                                                std::vector<CellExtent> *used,
+                                                std::vector<CellExtent> *skipped = nullptr);
 
     // The cells of this view that are not read yet, and one of them read,
     // so the legend can read them one by one before it asks for objects.

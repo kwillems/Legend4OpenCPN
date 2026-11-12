@@ -52,6 +52,8 @@ public:
 
     // The category as OpenCPN stores it: 'D', 'S', 'O' or 'M'.
     wxChar Category() const { return m_category; }
+    // When the settings were last read from OpenCPN's file.
+    const wxDateTime &Modified() const { return m_modified; }
 
 private:
     wxString m_path;

@@ -601,7 +601,8 @@ std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &ar
                                                        int maxScale, size_t maxCells,
                                                        const std::vector<std::pair<double, double>> &samples,
                                                        std::vector<wxString> *unread,
-                                                       std::vector<CellExtent> *used)
+                                                       std::vector<CellExtent> *used,
+                                                       std::vector<CellExtent> *skipped)
 {
     std::vector<ChartObject> objects;
     if (!m_inventoried)
@@ -622,19 +623,44 @@ std::vector<ChartObject> S57Source::PointObjectsInArea(const PlugIn_ViewPort &ar
         if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
             chosen.push_back(cell);
     };
+    // Every sample point its most detailed cell while the limit allows;
+    // beyond it a point not covered yet gets its coarsest cell, which
+    // covers the most. More cells than the limit would not stay loaded.
+    auto has = [](const Cell *cell, const std::pair<double, double> &point) {
+        return point.first >= cell->latMin && point.first <= cell->latMax &&
+               point.second >= cell->lonMin && point.second <= cell->lonMax;
+    };
     for (const auto &point : samples) {
+        const Cell *finest = nullptr;
+        const Cell *coarsest = nullptr;
+        bool covered = false;
         for (const Cell *cell : candidates) {
-            if (point.first >= cell->latMin && point.first <= cell->latMax &&
-                point.second >= cell->lonMin && point.second <= cell->lonMax) {
-                choose(cell);
-                break;
-            }
+            if (!has(cell, point))
+                continue;
+            if (!finest)
+                finest = cell;
+            coarsest = cell;
+            covered = covered || std::find(chosen.begin(), chosen.end(), cell) != chosen.end();
         }
+        if (!finest)
+            continue;
+        if (chosen.size() < maxCells)
+            choose(finest);
+        else if (!covered)
+            choose(coarsest);
     }
     for (const Cell *cell : candidates) {
         if (chosen.size() >= maxCells)
             break;
         choose(cell);
+    }
+    // What the limit left out, so the Uitkijk can tell when a better
+    // chart for part of the fan was not read.
+    if (skipped) {
+        for (const Cell *cell : candidates)
+            if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
+                skipped->push_back(
+                    {cell->latMin, cell->lonMin, cell->latMax, cell->lonMax, cell->scale});
     }
 
     std::set<wxString> seen;
