@@ -11,7 +11,7 @@ your own legends, notes and route descriptions too, and pins notes to a
 place on the chart. If you only want a legend, you turn notes off entirely.
 
 > Status: alpha. The plugin is developed and tested on macOS (Apple Silicon)
-> with OpenCPN 5.14.
+> with OpenCPN 5.14, and tested on an Android tablet with OpenCPN 5.14.
 
 > **Use at your own risk.** Legend4OpenCPN is an aid, not a means of
 > navigation. The explanations, light characteristics, channels and other
@@ -113,7 +113,7 @@ place on the chart. If you only want a legend, you turn notes off entirely.
 ## Installing
 
 1. Download or build the package, for example
-   `Legend-v0.2.0-alpha27_darwin-wx32-10.13.6-arm64.tar.gz`.
+   `Legend-v0.2.0-alpha32_darwin-wx32-10.13.6-arm64.tar.gz`.
 2. In OpenCPN, choose **Options → Plugins → Import Plugin** and select the
    package.
 3. Enable the plugin. The Legend button appears in the toolbar.
@@ -682,8 +682,9 @@ of the chart cells, so that later start-ups are fast.
 - Sectors come only from charts, not from waypoint layers.
 - Lights the chart does not draw at this scale don't shine.
 - The lookout reads its own area from the chart cells, including what lies
-  out of view. While cells are still being opened, or when part of the beam
-  has no chart, it says so next to the heading. What the chart does not draw
+  out of view, at most 12 o-charts and 24 ENC cells at a time. While cells
+  are still being opened, when part of the beam has no chart, or when on a
+  long beam not every chart could be read, it says so next to the heading. What the chart does not draw
   at this scale is only included with *Also show hidden at this scale*.
 - The lines and the label on the lookout beam are drawn on top of the chart,
   not beneath it; that is why they are faint.
@@ -728,7 +729,7 @@ The message that `wxWidgets_CONFIG_EXECUTABLE` was not used is wrong and
 can be ignored. Warnings about CMake policies are harmless too.
 
 The package (`.tar.gz`) ends up in `build/`. Its name comes from the git tag
-on the current commit, for example `Legend-v0.2.0-alpha27_…tar.gz`; without
+on the current commit, for example `Legend-v0.2.0-alpha32_…tar.gz`; without
 a tag it follows from `Plugin.cmake` with the date and commit id. Run
 `cmake ..` again after a new tag.
 

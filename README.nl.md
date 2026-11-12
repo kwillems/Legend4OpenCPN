@@ -12,7 +12,8 @@ routebeschrijvingen, en pin je notities vast op een plek op de kaart. Wil je
 alleen een legenda, dan zet je de notities helemaal uit.
 
 > Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
-> Silicon) met OpenCPN 5.14.
+> Silicon) met OpenCPN 5.14, en getest op een Android-tablet met OpenCPN
+> 5.14.
 
 > **Taal.** De plugin volgt de taal van OpenCPN. De bediening is er in het
 > Engels en het Nederlands; in andere talen is hij Engels tot er een
@@ -113,7 +114,7 @@ alleen een legenda, dan zet je de notities helemaal uit.
 ## Installeren
 
 1. Download of bouw het pakket, bijvoorbeeld
-   `Legend-v0.2.0-alpha27_darwin-wx32-10.13.6-arm64.tar.gz`.
+   `Legend-v0.2.0-alpha32_darwin-wx32-10.13.6-arm64.tar.gz`.
 2. Kies in OpenCPN **Opties → Plugins → Import Plugin** en kies het pakket.
 3. Zet de plugin aan. In de werkbalk verschijnt de Legend-knop.
 
@@ -683,8 +684,10 @@ dekking van de kaartcellen, zodat latere starts snel zijn.
 - Sectoren komen alleen uit kaarten, niet uit waypoint-lagen.
 - Lichten die de kaart op deze schaal niet tekent, branden niet mee.
 - De uitkijk leest zijn eigen gebied uit de kaartcellen, ook wat buiten beeld
-  ligt. Zolang er nog cellen worden geopend, of als een deel van de bundel
-  geen kaart heeft, staat dat naast het kopje. Wat de kaart op deze schaal
+  ligt, hoogstens 12 o-charts- en 24 ENC-cellen tegelijk. Zolang er nog
+  cellen worden geopend, als een deel van de bundel geen kaart heeft, of als
+  bij een lange bundel niet alle kaarten gelezen konden worden, staat dat
+  naast het kopje. Wat de kaart op deze schaal
   niet tekent, staat er alleen in met *Ook op deze schaal verborgen tonen*.
 - De lijnen en het label op de uitkijkbundel worden over de kaart heen
   getekend, niet eronder; daarom zijn ze licht.
@@ -729,7 +732,7 @@ De melding dat `wxWidgets_CONFIG_EXECUTABLE` niet gebruikt is, klopt niet en
 mag je negeren. Waarschuwingen over CMake-policies zijn ook onschuldig.
 
 Het pakket (`.tar.gz`) komt in `build/`. De naam komt uit de git-tag op de
-huidige commit, bijvoorbeeld `Legend-v0.2.0-alpha27_…tar.gz`; zonder tag
+huidige commit, bijvoorbeeld `Legend-v0.2.0-alpha32_…tar.gz`; zonder tag
 volgt hij uit `Plugin.cmake` met datum en commit-id. Draai na een nieuwe tag
 opnieuw `cmake ..`.
 
