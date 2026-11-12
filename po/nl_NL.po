@@ -160,6 +160,10 @@ msgid "%zu hidden at this scale"
 msgstr "%zu op deze schaal verborgen"
 
 #, c-format
+#, c-format
+msgid "%zu more further on in the beam"
+msgstr "nog %zu verderop in de bundel"
+
 msgid "%zu of %zu"
 msgstr "%zu van %zu"
 
@@ -543,6 +547,9 @@ msgstr "Geen zichtbare waypoints in dit kaartbeeld."
 
 msgid "Not drawn at this scale"
 msgstr "Op deze schaal niet getekend"
+
+msgid "Not every chart of the beam read"
+msgstr "Niet alle kaarten van de bundel gelezen"
 
 msgid "Not saved yet…"
 msgstr "Nog niet bewaard…"

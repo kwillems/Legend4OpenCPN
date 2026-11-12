@@ -470,7 +470,8 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
                                                            int maxScale, size_t maxCells,
                                                            const std::vector<std::pair<double, double>> &samples,
                                                            std::vector<wxString> *unopened,
-                                                           std::vector<CellExtent> *used)
+                                                           std::vector<CellExtent> *used,
+    std::vector<CellExtent> *skipped)
 {
     std::vector<ChartObject> objects;
     if (!m_inventoried)
@@ -485,6 +486,20 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
         static_cast<float>(std::sqrt(halfLat * halfLat + halfLon * halfLon) * 1.05);
     PlugIn_ViewPort query = area;
     query.chart_scale = 1.0f;
+    // o-charts only returns objects within the view it is given, worked
+    // out from its centre, size in pixels and scale; the area is the
+    // window's view moved, often far larger than the window shows. A
+    // scale at which the whole area fits the pixels, north up.
+    {
+        const double widthM = (area.lon_max - area.lon_min) * cosLat * 60.0 * 1852.0;
+        const double heightM = (area.lat_max - area.lat_min) * 60.0 * 1852.0;
+        if (widthM > 0.0 && heightM > 0.0 && query.pix_width > 0 && query.pix_height > 0) {
+            query.view_scale_ppm = 0.9 * std::min(query.pix_width / widthM,
+                                                  query.pix_height / heightM);
+            query.rotation = 0.0;
+            query.skew = 0.0;
+        }
+    }
 
     std::vector<const Cell *> candidates;
     for (const Cell &cell : m_cells) {
@@ -501,19 +516,44 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
         if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
             chosen.push_back(cell);
     };
+    // Every sample point its most detailed cell while the limit allows;
+    // beyond it a point not covered yet gets its coarsest cell, which
+    // covers the most. More cells than the limit would not stay open.
+    auto has = [](const Cell *cell, const std::pair<double, double> &point) {
+        return point.first >= cell->extent.SLAT && point.first <= cell->extent.NLAT &&
+               point.second >= cell->extent.WLON && point.second <= cell->extent.ELON;
+    };
     for (const auto &point : samples) {
+        const Cell *finest = nullptr;
+        const Cell *coarsest = nullptr;
+        bool covered = false;
         for (const Cell *cell : candidates) {
-            if (point.first >= cell->extent.SLAT && point.first <= cell->extent.NLAT &&
-                point.second >= cell->extent.WLON && point.second <= cell->extent.ELON) {
-                choose(cell);
-                break;
-            }
+            if (!has(cell, point))
+                continue;
+            if (!finest)
+                finest = cell;
+            coarsest = cell;
+            covered = covered || std::find(chosen.begin(), chosen.end(), cell) != chosen.end();
         }
+        if (!finest)
+            continue;
+        if (chosen.size() < maxCells)
+            choose(finest);
+        else if (!covered)
+            choose(coarsest);
     }
     for (const Cell *cell : candidates) {
         if (chosen.size() >= maxCells)
             break;
         choose(cell);
+    }
+    // What the limit left out, so the Uitkijk can tell when a better
+    // chart for part of the fan was not read.
+    if (skipped) {
+        for (const Cell *cell : candidates)
+            if (std::find(chosen.begin(), chosen.end(), cell) == chosen.end())
+                skipped->push_back({cell->extent.SLAT, cell->extent.WLON, cell->extent.NLAT,
+                                    cell->extent.ELON, cell->scale});
     }
 
     std::set<wxString> seen;

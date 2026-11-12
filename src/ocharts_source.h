@@ -55,7 +55,8 @@ public:
                                                 size_t maxCells,
                                                 const std::vector<std::pair<double, double>> &samples,
                                                 std::vector<wxString> *unopened,
-                                                std::vector<CellExtent> *used);
+                                                std::vector<CellExtent> *used,
+                                                std::vector<CellExtent> *skipped = nullptr);
 
     // The cells of this view that are not open yet, and one of them opened:
     // each takes a fifth of a second, so the legend opens them one by one,

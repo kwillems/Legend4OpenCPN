@@ -1436,9 +1436,20 @@ void legend_pi::CollectDynamicLegend()
     m_dynamic_groups.clear();
     m_dynamic_total = 0;
     m_dynamic_hidden = 0;
-    // The Uitkijk groups its own area again: settings and scale may have
-    // changed.
-    m_ahead_groups_key.Clear();
+    // The Uitkijk groups its own area again when what the grouping depends
+    // on changed: the scale, the settings of the legend or of OpenCPN. Not
+    // for a chart that only moved along with the boat: that is thousands
+    // of objects, every second or two.
+    const wxDateTime &displayModified = m_display_settings.Modified();
+    const wxString basis = wxString::Format(
+        "%.0f|%d|%d|%d|%c|%s", DisplayedScale(m_viewport), m_show_hidden_at_scale ? 1 : 0,
+        m_dutch_names ? 1 : 0, m_show_lights ? 1 : 0,
+        static_cast<char>(m_display_settings.Category()),
+        displayModified.IsValid() ? displayModified.FormatISOCombined() : wxString());
+    if (basis != m_ahead_groups_basis) {
+        m_ahead_groups_basis = basis;
+        m_ahead_groups_key.Clear();
+    }
 
     m_collected_viewport = m_viewport;
     m_collected_viewport_valid = m_viewport_valid;

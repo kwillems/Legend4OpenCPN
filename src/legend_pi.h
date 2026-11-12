@@ -802,6 +802,10 @@ private:
         wxString light;          // its light character, if any
     };
     std::vector<AheadItem> m_ahead;
+    // Beyond the first kAheadMaxRows of a long fan only counted: thousands
+    // of rows, each with a picture, would stall OpenCPN on every update.
+    static constexpr size_t kAheadMaxRows = 100;
+    size_t m_ahead_more = 0;
     struct AheadVhf
     {
         double minutes = 0.0;
@@ -839,17 +843,36 @@ private:
     bool m_ahead_area_valid = false;
     std::vector<ChartObject> m_ahead_objects;
     std::vector<CellExtent> m_ahead_cells_used;
+    std::vector<CellExtent> m_ahead_cells_skipped; // left out by the cell limit
     std::vector<DynamicGroup> m_ahead_groups;
     wxString m_ahead_groups_key;
+    // What the grouping of the Uitkijk depends on besides its objects;
+    // grouped again only when it changes.
+    wxString m_ahead_groups_basis;
     std::vector<std::pair<bool, wxString>> m_ahead_cells_to_open; // o-charts?, path
     std::set<wxString> m_ahead_cells_tried;
     wxTimer m_ahead_cell_timer;
     bool m_ahead_reading = false;   // cells of the area still to open
     bool m_ahead_uncovered = false; // part of the fan lies outside every cell
+    bool m_ahead_limited = false;   // a better cell for part of it was left out
+    // Whether there are vector charts to read at all, found by the Uitkijk
+    // itself: it can be shown before the legend of the view is collected.
+    bool m_ahead_sources_available = false;
+    // Where the boat was when the area was read: read again for a cell
+    // the limit left out only once it has moved on.
+    double m_ahead_read_lat = 0.0;
+    double m_ahead_read_lon = 0.0;
+    double m_ahead_read_cog = 0.0;
+    double m_ahead_read_range = 0.0;
     void EnsureAheadGroups(double range);
-    void ReadAheadArea(const PlugIn_ViewPort &area);
+    void ReadAheadArea(const PlugIn_ViewPort &area, double range);
     void OpenNextAheadCell();
+    // Points along the course line and the edges of the fan.
+    std::vector<std::pair<double, double>> AheadCheckPoints(double range) const;
     bool AheadCovered(double range) const;
+    // Whether a cell left out by the limit is more detailed, somewhere in
+    // the fan, than every cell read there.
+    bool AheadLimited(double range) const;
 
     // The fan of the Uitkijk: at least this wide on either side of the
     // course, widening at m_ahead_angle degrees on either side (setting
