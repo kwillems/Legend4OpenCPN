@@ -325,6 +325,10 @@ bool legend_pi::DeInit()
     StopMarker();
     m_auto_refresh_timer.Stop();
     m_loading_timer.Stop();
+    // A reading thread still busy finishes first: it must not outlive the
+    // plugin's code.
+    if (m_layer_read_thread.joinable())
+        m_layer_read_thread.join();
     m_prefetch_timer.Stop();
     m_fill_window_timer.Stop();
     // A cell opened after m_ocharts.Close() below, or what waits for the

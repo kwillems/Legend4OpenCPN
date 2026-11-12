@@ -142,6 +142,10 @@ macro(add_plugin_libraries)
     add_subdirectory("${CMAKE_SOURCE_DIR}/opencpn-libs/plugin_dc")
     target_link_libraries(${PACKAGE_NAME} ocpn::plugin-dc)
 
+    # The layer files are first read on a thread (std::thread).
+    find_package(Threads REQUIRED)
+    target_link_libraries(${PACKAGE_NAME} Threads::Threads)
+
     # OpenCPN on Android lacks some wxWidgets classes the plugin uses:
     # wxMemoryFSHandler comes from its wxWidgets source, and the note editor
     # is a plain text field instead of a wxRichTextCtrl.

@@ -374,21 +374,45 @@ bool SamePoint(const PlugIn_Waypoint_Ex &wp, const LayerWaypoint &point)
 // in OpenCPN's list and tell whether the layer is shown, and one point per
 // icon for the icon's description. False when the files do not match
 // OpenCPN's list: then everything comes from OpenCPN, as before.
-bool legend_pi::PrefillFromLayers(const wxArrayString &guids)
+wxString legend_pi::LayersDir() const
+{
+    wxString *privateDir = GetpPrivateApplicationDataLocation();
+    if (!privateDir || privateDir->IsEmpty())
+        return wxString();
+    return *privateDir + wxFileName::GetPathSeparator() + "layers";
+}
+
+void legend_pi::StartLayerRead()
+{
+    // The thread gets its own copy of the folder name and fills its own
+    // LayerRead; nothing of the plugin is touched until done is set.
+    const std::wstring dir = LayersDir().ToStdWstring();
+    auto read = std::make_shared<LayerRead>();
+    auto work = [dir, read]() {
+        wxStopWatch watch;
+        if (!dir.empty())
+            read->waypoints.Load(wxString(dir));
+        read->ms = watch.Time();
+        read->done.store(true, std::memory_order_release);
+    };
+    m_layer_read = read;
+    try {
+        m_layer_read_thread = std::thread(work);
+    }
+    catch (const std::exception &) {
+        work();  // no thread to be had: read here, as before
+    }
+}
+
+bool legend_pi::PrefillFromLayers(const wxArrayString &guids, long readMs)
 {
     m_loading_prefilled.clear();
     m_loading_have.clear();
 
-    wxString *privateDir = GetpPrivateApplicationDataLocation();
-    if (!privateDir || privateDir->IsEmpty())
-        return false;
-
     wxStopWatch watch;
-    m_layer_waypoints.Load(*privateDir + wxFileName::GetPathSeparator() + "layers");
     const std::vector<LayerFile> &files = m_layer_waypoints.Files();
     if (files.empty())
         return false;
-    const long readMs = watch.Time();
 
     const size_t count = guids.GetCount();
     std::vector<CachedWaypoint> prefilled(count);
@@ -527,15 +551,18 @@ bool legend_pi::StartWaypointLoading(bool reloadAll)
     m_loading_fetched = 0;
     m_loading_started = wxGetLocalTimeMillis();
 
-    // The first time the layer files are read, half a second at once: in a
-    // timer step, so the window can show that it is loading first.
+    // The first time the layer files are read, seconds on Android: on a
+    // thread, while the window shows that it is loading (OnLoadingTimer).
     if (m_waypoint_cache.empty()) {
         m_loading_prefill_pending = true;
         m_loading_timer.Start(10);
         return false;
     }
     m_loading_prefill_pending = false;
-    PrefillFromLayers(guids);
+    // Later only changed files are read again, mostly none.
+    wxStopWatch read;
+    m_layer_waypoints.Load(LayersDir());
+    PrefillFromLayers(guids, read.Time());
 
     size_t missing = 0;
     for (size_t i = 0; i < guids.GetCount(); ++i) {
@@ -564,8 +591,19 @@ void legend_pi::OnLoadingTimer()
     }
 
     if (m_loading_prefill_pending) {
+        if (!m_layer_read) {
+            StartLayerRead();
+            return;
+        }
+        if (!m_layer_read->done.load(std::memory_order_acquire))
+            return;
+        if (m_layer_read_thread.joinable())
+            m_layer_read_thread.join();
+        m_layer_waypoints = std::move(m_layer_read->waypoints);
+        const long readMs = m_layer_read->ms;
+        m_layer_read.reset();
         m_loading_prefill_pending = false;
-        PrefillFromLayers(m_loading_guids);
+        PrefillFromLayers(m_loading_guids, readMs);
         return;
     }
 

@@ -29,6 +29,9 @@
 #endif
 #include "chart_notice.h"
 
+#include <atomic>
+#include <memory>
+#include <thread>
 #include <map>
 #include <string>
 #include <set>
@@ -231,7 +234,13 @@ private:
 
     // Filling the waypoint cache in small steps keeps OpenCPN responsive.
     bool StartWaypointLoading(bool reloadAll); // true: cache is up to date
-    bool PrefillFromLayers(const wxArrayString &guids);
+    // Uses m_layer_waypoints, read readMs before.
+    bool PrefillFromLayers(const wxArrayString &guids, long readMs);
+    // OpenCPN's layers folder; empty when it is not known.
+    wxString LayersDir() const;
+    // The first reading of the layer files, seconds on Android: on a
+    // thread of its own, so OpenCPN stays responsive meanwhile.
+    void StartLayerRead();
     void OnLoadingTimer();
     void FinishWaypointLoading();
 
@@ -592,6 +601,17 @@ private:
     std::vector<char> m_loading_have;
     bool m_loading_prefill_pending = false;
     LayerWaypoints m_layer_waypoints;
+    // What the reading thread fills; the plugin looks at waypoints and
+    // ms only once done is true. A plain std::thread: std::future needs
+    // C++ runtime functions OpenCPN's Android build does not have.
+    struct LayerRead
+    {
+        LayerWaypoints waypoints;
+        long ms = 0;
+        std::atomic<bool> done{false};
+    };
+    std::shared_ptr<LayerRead> m_layer_read;
+    std::thread m_layer_read_thread;  // DeInit() joins it
     std::map<wxString, wxString> m_icon_descriptions; // icon -> OpenCPN's description
     size_t m_loading_next;
     int m_loading_fetched;
