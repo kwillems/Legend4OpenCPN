@@ -72,6 +72,7 @@ set(SRC
     src/chart_object.cpp
     src/chart_symbols.h
     src/chart_symbols.cpp
+    src/type_check.h
     src/ocharts_source.h
     src/ocharts_source.cpp
     src/iso8211.h
@@ -191,6 +192,7 @@ macro(add_plugin_libraries)
             test/geo_test.cpp
             test/chart_object_test.cpp
             test/iso8211_test.cpp
+            test/type_check_test.cpp
             src/light_character.cpp
             src/vhf_areas.cpp
             src/note_places.cpp
