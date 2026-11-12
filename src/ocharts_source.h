@@ -91,7 +91,7 @@ private:
 
     struct OpenChart
     {
-        PlugInChartBaseExtendedPlus2 *chart;
+        PlugInChartBaseExtended *chart;
         unsigned lastUse;
     };
 
@@ -99,8 +99,8 @@ private:
     void LoadCache(std::map<wxString, Cell> *cache) const;
     void SaveCache() const;
     std::vector<const Cell *> Candidates(const PlugIn_ViewPort &vp);
-    PlugInChartBaseExtendedPlus2 *Create();
-    PlugInChartBaseExtendedPlus2 *Open(const wxString &path);
+    PlugInChartBaseExtended *Create();
+    PlugInChartBaseExtended *Open(const wxString &path);
 
     wxString m_cache_file;
     bool m_inventoried = false;

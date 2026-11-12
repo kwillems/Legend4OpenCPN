@@ -9,6 +9,8 @@
 
 #include "ocharts_source.h"
 
+#include "type_check.h"
+
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -181,7 +183,7 @@ void OChartsSource::SetCacheFile(const wxString &path)
     m_cache_file = path;
 }
 
-PlugInChartBaseExtendedPlus2 *OChartsSource::Create()
+PlugInChartBaseExtended *OChartsSource::Create()
 {
     for (const char *name : kChartClasses) {
         wxObject *object = wxCreateDynamicObject(name);
@@ -190,15 +192,30 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Create()
 
         // Only a chart class of the plugin API this plugin was built
         // against is used; anything else would be read with the wrong
-        // layout. OpenCPN creates plugin charts the same way.
-        auto *chart = dynamic_cast<PlugInChartBaseExtendedPlus2 *>(object);
+        // layout. OpenCPN creates plugin charts the same way. All this
+        // plugin calls is in PlugInChartBaseExtended; on Android the
+        // o-charts classes derive from that, not from the Plus2 class.
+        auto *chart = dynamic_cast<PlugInChartBaseExtended *>(object);
         if (chart)
             return chart;
+        // On Android the o-charts plugin has its own copy of the API's
+        // type information, and the C++ runtime there compares those by
+        // address: dynamic_cast fails although the class is right. Its
+        // base classes by name tell the same, safely.
+        if (type_check::DerivesFrom(typeid(*object), typeid(PlugInChartBaseExtended))) {
+            static bool loggedByName = false;
+            if (!loggedByName) {
+                wxLogMessage("Legend: o-charts class %s recognised by name", name);
+                loggedByName = true;
+            }
+            return static_cast<PlugInChartBaseExtended *>(object);
+        }
         static bool logged = false;
         if (!logged) {
-            wxLogMessage("Legend: o-charts class %s is not a PlugInChartBaseExtendedPlus2; "
-                         "o-charts cells are not read",
-                         name);
+            wxLogMessage("Legend: o-charts class %s is not a PlugInChartBaseExtended; "
+                         "o-charts cells are not read. Its classes: %s; wanted: %s",
+                         name, type_check::Describe(typeid(*object)),
+                         typeid(PlugInChartBaseExtended).name());
             logged = true;
         }
         delete object;
@@ -208,7 +225,7 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Create()
 
 bool OChartsSource::Available()
 {
-    PlugInChartBaseExtendedPlus2 *chart = Create();
+    PlugInChartBaseExtended *chart = Create();
     if (!chart)
         return false;
     delete chart;
@@ -332,7 +349,7 @@ void OChartsSource::Inventory()
                 continue;
             }
 
-            PlugInChartBaseExtendedPlus2 *chart = Create();
+            PlugInChartBaseExtended *chart = Create();
             if (!chart)
                 return;
             ++headerReads;
@@ -368,7 +385,7 @@ void OChartsSource::Inventory()
 // Opening cells and reading objects
 // ---------------------------------------------------------------------------
 
-PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
+PlugInChartBaseExtended *OChartsSource::Open(const wxString &path)
 {
     auto found = m_open.find(path);
     if (found != m_open.end()) {
@@ -386,7 +403,7 @@ PlugInChartBaseExtendedPlus2 *OChartsSource::Open(const wxString &path)
         m_open.erase(oldest);
     }
 
-    PlugInChartBaseExtendedPlus2 *chart = Create();
+    PlugInChartBaseExtended *chart = Create();
     if (!chart)
         return nullptr;
 
@@ -506,7 +523,7 @@ std::vector<ChartObject> OChartsSource::PointObjectsInArea(const PlugIn_ViewPort
             unopened->push_back(cell.path);
             continue;
         }
-        PlugInChartBaseExtendedPlus2 *chart = Open(cell.path);
+        PlugInChartBaseExtended *chart = Open(cell.path);
         if (!chart)
             continue;
         used->push_back({cell.extent.SLAT, cell.extent.WLON, cell.extent.NLAT,
@@ -562,7 +579,7 @@ std::vector<ChartObject> OChartsSource::PointObjectsInView(
     int rawCount = 0;
 
     for (const Cell *cell : candidates) {
-        PlugInChartBaseExtendedPlus2 *chart = Open(cell->path);
+        PlugInChartBaseExtended *chart = Open(cell->path);
         if (!chart)
             continue;
         ++cellsRead;

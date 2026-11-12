@@ -116,5 +116,6 @@ void TestLayerWaypoints();
 void TestGeo();
 void TestChartObjects();
 void TestIso8211();
+void TestTypeCheck();
 
 #endif

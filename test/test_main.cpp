@@ -30,6 +30,7 @@ int main()
     TestGeo();
     TestChartObjects();
     TestIso8211();
+    TestTypeCheck();
 
     std::printf("%d checks, %d failed\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
