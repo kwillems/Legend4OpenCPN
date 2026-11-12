@@ -899,16 +899,25 @@ void legend_pi::CollectChartObjects(
 
     m_chart_sources_available = m_ocharts_available || m_s57.CellCount() > 0;
 
+    // The sources return what lies within the bounds; on a turned chart
+    // part of that is off the screen.
+    const size_t withinBounds = objects.size();
+    objects.erase(std::remove_if(objects.begin(), objects.end(),
+                                 [&vp](const ChartObject &object) {
+                                     return !OnScreen(vp, object.lat, object.lon);
+                                 }),
+                  objects.end());
+
     size_t probes = 0;
     int unanswered = 0;
     GroupChartObjects(objects, vp, groups, false, &probes, &unanswered);
 
     // The list is rebuilt on every pause of the chart; log only what changed.
     const wxString summary = wxString::Format(
-        "Legend: chart objects: %s; %s; %d listed, %d hidden, %d hidden by scale "
-        "listed, %zu class probes%s",
+        "Legend: chart objects: %s; %s; %zu off a turned screen; %d listed, %d hidden, "
+        "%d hidden by scale listed, %zu class probes%s",
         m_ocharts_available ? m_ocharts.LastDiagnostics() : wxString("no o-charts"),
-        m_s57.LastDiagnostics(), m_chart_object_total, m_chart_objects_hidden,
+        m_s57.LastDiagnostics(), withinBounds - objects.size(), m_chart_object_total, m_chart_objects_hidden,
         m_chart_objects_scale_hidden, probes,
         unanswered > 0 ? " (PLIB gave no answer)" : "");
     if (summary != m_chart_objects_logged) {
@@ -1232,6 +1241,20 @@ void legend_pi::AddLight(
     group.positions.emplace_back(lat, lon);
 }
 
+bool legend_pi::OnScreen(const PlugIn_ViewPort &view, double lat, double lon)
+{
+    // North up (or nearly): the bounds are the screen.
+    if (std::fabs(std::sin(view.rotation + view.skew)) < 1e-3)
+        return true;
+    if (view.pix_width <= 0 || view.pix_height <= 0)
+        return true;
+    PlugIn_ViewPort copy = view;
+    wxPoint pixel;
+    GetCanvasPixLL(&copy, &pixel, lat, lon);
+    return pixel.x >= 0 && pixel.x <= view.pix_width && pixel.y >= 0 &&
+           pixel.y <= view.pix_height;
+}
+
 // The waypoints of the layers within the bounds of `area` into groups, one
 // per icon, with their lights under them. Scale limits are compared with
 // scaleForLimits. For the Uitkijk (lookout) the counts of the legend are
@@ -1263,6 +1286,11 @@ void legend_pi::CollectWaypointGroups(const PlugIn_ViewPort &area, double scaleF
             continue;
 
         if (!lonInView(wp.lon))
+            continue;
+
+        // The legend lists what is on the screen; the Uitkijk's area is
+        // its own.
+        if (!lookout && !OnScreen(area, wp.lat, wp.lon))
             continue;
 
         wxString icon = wp.icon;

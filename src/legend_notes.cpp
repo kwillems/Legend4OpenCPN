@@ -925,7 +925,8 @@ bool legend_pi::NotePlaceInView(const NotePlace &place) const
     bool lonIn = false;
     for (double offset : {0.0, 360.0, -360.0})
         lonIn = lonIn || (place.lon + offset >= view.lon_min && place.lon + offset <= view.lon_max);
-    return place.lat >= view.lat_min && place.lat <= view.lat_max && lonIn;
+    return place.lat >= view.lat_min && place.lat <= view.lat_max && lonIn &&
+           OnScreen(view, place.lat, place.lon);
 }
 
 // How many signs of notes this view shows, or would show with notes off.
