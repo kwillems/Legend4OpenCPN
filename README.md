@@ -347,7 +347,10 @@ beam* when nothing is there. The Lookout only says so when it knows: while
 charts are still being read, where no chart covers part of the beam or when
 there are no vector charts, it says that instead. The Lookout reads your
 vector charts (ENC and o-charts) itself, also while you look at a raster
-chart. The time is an estimate at your current speed. When you
+chart: at most 12 o-charts and 24 ENC cells at a time, the most detailed for
+the beam itself first. On a long beam in an area with many charts it may
+fall back on a coarser chart for the far part; it then says *Not every chart
+of the beam read*. The time is an estimate at your current speed. When you
 fold the Lookout, the icons of what you will meet first are shown to the
 right of the heading, in order of arrival (VHF areas and notes too), with
 the count of the rest after them, such as *+4*.
@@ -357,7 +360,9 @@ Each line starts small with when and where, with the description below:
 - All objects from the legend inside the beam, in order of arrival, for
   example *in 4 min · starboard · 0.6 NM · 038°* with *Red conical buoy*
   and the light characteristic below. Distance and bearing are shown when
-  *Distance and bearing from the boat* is on.
+  *Distance and bearing from the boat* is on. On a long beam the first 100
+  are listed, with below them how many more lie further on (*240 more
+  further on in the beam*).
 - With *Also show hidden at this scale*, buoys the chart does not draw
   yet at this scale are listed too, in grey, with the closed eye and the
   scale, just as in the rest of the legend. A click zooms there.

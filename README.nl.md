@@ -341,7 +341,11 @@ Naast het kopje staat waar de uitkijk naar kijkt, bijvoorbeeld *tot 2 NM,
 zegt de Uitkijk alleen als hij het weet: worden kaarten nog gelezen, dekt
 geen kaart een deel van de bundel of zijn er geen vectorkaarten, dan staat
 dat er in plaats daarvan. De Uitkijk leest je vectorkaarten (ENC en
-o-charts) zelf, ook als je een rasterkaart bekijkt. De tijd
+o-charts) zelf, ook als je een rasterkaart bekijkt: hoogstens 12 o-charts-
+en 24 ENC-cellen tegelijk, de meest gedetailleerde voor de bundel zelf
+eerst. Bij een lange bundel in een gebied met veel kaarten kan hij voor het
+verre deel op een grovere kaart terugvallen; dan staat er *Niet alle kaarten
+van de bundel gelezen*. De tijd
 is een schatting bij je snelheid van dit moment. Klap je de Uitkijk in, dan
 staan rechts naast het kopje de iconen van wat je het eerst tegenkomt, op
 volgorde van aankomst (ook marifoongebieden en notities), met het aantal van
@@ -352,7 +356,9 @@ Elke regel begint klein met wanneer en waar, met de beschrijving eronder:
 - Alle objecten uit de legenda in de bundel, op volgorde van aankomst,
   bijvoorbeeld *over 4 min · stuurboord · 0,6 NM · 038°* met daaronder *Rode
   spitse ton* en het lichtkarakter. Afstand en peiling staan erbij als
-  *Afstand en peiling vanaf de boot* aan staat.
+  *Afstand en peiling vanaf de boot* aan staat. Bij een lange bundel staan
+  de eerste 100 er, met daaronder hoeveel er verderop nog liggen (*nog 240
+  verderop in de bundel*).
 - Met *Ook op deze schaal verborgen tonen* staan ook tonnen die de kaart op
   deze schaal nog niet tekent erin, grijs, met het gesloten oogje en de
   schaal, net als in de rest van de legenda. Een klik zoomt erheen.
