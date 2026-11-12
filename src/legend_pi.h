@@ -725,6 +725,10 @@ private:
     std::vector<NotePlace> m_note_places;
     std::vector<NotePlace> m_notes_off_places; // with notes off: only counted
     bool NotePlaceInView(const NotePlace &place) const;
+    // Whether a position within the bounds of view lies on the screen.
+    // The bounds are a rectangle of latitude and longitude around the
+    // view; turned, the screen covers only part of it.
+    static bool OnScreen(const PlugIn_ViewPort &view, double lat, double lon);
     size_t NotesInView();
     int m_note_selected = -1;            // clicked sign: its radius shows
     int m_note_hover = -1;               // sign under the mouse
