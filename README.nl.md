@@ -11,9 +11,9 @@ hoe ver het weg is. Ook toont hij je eigen legenda's, notities en
 routebeschrijvingen, en pin je notities vast op een plek op de kaart. Wil je
 alleen een legenda, dan zet je de notities helemaal uit.
 
-> Status: alpha. De plugin wordt ontwikkeld en getest op macOS (Apple
-> Silicon) met OpenCPN 5.14, en getest op een Android-tablet met OpenCPN
-> 5.14.
+> Status: alpha. De plugin wordt ontwikkeld op macOS (Apple Silicon) en
+> getest met OpenCPN 5.14 op macOS, Windows, Linux en Android, het meest op
+> macOS en op een Android-tablet.
 
 > **Taal.** De plugin volgt de taal van OpenCPN. De bediening is er in het
 > Engels en het Nederlands; in andere talen is hij Engels tot er een
