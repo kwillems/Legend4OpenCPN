@@ -10,8 +10,9 @@ lookout for you: what lies on your course and how far away it is. It shows
 your own legends, notes and route descriptions too, and pins notes to a
 place on the chart. If you only want a legend, you turn notes off entirely.
 
-> Status: alpha. The plugin is developed and tested on macOS (Apple Silicon)
-> with OpenCPN 5.14, and tested on an Android tablet with OpenCPN 5.14.
+> Status: alpha. The plugin is developed on macOS (Apple Silicon) and tested
+> with OpenCPN 5.14 on macOS, Windows, Linux and Android, most of all on macOS
+> and on an Android tablet.
 
 > **Use at your own risk.** Legend4OpenCPN is an aid, not a means of
 > navigation. The explanations, light characteristics, channels and other
