@@ -531,16 +531,16 @@ void legend_pi::ComputeAhead()
     for (const Found &f : found) {
         bool duplicate = false;
         const auto cell = cellOf(f.lat, f.lon);
-        std::vector<size_t> near;
+        std::vector<size_t> nearby;
         for (long dLat = -1; dLat <= 1; ++dLat) {
             for (long dLon = -1; dLon <= 1; ++dLon) {
                 auto bucket = keptCells.find(std::make_pair(cell.first + dLat, cell.second + dLon));
                 if (bucket != keptCells.end())
-                    near.insert(near.end(), bucket->second.begin(), bucket->second.end());
+                    nearby.insert(nearby.end(), bucket->second.begin(), bucket->second.end());
             }
         }
-        std::sort(near.begin(), near.end());  // the first kept first, as before
-        for (size_t index : near) {
+        std::sort(nearby.begin(), nearby.end());  // the first kept first, as before
+        for (size_t index : nearby) {
             AheadItem &kept = m_ahead[index];
             const auto &p = m_ahead_groups[kept.group].positions[kept.position];
             if (std::fabs(p.first - f.lat) < kJoinLat && std::fabs(p.second - f.lon) < kJoinLon &&
