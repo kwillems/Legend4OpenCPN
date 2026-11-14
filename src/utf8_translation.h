@@ -7,12 +7,13 @@
 // Free Software Foundation; either version 2 of the License, or (at your
 // option) any later version. See the LICENSE file for details.
 
-#ifndef _ANDROID_TRANSLATION_H_
-#define _ANDROID_TRANSLATION_H_
+#ifndef _UTF8_TRANSLATION_H_
+#define _UTF8_TRANSLATION_H_
 
-// Included before every source on Android (Plugin.cmake). The sources are
-// UTF-8, but there wxString reads a char string in the C locale, so
-// "‹  Previous" became "â€¹  Previous". _() reads its text as UTF-8.
+// Included before every source on Android and Windows (Plugin.cmake). The
+// sources are UTF-8, but there wxString reads a char string in the C locale
+// or the Windows code page, so "‹  Previous" became "â€¹  Previous" and
+// the translation was not found. _() reads its text as UTF-8.
 #define WXINTL_NO_GETTEXT_MACRO
 #include <wx/string.h>
 #include <wx/translation.h>
