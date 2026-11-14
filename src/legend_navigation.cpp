@@ -860,8 +860,8 @@ bool legend_pi::HighlightVhfAreas(const wxString &icon,
     return true;
 }
 
-// Lights up these areas, with a notice of their channels, as "Welk
-// marifoonkanaal hier?" does.
+// Lights up these areas, with a notice of their channels, as "Which VHF
+// channel here?" does.
 void legend_pi::ShowVhfAreas(const std::vector<VhfArea> &areas)
 {
     if (areas.empty())
@@ -878,7 +878,7 @@ void legend_pi::ShowVhfAreas(const std::vector<VhfArea> &areas)
     m_vhf_highlight.Show(areas);
 }
 
-// "Welk marifoonkanaal hier?" from the chart's menu.
+// "Which VHF channel here?" from the chart's menu.
 void legend_pi::ShowVhfHere(double lat, double lon)
 {
     EnsureVhfAreas();

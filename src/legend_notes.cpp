@@ -431,7 +431,7 @@ bool legend_pi::NewNote()
     return m_editing;
 }
 
-// "Nieuwe notitie hier" from the chart menu: a new note, pinned at once to
+// "New note here" from the chart menu: a new note, pinned at once to
 // the clicked spot, in the legend window, also when that was closed.
 void legend_pi::NewNoteAt(double lat, double lon)
 {
@@ -843,7 +843,7 @@ void legend_pi::RefreshNotePlaces()
     RefreshAllCanvases();
 }
 
-// "Notities" in the settings: off, the plugin is a legend only; no signs,
+// "Notes" in the settings: off, the plugin is a legend only; no signs,
 // no rows, no notices, no buttons or chart menu for notes. The Markdown
 // files stay in the list, to read.
 void legend_pi::SetNotesOn(bool on)
@@ -1138,7 +1138,7 @@ void legend_pi::ClearNoteSelection()
     RefreshAllCanvases();
 }
 
-// "Notitie" in the chart's right-click menu, with a submenu that
+// "Note" in the chart's right-click menu, with a submenu that
 // PrepareContextMenu() fills each time for the spot and the state.
 void legend_pi::AddNoteMenuItems()
 {

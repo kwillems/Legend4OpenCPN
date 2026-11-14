@@ -82,8 +82,8 @@ public:
     // As charts write it: "Fl(2+1)G.10s", "Q(6)+LFl.15s", "Al.WR".
     wxString Abbreviation() const;
 
-    // In words, starting in lower case, for example "groen groepschitter-
-    // licht met samengestelde groep: 2+1 schitteringen, elke 10 seconden".
+    // In words, starting in lower case, for example "green composite
+    // group-flashing light: 2+1 flashes, every 10 seconds".
     wxString Words(bool dutch) const;
 
     // Colour codes of the light ("W", "R", "G", "Y", "Bu", ...); white when
@@ -134,8 +134,8 @@ struct LightSector
     double to = 0.0;
 };
 
-// The sectors in words: "sectoren (peiling naar het licht): wit 090°–120°,
-// rood 120°–150°".
+// The sectors in words: "sectors (bearing towards the light): white
+// 090°–120°, red 120°–150°".
 wxString SectorWords(const std::vector<LightSector> &sectors, bool dutch);
 
 // Colour of a light on screen, by its code ("W", "R", "G", ...); dim darkens
