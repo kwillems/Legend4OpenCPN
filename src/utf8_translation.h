@@ -14,10 +14,15 @@
 // sources are UTF-8, but there wxString reads a char string in the C locale
 // or the Windows code page, so "‹  Previous" became "â€¹  Previous" and
 // the translation was not found. _() reads its text as UTF-8.
+//
+// Visual Studio also includes it before the C sources of md4c, since it
+// ignores the C++-only condition in Plugin.cmake; those skip it.
+#ifdef __cplusplus
 #define WXINTL_NO_GETTEXT_MACRO
 #include <wx/string.h>
 #include <wx/translation.h>
 
 #define _(s) wxGetTranslation(wxString::FromUTF8(s))
+#endif
 
 #endif
