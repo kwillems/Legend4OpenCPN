@@ -158,7 +158,7 @@ macro(add_plugin_libraries)
 
         # On Android _() reads its text as UTF-8; see the header.
         target_compile_options(${PACKAGE_NAME} PRIVATE
-            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${CMAKE_SOURCE_DIR}/src/android_translation.h>"
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${CMAKE_SOURCE_DIR}/src/utf8_translation.h>"
         )
     endif ()
 
@@ -170,8 +170,10 @@ macro(add_plugin_libraries)
 
         # Without /utf-8 MSVC turns "·" into the Windows code page
         # instead of UTF-8, and wxString::FromUTF8 then gives nothing.
+        # And _() reads its text as UTF-8 too; see the header.
         if (MSVC)
-            target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8)
+            target_compile_options(${PACKAGE_NAME} PRIVATE /utf-8
+                "$<$<COMPILE_LANGUAGE:CXX>:/FI${CMAKE_SOURCE_DIR}/src/utf8_translation.h>")
         endif ()
 
         # ocpn_plugin.h only makes DECL_EXP __declspec(dllexport) when
