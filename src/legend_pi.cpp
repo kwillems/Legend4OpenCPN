@@ -284,8 +284,8 @@ int legend_pi::Init()
            WANTS_CURSOR_LATLON | INSTALLS_CONTEXTMENU_ITEMS | WANTS_NMEA_EVENTS;
 }
 
-// In the chart's right-click menu: "Toon in legenda" and "Welk
-// marifoonkanaal hier?", and the submenu "Notitie".
+// In the chart's right-click menu: "Show in legend" and "Which VHF
+// channel here?", and the submenu "Note".
 void legend_pi::AddContextMenuItems()
 {
     m_menu_reveal = AddCanvasContextMenuItem(

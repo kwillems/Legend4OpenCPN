@@ -427,8 +427,8 @@ private:
     void UpdateNoteButtons();
     void AddNoteButtons(wxPanel *panel, wxSizer *headerRow);
     void InsertLink();
-    // The chart's right-click menu: "Toon in legenda", "Welk marifoonkanaal
-    // hier?", and "Notitie" with a submenu whose actions hidden items carry
+    // The chart's right-click menu: "Show in legend", "Which VHF channel
+    // here?", and "Note" with a submenu whose actions hidden items carry
     // (see Init).
     int m_menu_parent = -1;
     void AddNoteMenuItems();
@@ -452,7 +452,7 @@ private:
     void AddContextMenuItems();
     void RemoveContextMenuItems();
     void DeleteNoteFile(const wxString &path);
-    wxPanel *m_place_bar = nullptr;      // "Hoort bij ..." while editing
+    wxPanel *m_place_bar = nullptr;      // "Pinned at ..." while editing
     wxStaticText *m_place_text = nullptr;
     wxButton *m_radius_button = nullptr; // Straal
     wxButton *m_loose_button = nullptr;  // Losmaken
@@ -697,7 +697,7 @@ private:
 
     LightSectors m_light_sectors; // of the chart objects last collected
 
-    // "Welk marifoonkanaal hier?": the VHF areas (VHFinfo layer) the boat is in, or
+    // "Which VHF channel here?": the VHF areas (VHFinfo layer) the boat is in, or
     // the middle of the chart without a recent position fix.
     VhfAreas m_vhf_areas;
     bool m_vhf_loaded = false;
